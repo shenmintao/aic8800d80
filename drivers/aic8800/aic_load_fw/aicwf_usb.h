@@ -46,7 +46,7 @@ enum AICWF_IC{
 
 
 #define AICWF_USB_RX_URBS               (20)
-#define AICWF_USB_TX_URBS               (30)
+#define AICWF_USB_TX_URBS               (100)
 #define AICWF_USB_TX_LOW_WATER          (AICWF_USB_TX_URBS/4)
 #define AICWF_USB_TX_HIGH_WATER         (AICWF_USB_TX_LOW_WATER*3)
 #define AICWF_USB_MAX_PKT_SIZE          (2048)
@@ -90,7 +90,6 @@ enum AICWF_IC{
 #define FW_RAM_PATCH_BASE_ADDR          0x00100000
 #define FW_RAM_PATCH_BASE_ADDR_U03      0x00100000
 #define FW_PATCH_TEST_BASE_ADDR         0x00100000
-#define RAM_FW_BLE_WAKEUP_OUT_ADDR		0x0015f000
 
 enum {
     FW_NORMAL_MODE,

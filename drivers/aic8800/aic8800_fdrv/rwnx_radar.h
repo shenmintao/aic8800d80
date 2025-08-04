@@ -82,33 +82,11 @@ struct rwnx_radar_detected {
     s16 freq[NX_NB_RADAR_DETECTED];
 };
 
-#define RWNX_RADAR_DUMP_EN  1
-#ifdef RWNX_RADAR_DUMP_EN
-#define RWNX_RADARR_DUMP_NB 32
-struct rwnx_radar_dump {
-    u32 cnt;
-    u32 idx;
-    u32 ps[RWNX_RADARR_DUMP_NB];
-    u64 tm[RWNX_RADARR_DUMP_NB];
-    u64 ts[RWNX_RADARR_DUMP_NB];
-};
-#endif
-enum rwnx_radar_status {
-    RWNX_RADAR_IDLE             = 0,
-    RWNX_RADAR_CAC_BUSY         = 1,
-    RWNX_RADAR_CAC_DONE         = 2,
-    RWNX_RADAR_INSERVICE_BUSY   = 3,
-    RWNX_RADAR_INSERVICE_DONE   = 4
-};
+
 struct rwnx_radar {
     struct rwnx_radar_pulses pulses[RWNX_RADAR_LAST];
     struct dfs_pattern_detector *dpd[RWNX_RADAR_LAST];
     struct rwnx_radar_detected detected[RWNX_RADAR_LAST];
-    #ifdef RWNX_RADAR_DUMP_EN
-    struct rwnx_radar_dump *rmem;
-    #endif
-    u16     status;
-    u16     sta_num;
     struct work_struct detection_work;  /* Work used to process radar pulses */
     spinlock_t lock;                    /* lock for pulses processing */
 
@@ -118,10 +96,6 @@ struct rwnx_radar {
     struct rwnx_vif *cac_vif;           /* vif on which we started CAC */
 #endif
 };
-
-void rwnx_radar_reset_rmem(struct rwnx_radar *radar);
-void rwnx_radar_init_rmem(struct rwnx_radar *radar);
-void rwnx_radar_deinit_rmem(struct rwnx_radar *radar);
 
 bool rwnx_radar_detection_init(struct rwnx_radar *radar);
 void rwnx_radar_detection_deinit(struct rwnx_radar *radar);

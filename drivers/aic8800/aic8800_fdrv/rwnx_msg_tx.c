@@ -22,10 +22,6 @@
 #include "aicwf_txrxif.h"
 #include "rwnx_strs.h"
 
-#ifdef RF_WRITE_FILE
-#include <linux/fs.h>
-#endif
-
 
 const struct mac_addr mac_addr_bcst = {{0xFFFF, 0xFFFF, 0xFFFF}};
 
@@ -1150,320 +1146,58 @@ int rwnx_send_rf_config_req(struct rwnx_hw *rwnx_hw, u8_l ofst, u8_l sel, u8_l *
     return (error);
 }
 
-#ifdef RF_WRITE_FILE
-
-#define FW_PATH_MAX_LEN_RF 200
-extern char aic_fw_path[FW_PATH_MAX_LEN_RF];
-
-int rwnx_rf_write_file(void *buf, int buf_len)
-{	
-	int sum = 0, len = 0;
-    char *path = NULL;
-    struct file *fp = NULL;
-    loff_t pos = 0;
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(5, 10, 0)
-	mm_segment_t fs;
-#endif
-	
-	AICWFDBG(LOGINFO, "%s\n", __func__);
-    path = __getname();
-    if (!path) {
-        AICWFDBG(LOGINFO, "get path fail\n");
-        return -1;
-    }
-
-	len = snprintf(path, FW_PATH_MAX_LEN_RF, "%s/%s", aic_fw_path, FW_RF_CALIB_FILE);
-	AICWFDBG(LOGINFO, "%s: path=%s\n", __func__,path);
-	
-	fp = filp_open(path, O_RDWR | O_CREAT, 0644);
-	if (IS_ERR(fp)) {
-	  AICWFDBG(LOGINFO, "fp open fial\n");
-	  __putname(path);
-	  fp = NULL;
-	  return -2;
-	}
-
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(5, 10, 0)
-	fs = get_fs();
-	set_fs(KERNEL_DS);
-#endif
-	  
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0)
-	sum = kernel_write(fp, buf, buf_len, &pos);
-#else LINUX_VERSION_CODE >= KERNEL_VERSION(3, 9, 0)
-	sum = kernel_write(fp, (char *)buf, buf_len, pos);
-#endif
-	  
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(5, 10, 0)
-	set_fs(fs);
-#endif
-
-	__putname(path);
-    filp_close(fp, NULL);
-	fp = NULL;
-
-    return 0;
-	  
-}
-
-int is_file_exist_rf(char* name)
-{
-    char *path = NULL;
-    struct file *fp = NULL;
-    int len;
-
-    path = __getname();
-    if (!path) {
-        AICWFDBG(LOGINFO, "%s getname fail\n", __func__);
-        return -1;
-    }
-
-    len = snprintf(path, FW_PATH_MAX_LEN_RF, "%s/%s", aic_fw_path, name);
-
-    fp = filp_open(path, O_RDONLY, 0);
-    if (IS_ERR(fp)) {
-        __putname(path);
-        fp = NULL;
-        return 0;
-    } else {
-        __putname(path);
-        filp_close(fp, NULL);
-		fp = NULL;
-        return 1;
-    }
-}
-#endif
-
 extern void get_userconfig_xtal_cap(xtal_cap_conf_t *xtal_cap);
 
 int rwnx_send_rf_calib_req(struct rwnx_hw *rwnx_hw, struct mm_set_rf_calib_cfm *cfm)
 {
+    struct mm_set_rf_calib_req *rf_calib_req;
     xtal_cap_conf_t xtal_cap = {0,};
     int error;
 
     RWNX_DBG(RWNX_FN_ENTRY_STR);
-	AICWFDBG(LOGINFO, "%s in,chipid=%d\n", __func__,rwnx_hw->usbdev->chipid);	
-	
-	if((rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800D81X2) ||(rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800D89X2))
-	{
-		struct mm_set_rf_calib_req_v2 *rf_calib_req;
-		struct mm_set_rf_calib_cfm_v2 cfm2;
 
-		 /* Build the MM_SET_RF_CALIB_REQ message */
-	    rf_calib_req = rwnx_msg_zalloc(MM_SET_RF_CALIB_REQ, TASK_MM, DRV_TASK_ID,
-	                                  sizeof(struct mm_set_rf_calib_req_v2));
+    /* Build the MM_SET_RF_CALIB_REQ message */
+    rf_calib_req = rwnx_msg_zalloc(MM_SET_RF_CALIB_REQ, TASK_MM, DRV_TASK_ID,
+                                  sizeof(struct mm_set_rf_calib_req));
 
-	    if (!rf_calib_req) {
-	        return -ENOMEM;
-	    }
+    if (!rf_calib_req) {
+        return -ENOMEM;
+    }
 
-	    if(rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8801){
-	        rf_calib_req->cal_cfg_24g = 0xbf;
-	        rf_calib_req->cal_cfg_5g = 0x3f;
-	    }else if(rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800DC ||
-	        rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800DW){
-	        rf_calib_req->cal_cfg_24g = 0x0f8f;
-	        rf_calib_req->cal_cfg_5g = 0;
-	    }else if(rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800D81){
-	        rf_calib_req->cal_cfg_24g = 0x0f8f;
-	        rf_calib_req->cal_cfg_5g = 0x0f0f;
-	    }else if(rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800D81X2 ||
-	        rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800D89X2){
-	        rf_calib_req->cal_cfg_24g = 0x0f8f;
-	        rf_calib_req->cal_cfg_5g = 0x0f0f;
-	    }
+    if(rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8801){
+        rf_calib_req->cal_cfg_24g = 0xbf;
+        rf_calib_req->cal_cfg_5g = 0x3f;
+    }else if(rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800DC ||
+        rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800DW){
+        rf_calib_req->cal_cfg_24g = 0x0f8f;
+        rf_calib_req->cal_cfg_5g = 0;
+    }else if(rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800D81){
+        rf_calib_req->cal_cfg_24g = 0x0f8f;
+        rf_calib_req->cal_cfg_5g = 0x0f0f;
+    }else if(rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800D81X2 ||
+        rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800D89X2){
+        rf_calib_req->cal_cfg_24g = 0x0f8f;
+        rf_calib_req->cal_cfg_5g = 0x0f0f;
+    }
 
-	    rf_calib_req->param_alpha = 0x0c34c008;
-	    rf_calib_req->bt_calib_en = 0;
-	    rf_calib_req->bt_calib_param = 0x264203;
+    rf_calib_req->param_alpha = 0x0c34c008;
+    rf_calib_req->bt_calib_en = 0;
+    rf_calib_req->bt_calib_param = 0x264203;
 
-	    get_userconfig_xtal_cap(&xtal_cap);
+    get_userconfig_xtal_cap(&xtal_cap);
 
-	    if (xtal_cap.enable) {
-	        AICWFDBG(LOGINFO, "user xtal cap: %d, cap_fine: %d\n", xtal_cap.xtal_cap, xtal_cap.xtal_cap_fine);
-	        rf_calib_req->xtal_cap = xtal_cap.xtal_cap;
-	        rf_calib_req->xtal_cap_fine = xtal_cap.xtal_cap_fine;
-	    } else {
-	        rf_calib_req->xtal_cap = 0;
-	        rf_calib_req->xtal_cap_fine = 0;
-	    }
-		
-#ifdef RF_WRITE_FILE
-		if(is_file_exist_rf(FW_RF_CALIB_FILE) == 1)
-		{
-			void *buffer = NULL;
-			char *path = NULL;
-			struct file *fp = NULL;
-			int size = 0, len = 0;// i = 0;
-			ssize_t rdlen = 0;
-			unsigned char decrypt[16];
-			//u32 **fw_buf =NULL; 
-			//struct kstat stat;
-		
-		
-			AICWFDBG(LOGINFO, "%s: file exist in\n", __func__);
-			path = __getname();
-			if (!path) 
-			{
-				return -1;
-			}
-			len = snprintf(path, FW_PATH_MAX_LEN_RF, "%s/%s", aic_fw_path, FW_RF_CALIB_FILE);
-			AICWFDBG(LOGINFO, "%s: path=%s\n", __func__,path);
+    if (xtal_cap.enable) {
+        AICWFDBG(LOGINFO, "user xtal cap: %d, cap_fine: %d\n", xtal_cap.xtal_cap, xtal_cap.xtal_cap_fine);
+        rf_calib_req->xtal_cap = xtal_cap.xtal_cap;
+        rf_calib_req->xtal_cap_fine = xtal_cap.xtal_cap_fine;
+    } else {
+        rf_calib_req->xtal_cap = 0;
+        rf_calib_req->xtal_cap_fine = 0;
+    }
 
-			if (len >= FW_PATH_MAX_LEN_RF) 
-			{
-				AICWFDBG(LOGERROR, "%s: %s file's path too long\n", __func__, FW_RF_CALIB_FILE);
-				__putname(path);
-				return -2;
-			}
+    /* Send the MM_SET_RF_CALIB_REQ message to UMAC FW */
+    error = rwnx_send_msg(rwnx_hw, rf_calib_req, 1, MM_SET_RF_CALIB_CFM, cfm);
 
-			fp = filp_open(path, O_RDONLY, 0);
-			if (IS_ERR_OR_NULL(fp)) 
-			{
-				AICWFDBG(LOGERROR, "%s: %s file failed to open\n", __func__, FW_RF_CALIB_FILE);
-				__putname(path);
-				fp = NULL;
-				return -3;
-			}
-
-			//vfs_stat(path, &stat);
-			size =(int)fp->f_inode->i_size;
-			AICWFDBG(LOGINFO, "%s: file is %d bytes\n", __func__,size);
-			buffer = vmalloc(size);
-			if (!buffer) 
-			{
-				__putname(path);
-				filp_close(fp, NULL);
-				fp = NULL;
-				return -4;
-			}
-
-		#if LINUX_VERSION_CODE > KERNEL_VERSION(4, 13, 16)
-			rdlen = kernel_read(fp, buffer, size, &fp->f_pos);
-		#else
-			rdlen = kernel_read(fp, fp->f_pos, buffer, size);
-		#endif
-			//rwnx_data_dump("cal_res.res_data",buffer,size);
-			
-			if (size != rdlen) 
-			{
-			   AICWFDBG(LOGERROR, "%s: %s file rdlen invalid %d\n", __func__, FW_RF_CALIB_FILE, (int)rdlen);
-			   __putname(path);
-			   filp_close(fp, NULL);
-			   fp = NULL;
-			   vfree(buffer);
-			   buffer = NULL;
-			   return -5;
-			}
-			
-			if (rdlen > 0) 
-			{
-			   fp->f_pos += rdlen;
-			}
-			
-			__putname(path);
-			filp_close(fp, NULL);
-			fp = NULL;
-
-			if(rdlen == sizeof(rf_calib_req->cal_res.res_data))
-			{
-				memcpy((u8 *)rf_calib_req->cal_res.res_data,buffer,rdlen);
-				//SET Demo
-				rf_calib_req->cal_res.magic_num = DRIVER_SET_WIFI_CALRES_MAGIC_NUM;
-				rf_calib_req->cal_res.info_flag = 0x4F;
-				rf_calib_req->cal_res.calib_flag = 0x00;
-				// before req, write testmode rf calib reg->cal res.res_data[], data read from file 	
-			}
-			else
-			{
-				AICWFDBG(LOGERROR, "%s: %s file rdlen %d is not equal rf_calib_req \n", __func__, FW_RF_CALIB_FILE, (int)rdlen);
-				vfree(buffer);
-				return -6;
-			}
-			vfree(buffer);
-		}
-		else
-#endif
-		{
-			AICWFDBG(LOGINFO, "%s: file not exist in\n", __func__);
-			//GET Demo
-			rf_calib_req->cal_res.magic_num = DRIVER_GET_WIFI_CALRES_MAGIC_NUM;
-			rf_calib_req->cal_res.info_flag = 0x00;
-			rf_calib_req->cal_res.calib_flag = 0x4F;
-			// after req, read mm_set_rf_calib_cfm.cal_res.res data[]
-			// save the data into file		
-		}
-		/* Send the MM_SET_RF_CALIB_REQ message to UMAC FW */
-		error = rwnx_send_msg(rwnx_hw, rf_calib_req, 1, MM_SET_RF_CALIB_CFM, &cfm2);
-
-#ifdef RF_WRITE_FILE
-		if(is_file_exist_rf(FW_RF_CALIB_FILE) != 1)
-		{	
-			void *buffer = NULL;
-			int buf_len = sizeof(cfm2.cal_res.res_data);
-			
-			AICWFDBG(LOGINFO, "%s: file not exist in2,buf_len=%d\n", __func__,buf_len);
-			buffer = vmalloc(buf_len);
-			if (!buffer) 
-			{
-				return -4;
-			}
-			memcpy(buffer,cfm2.cal_res.res_data,buf_len);
-			//rwnx_data_dump("cal_res.res_data",buffer,buf_len);
-			rwnx_rf_write_file(buffer,buf_len);
-			vfree(buffer);
-		}
-#endif
-		cfm->rxgain_24g_addr	= 	cfm2.rxgain_24g_addr;
-    	cfm->rxgain_5g_addr 	= 	cfm2.rxgain_5g_addr;
-    	cfm->txgain_24g_addr 	= 	cfm2.txgain_24g_addr;
-    	cfm->txgain_5g_addr		=	cfm2.txgain_5g_addr;	
-	}
-	else
-	{
-		struct mm_set_rf_calib_req *rf_calib_req;
-	    /* Build the MM_SET_RF_CALIB_REQ message */
-	    rf_calib_req = rwnx_msg_zalloc(MM_SET_RF_CALIB_REQ, TASK_MM, DRV_TASK_ID,
-	                                  sizeof(struct mm_set_rf_calib_req));
-
-	    if (!rf_calib_req) {
-	        return -ENOMEM;
-	    }
-
-	    if(rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8801){
-	        rf_calib_req->cal_cfg_24g = 0xbf;
-	        rf_calib_req->cal_cfg_5g = 0x3f;
-	    }else if(rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800DC ||
-	        rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800DW){
-	        rf_calib_req->cal_cfg_24g = 0x0f8f;
-	        rf_calib_req->cal_cfg_5g = 0;
-	    }else if(rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800D81){
-	        rf_calib_req->cal_cfg_24g = 0x0f8f;
-	        rf_calib_req->cal_cfg_5g = 0x0f0f;
-	    }else if(rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800D81X2 ||
-	        rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800D89X2){
-	        rf_calib_req->cal_cfg_24g = 0x0f8f;
-	        rf_calib_req->cal_cfg_5g = 0x0f0f;
-	    }
-
-	    rf_calib_req->param_alpha = 0x0c34c008;
-	    rf_calib_req->bt_calib_en = 0;
-	    rf_calib_req->bt_calib_param = 0x264203;
-
-	    get_userconfig_xtal_cap(&xtal_cap);
-
-	    if (xtal_cap.enable) {
-	        AICWFDBG(LOGINFO, "user xtal cap: %d, cap_fine: %d\n", xtal_cap.xtal_cap, xtal_cap.xtal_cap_fine);
-	        rf_calib_req->xtal_cap = xtal_cap.xtal_cap;
-	        rf_calib_req->xtal_cap_fine = xtal_cap.xtal_cap_fine;
-	    } else {
-	        rf_calib_req->xtal_cap = 0;
-	        rf_calib_req->xtal_cap_fine = 0;
-	    }
-		/* Send the MM_SET_RF_CALIB_REQ message to UMAC FW */
-		error = rwnx_send_msg(rwnx_hw, rf_calib_req, 1, MM_SET_RF_CALIB_CFM, cfm);
-	}
-		
     return (error);
 };
 
@@ -1828,391 +1562,6 @@ int rwnx_send_vendor_swconfig_req(struct rwnx_hw *rwnx_hw, uint32_t swconfig_id,
 
     return error;
 }
-
-int rwnx_send_vendor_hwconfig_req_x2(struct rwnx_hw *rwnx_hw, uint32_t hwconfig_id, int32_t *param, int32_t *param_out)
-{
-	struct mm_set_acs_txop_req *req0;
-	struct mm_set_channel_access_req *req1;
-	struct mm_set_mac_timescale_req *req2;
-	struct mm_set_cca_threshold_req *req3;
-	struct mm_set_bwmode_req *req4;
-
-	int error = 0;
-
-	switch (hwconfig_id)
-	{
-	    case ACS_TXOP_REQ_X2:
-		/* Build the ACS_TXOP_REQ message */
-		req0= rwnx_msg_zalloc(MM_SET_VENDOR_HWCONFIG_REQ, TASK_MM, DRV_TASK_ID, sizeof(struct mm_set_acs_txop_req) );
-		if (!req0)
-		    return -ENOMEM;
-		req0->hwconfig_id = hwconfig_id;
-		req0->txop_be = param[0];
-		req0->txop_bk = param[1];
-		req0->txop_vi = param[2];
-		req0->txop_vo = param[3];
-		AICWFDBG(LOGINFO, "set_acs_txop_req: be: %x,bk: %x,vi: %x,vo: %x\n",
-                        req0->txop_be, req0->txop_bk, req0->txop_vi, req0->txop_vo);
-		/* Send the MM_SET_VENDOR_HWCONFIG_CFM  message to UMAC FW */
-		error = rwnx_send_msg(rwnx_hw, req0, 1, MM_SET_VENDOR_HWCONFIG_CFM, NULL);
-		break;
-
-	    case CHANNEL_ACCESS_REQ_X2:
-		/* Build the CHANNEL_ACCESS_REQ message */
-		req1 = rwnx_msg_zalloc(MM_SET_VENDOR_HWCONFIG_REQ, TASK_MM, DRV_TASK_ID, sizeof(struct mm_set_channel_access_req));
-		if (!req1)
-		    return -ENOMEM;
-		req1->hwconfig_id = hwconfig_id;
-		req1->edca[0] = param[0];
-		req1->edca[1] = param[1];
-		req1->edca[2] =	param[2];
-		req1->edca[3] = param[3];
-		req1->vif_idx = param[4];
-		req1->retry_cnt = param[5];
-		req1->rts_en = param[6];
-		req1->long_nav_en = param[7];
-		req1->cfe_en = param[8];
-		req1->rc_retry_cnt[0] = param[9];
-		req1->rc_retry_cnt[1] = param[10];
-		req1->rc_retry_cnt[2] = param[11];
-		req1->ccademod_th = param[12];
-		req1->remove_1m2m = param[13];
-		AICWFDBG(LOGINFO, "set_channel_access_req:edca[]= %x %x %x %x\nvif_idx: %x, retry_cnt: %x, rts_en: %x, long_nav_en: %x, cfe_en: %x, rc_retry_cnt: %x:%x:%x, ccademod_th = %d remove_1m2m = %x\n",
-			req1->edca[0], req1->edca[1], req1->edca[2], req1->edca[3], req1->vif_idx, req1->retry_cnt, req1->rts_en, req1->long_nav_en, req1->cfe_en, req1->rc_retry_cnt[0],req1->rc_retry_cnt[1], req1->rc_retry_cnt[2], req1->ccademod_th, req1->remove_1m2m);
-		/* Send the MM_SET_VENDOR_HWCONFIG_CFM  message to UMAC FW */
-		error = rwnx_send_msg(rwnx_hw, req1, 1, MM_SET_VENDOR_HWCONFIG_CFM, NULL);
-		break;
-
-	    case MAC_TIMESCALE_REQ_X2:
-		/* Build the MAC_TIMESCALE_REQ message */
-		req2 = rwnx_msg_zalloc(MM_SET_VENDOR_HWCONFIG_REQ, TASK_MM, DRV_TASK_ID, sizeof(struct mm_set_mac_timescale_req));
-		if (!req2)
-		    return -ENOMEM;
-		req2->hwconfig_id = hwconfig_id;
-		req2->sifsA_time = param[0];
-		req2->sifsB_time = param[1];
-		req2->slot_time = param[2];
-		req2->rx_startdelay_ofdm = param[3];
-		req2->rx_startdelay_long = param[4];
-		req2->rx_startdelay_short = param[5];
-		AICWFDBG(LOGINFO, "set_mac_timescale_req:sifsA_time: %x, sifsB_time: %x, slot_time: %x, rx_startdelay ofdm:%x long %x short %x\n",
-			req2->sifsA_time, req2->sifsB_time, req2->slot_time, req2->rx_startdelay_ofdm, req2->rx_startdelay_long, req2->rx_startdelay_short);
-		/* Send the MM_SET_VENDOR_HWCONFIG_CFM  message to UMAC FW */
-		error = rwnx_send_msg(rwnx_hw, req2, 1, MM_SET_VENDOR_HWCONFIG_CFM, NULL);
-		break;
-
-	    case CCA_THRESHOLD_REQ_X2:
-		/* Build the CCA_THRESHOLD_REQ message */
-		req3 = rwnx_msg_zalloc(MM_SET_VENDOR_HWCONFIG_REQ, TASK_MM, DRV_TASK_ID, sizeof(struct mm_set_cca_threshold_req));
-		if (!req3)
-		    return -ENOMEM;
-		req3->hwconfig_id = hwconfig_id;
-	        req3->auto_cca_en = param[0];
-		req3->cca20p_rise_th = param[1];
-		req3->cca20s_rise_th = param[2];
-		req3->cca20p_fall_th = param[3];
-		req3->cca20s_fall_th = param[4];
-		AICWFDBG(LOGINFO, "cca_threshold_req: auto_cca_en:%d\ncca20p_rise_th = %d\ncca20s_rise_th = %d\ncca20p_fall_th = %d\ncca20s_fall_th = %d\n",
-			req3->auto_cca_en, req3->cca20p_rise_th, req3->cca20s_rise_th, req3->cca20p_fall_th, req3->cca20s_fall_th);
-		/* Send the MM_SET_VENDOR_HWCONFIG_CFM  message to UMAC FW */
-		error = rwnx_send_msg(rwnx_hw, req3, 1, MM_SET_VENDOR_HWCONFIG_CFM, NULL);
-		break;
-
-	    case BWMODE_REQ_X2:
-		/* Build the SET_BWMODE_REQ message */
-		req4 = rwnx_msg_zalloc(MM_SET_VENDOR_HWCONFIG_REQ, TASK_MM, DRV_TASK_ID, sizeof(struct mm_set_bwmode_req));
-		if (!req4)
-		    return -ENOMEM;
-		req4->hwconfig_id = hwconfig_id;
-		req4->bwmode = param[0];
-		AICWFDBG(LOGINFO, "bwmode :%d\n", req4->bwmode);
-                /* Send the MM_SET_VENDOR_HWCONFIG_CFM  message to UMAC FW */
-		error = rwnx_send_msg(rwnx_hw, req4, 1, MM_SET_VENDOR_HWCONFIG_CFM, NULL);
-		break;
-        case CHIP_TEMP_GET_REQ_X2:
-        //if ((rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800DC) ||
-        //    (rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800DW))
-        {
-            struct mm_get_chip_temp_req *req;
-            struct mm_set_vendor_hwconfig_cfm cfm = {0,};
-            /* Build the CHIP_TEMP_GET_REQ message */
-            req = rwnx_msg_zalloc(MM_SET_VENDOR_HWCONFIG_REQ, TASK_MM, DRV_TASK_ID, sizeof(struct mm_get_chip_temp_req));
-            if (!req)
-                return -ENOMEM;
-            req->hwconfig_id = hwconfig_id;
-            /* Send the MM_SET_VENDOR_HWCONFIG_REQ  message to UMAC FW */
-            error = rwnx_send_msg(rwnx_hw, req, 1, MM_SET_VENDOR_HWCONFIG_CFM, &cfm);
-            if (!error) {
-                if (param_out) {
-                    param_out[0] = (int32_t)cfm.chip_temp_cfm.degree;
-                }
-                AICWFDBG(LOGINFO, "get_chip_temp degree=%d\n", cfm.chip_temp_cfm.degree);
-            } else {
-                AICWFDBG(LOGERROR, "get_chip_temp err=%d\n", error);
-            }
-        }
-        break;
-
-        case STBC_MCS_SET_REQ_X2:
-        {
-            struct mm_get_stbc_msc_req *req;
-
-            req = rwnx_msg_zalloc(MM_SET_VENDOR_HWCONFIG_REQ, TASK_MM, DRV_TASK_ID, sizeof(struct mm_get_stbc_msc_req));
-            if (!req)
-                return -ENOMEM;
-            req->hwconfig_id = hwconfig_id;
-            req->enable = (u8)param[0];
-            req->mcs_thresh = (u8)param[1];
-
-            error = rwnx_send_msg(rwnx_hw, req, 1, MM_SET_VENDOR_HWCONFIG_CFM, NULL);
-            if (error) {
-                AICWFDBG(LOGERROR, "set_stbc_err =%d\n", error);
-            }
-        }
-        break;
-        case MAX_AGG_TX_CNT_REQ_X2:
-        {
-            struct mm_set_max_tx_agg_cnt_req *req;
-
-            if((u8)param[0] > 1 || (u8)param[1] > 11) {
-                AICWFDBG(LOGERROR, "hwvendor max_agg_cnt param error:%x,%x\n", (u8)param[0], (u8)param[1]);
-                break;
-            }
-            req = rwnx_msg_zalloc(MM_SET_VENDOR_HWCONFIG_REQ, TASK_MM, DRV_TASK_ID, sizeof(struct mm_set_max_tx_agg_cnt_req));
-            if (!req)
-                return -ENOMEM;
-
-            req->hwconfig_id = hwconfig_id;
-            req->enale = (u8)param[0];
-            req->mcs_thresh = (u8)param[1];
-            req->max_agg_cnt[0] = (u8)param[2];
-            req->max_agg_cnt[1] = (u8)param[3];
-            req->max_agg_cnt[2] = (u8)param[4];
-            req->max_agg_cnt[3] = (u8)param[5];
-
-            error = rwnx_send_msg(rwnx_hw, req, 1, MM_SET_VENDOR_HWCONFIG_CFM, NULL);
-            if (error) {
-                AICWFDBG(LOGERROR, "set agg max cnt err=%d\n", error);
-            }
-            AICWFDBG(LOGINFO, "hwvendor max_aggr_cnt:en=%d, mcs_thresh=%d, 0x%x, 0x%x, 0x%x, 0x%x\n", req->enale, req->mcs_thresh, req->max_agg_cnt[0],
-                                            req->max_agg_cnt[1], req->max_agg_cnt[2], req->max_agg_cnt[3]);
-        }
-        break;
-        case MAX_BW_MCS_THRESH_SET_REQ_X2:
-        {
-            struct mm_set_max_bw_mcs_thresh_req *req;
-            if((u8)param[0] > 1 || (u8)param[1] > 11) {
-                AICWFDBG(LOGERROR, "hwvendor max_bw_mcs param error:%x,%x\n", (u8)param[0], (u8)param[1]);
-                break;
-            }
-            req = rwnx_msg_zalloc(MM_SET_VENDOR_HWCONFIG_REQ, TASK_MM, DRV_TASK_ID, sizeof(struct mm_set_max_bw_mcs_thresh_req));
-            if (!req)
-                return -ENOMEM;
-
-            req->hwconfig_id = hwconfig_id;
-            req->enale = (u8)param[0];
-            req->max_bw_mcs_thresh = (u8)param[1];
-
-            error = rwnx_send_msg(rwnx_hw, req, 1, MM_SET_VENDOR_HWCONFIG_CFM, NULL);
-            if (error) {
-                AICWFDBG(LOGERROR, "set max_bw_mcs err=%d\n", error);
-            }
-            AICWFDBG(LOGINFO, "set max_bw_mcs: enable=%d, thresh=%d\n", (u8)param[0], (u8)param[1]);
-        }
-        break;
-        case DCM_FORCE_EN_REQ_X2:
-        {
-           struct mm_set_dcm_force_en_req *req;
-           req = rwnx_msg_zalloc(MM_SET_VENDOR_HWCONFIG_REQ, TASK_MM, DRV_TASK_ID, sizeof(struct mm_set_dcm_force_en_req));
-            if (!req)
-                return -ENOMEM;
-
-            req->hwconfig_id = hwconfig_id;
-            req->enable = (u8)param[0];
-
-            error = rwnx_send_msg(rwnx_hw, req, 1, MM_SET_VENDOR_HWCONFIG_CFM, NULL);
-            if (error) {
-                AICWFDBG(LOGERROR, "set dcm_force_en err=%d\n", error);
-            }
-            AICWFDBG(LOGINFO, "set dcm_force_en: enable=%d\n", (u8)param[0]);
-        }
-        break;
-        case AUTO_CCA_EN_REQ_X2:
-        {
-            struct mm_set_auto_cca_en_req *req;
-
-            if((u8)param[0] > 1 || (int8_t)param[1] > 0 || (u8)param[2] > 1 || (int8_t)param[3]>0) {
-                AICWFDBG(LOGERROR, "hwvendor auto_cca_en param error:%x,%d,%x,%d\n", (u8)param[0], (int8_t)param[1],
-                                                                               (u8)param[2], (int8_t)param[3]);
-                break;
-            }
-            req = rwnx_msg_zalloc(MM_SET_VENDOR_HWCONFIG_REQ, TASK_MM, DRV_TASK_ID, sizeof(struct mm_set_auto_cca_en_req));
-            if (!req)
-                return -ENOMEM;
-
-            req->hwconfig_id = hwconfig_id;
-            req->enable = (u8)param[0];
-            req->max_cca_thresh = (int8_t)param[1];
-            req->default_cca_set = (u8)param[2];
-            req->default_cca_thresh = (int8_t)param[3];
-
-            error = rwnx_send_msg(rwnx_hw, req, 1, MM_SET_VENDOR_HWCONFIG_CFM, NULL);
-            if (error) {
-                AICWFDBG(LOGERROR, "set auto cca en err=%d\n", error);
-            }
-            AICWFDBG(LOGINFO, "set auto cca en: enable=%d, thresh=%d, default_set=%d, default_thresh=%d\n",
-                                    (u8)param[0], (int8_t)param[1], (u8)param[2], (int8_t)param[3]);
-        }
-        break;
-        case NSS_1T2R_REQ_X2:
-        {
-            struct mm_set_nss_1t2r_req *req;
-            req = rwnx_msg_zalloc(MM_SET_VENDOR_HWCONFIG_REQ, TASK_MM, DRV_TASK_ID, sizeof(struct mm_set_nss_1t2r_req));
-            if (!req)
-                return -ENOMEM;
-
-            req->hwconfig_id = hwconfig_id;
-            req->enable = (u8)param[0];
-            error = rwnx_send_msg(rwnx_hw, req, 1, MM_SET_VENDOR_HWCONFIG_CFM, NULL);
-            if (error) {
-                AICWFDBG(LOGERROR, "set nss 1t2r err=%d\n", error);
-            }
-            AICWFDBG(LOGINFO, "set nss 1t2r: enable=%d\n", (u8)param[0]);
-        }
-        break;
-	    case ON_AIR_DUTY_CYCLE_REQ_X2:
-        {
-            struct mm_set_on_air_duty_cycle_req *req;
-            if((u8)param[1]<1 || (u8)param[1] > 100) {
-                AICWFDBG(LOGERROR, "hwvendor on_air_duty_cycle param error:%x,%x\n", (u8)param[0], (u8)param[1]);
-                break;
-            }
-            req = rwnx_msg_zalloc(MM_SET_VENDOR_HWCONFIG_REQ, TASK_MM, DRV_TASK_ID, sizeof(struct mm_set_on_air_duty_cycle_req));
-            if (!req)
-                return -ENOMEM;
-
-            req->hwconfig_id = hwconfig_id;
-            req->enable = (u8)param[0];
-            req->percent = (u8)param[1];
-
-            error = rwnx_send_msg(rwnx_hw, req, 1, MM_SET_VENDOR_HWCONFIG_CFM, NULL);
-            if (error) {
-                AICWFDBG(LOGERROR, "set on_air duty cycle err=%d\n", error);
-            }
-            AICWFDBG(LOGINFO, "set on_air duty cycle: enable=%d, percent=%d\n", (u8)param[0], (u8)param[1]);
-        }
-        break;
-	    default:
-		return -ENOMEM;
-	}
-    return error;
-}
-
-int rwnx_send_vendor_swconfig_req_x2(struct rwnx_hw *rwnx_hw, uint32_t swconfig_id, int32_t *param_in, int32_t *param_out)
-{
-    struct mm_set_vendor_swconfig_req *req;
-    struct mm_set_vendor_swconfig_cfm cfm = {0,};
-    int error;
-
-    req = rwnx_msg_zalloc(MM_SET_VENDOR_SWCONFIG_REQ, TASK_MM, DRV_TASK_ID, sizeof(struct mm_set_vendor_swconfig_req));
-    if (!req) {
-        return -ENOMEM;
-    }
-    req->swconfig_id = swconfig_id;
-
-    switch (swconfig_id)
-    {
-        case BCN_CFG_REQ_X2:
-            /* Build the BCN_CFG_REQ message */
-            req->bcn_cfg_req.tim_bcmc_ignored_enable = (bool_l)param_in[0];
-            AICWFDBG(LOGINFO, "bcn_cfg_req: tim_bcmc_ignd=%d\n", req->bcn_cfg_req.tim_bcmc_ignored_enable);
-            /* Send the MM_SET_VENDOR_SWCONFIG_REQ message to UMAC FW */
-            error = rwnx_send_msg(rwnx_hw, req, 1, MM_SET_VENDOR_SWCONFIG_CFM, &cfm);
-            if (!error) {
-                param_out[0] = (int32_t)cfm.bcn_cfg_cfm.tim_bcmc_ignored_status;
-                AICWFDBG(LOGINFO, "status=%d\n", cfm.bcn_cfg_cfm.tim_bcmc_ignored_status);
-            }
-            break;
-
-        case TEMP_COMP_SET_REQ_X2:
-            /* Build the TEMP_COMP_SET_REQ message */
-            req->temp_comp_set_req.enable = (u8_l)param_in[0];
-            req->temp_comp_set_req.tmr_period_ms = (u32_l)param_in[1];
-            AICWFDBG(LOGINFO, "temp_comp_set_req: en=%d, tmr=%x\n",
-                req->temp_comp_set_req.enable, req->temp_comp_set_req.tmr_period_ms);
-            /* Send the MM_SET_VENDOR_SWCONFIG_REQ message to UMAC FW */
-            error = rwnx_send_msg(rwnx_hw, req, 1, MM_SET_VENDOR_SWCONFIG_CFM, &cfm);
-            if (!error) {
-                param_out[0] = (int32_t)cfm.temp_comp_set_cfm.status;
-                AICWFDBG(LOGINFO, "status=%d\n", cfm.temp_comp_set_cfm.status);
-            }
-            break;
-
-        case TEMP_COMP_GET_REQ_X2:
-            AICWFDBG(LOGTRACE, "temp_comp_get_req\n");
-            /* Send the MM_SET_VENDOR_SWCONFIG_REQ message to UMAC FW */
-            error = rwnx_send_msg(rwnx_hw, req, 1, MM_SET_VENDOR_SWCONFIG_CFM, &cfm);
-            if (!error) {
-                param_out[0] = (int32_t)cfm.temp_comp_get_cfm.status;
-                param_out[1] = (int32_t)cfm.temp_comp_get_cfm.degree;
-                AICWFDBG(LOGINFO, "status=%d, degree=%d\n",
-                    cfm.temp_comp_get_cfm.status, cfm.temp_comp_get_cfm.degree);
-            }
-            break;
-
-        case EXT_FLAGS_SET_REQ_X2:
-            /* Build the EXT_FLAGS_SET_REQ message */
-            req->ext_flags_set_req.user_flags = (u32_l)param_in[0];
-            AICWFDBG(LOGINFO, "ext_flags_set_req: flags=%x\n",
-                req->ext_flags_set_req.user_flags);
-            /* Send the MM_SET_VENDOR_SWCONFIG_REQ message to UMAC FW */
-            error = rwnx_send_msg(rwnx_hw, req, 1, MM_SET_VENDOR_SWCONFIG_CFM, &cfm);
-            if (!error) {
-                param_out[0] = (uint32_t)cfm.ext_flags_set_cfm.user_flags;
-                AICWFDBG(LOGINFO, "cfm flags=%x\n", cfm.ext_flags_set_cfm.user_flags);
-            }
-            break;
-
-        case EXT_FLAGS_GET_REQ_X2:
-            /* Build the EXT_FLAGS_GET_REQ message */
-            AICWFDBG(LOGTRACE, "ext_flags_get_req\n");
-            /* Send the MM_SET_VENDOR_SWCONFIG_REQ message to UMAC FW */
-            error = rwnx_send_msg(rwnx_hw, req, 1, MM_SET_VENDOR_SWCONFIG_CFM, &cfm);
-            if (!error) {
-                param_out[0] = (uint32_t)cfm.ext_flags_get_cfm.user_flags;
-                AICWFDBG(LOGINFO, "cfm flags=%x\n", cfm.ext_flags_get_cfm.user_flags);
-            }
-            break;
-
-        case EXT_FLAGS_MASK_SET_REQ_X2:
-            /* Build the EXT_FLAGS_MASK_SET_REQ message */
-            req->ext_flags_mask_set_req.user_flags_mask = (u32_l)param_in[0];
-            req->ext_flags_mask_set_req.user_flags_val = (u32_l)param_in[1];
-            AICWFDBG(LOGINFO, "ext_flags_mask_set_req: flags mask=0x%x, val=0x%x\n",
-                req->ext_flags_mask_set_req.user_flags_mask, req->ext_flags_mask_set_req.user_flags_val);
-            /* Send the MM_SET_VENDOR_SWCONFIG_REQ message to UMAC FW */
-            error = rwnx_send_msg(rwnx_hw, req, 1, MM_SET_VENDOR_SWCONFIG_CFM, &cfm);
-            if (!error) {
-                param_out[0] = (uint32_t)cfm.ext_flags_mask_set_cfm.user_flags;
-                AICWFDBG(LOGINFO, "cfm flags=%x\n", cfm.ext_flags_mask_set_cfm.user_flags);
-            }
-            break;
-        case TWO_ANT_RSSI_GET_REQ_X2:
-            AICWFDBG(LOGINFO, "get 2 ant rssi:\n");
-            error = rwnx_send_msg(rwnx_hw, req, 1, MM_SET_VENDOR_SWCONFIG_CFM, &cfm);
-            if(error) {
-                AICWFDBG(LOGINFO, "get 2 ant rssi fail\n");
-            } else
-                param_out[0] = *((u32 *)&cfm + 1);
-            break;
-        default:
-            error = -ENOMEM;
-            break;
-    }
-
-    return error;
-}
-
 
 int rwnx_send_mask_set_ext_flags_req(struct rwnx_hw *rwnx_hw, uint32_t flags_mask, uint32_t flags_val, struct mm_set_vendor_swconfig_cfm *cfm)
 {
@@ -3286,15 +2635,6 @@ int rwnx_send_me_sta_add(struct rwnx_hw *rwnx_hw, struct station_parameters *par
     #endif
     RWNX_DBG(RWNX_FN_ENTRY_STR);
 
-#ifdef CONFIG_RADAR_OR_IR_DETECT
-	if((rwnx_hw->radar.sta_num == 0) && (rwnx_hw->radar.status != RWNX_RADAR_INSERVICE_BUSY))
-		rwnx_hw->radar.status = RWNX_RADAR_INSERVICE_BUSY;
-
-	AICWFDBG(LOGINFO, "DFS: assoc add num %d, %d\n", rwnx_hw->radar.sta_num, rwnx_hw->radar.status);
-	if(rwnx_hw->radar.sta_num < 0x0FFF)
-		rwnx_hw->radar.sta_num++;
-#endif
-
     /* Build the MM_STA_ADD_REQ message */
     req = rwnx_msg_zalloc(ME_STA_ADD_REQ, TASK_ME, DRV_TASK_ID,
                                   sizeof(struct me_sta_add_req));
@@ -3448,15 +2788,6 @@ int rwnx_send_me_sta_del(struct rwnx_hw *rwnx_hw, u8 sta_idx, bool tdls_sta)
     /* Set parameters for the MM_STA_DEL_REQ message */
     req->sta_idx = sta_idx;
     req->tdls_sta = tdls_sta;
-
-#ifdef CONFIG_RADAR_OR_IR_DETECT
-	if((rwnx_hw->radar.sta_num == 1) && (rwnx_hw->radar.status == RWNX_RADAR_INSERVICE_BUSY))
-		rwnx_hw->radar.status = RWNX_RADAR_INSERVICE_DONE;
-
-	AICWFDBG(LOGINFO, "DFS: assoc del num %d, %d\n", rwnx_hw->radar.sta_num, rwnx_hw->radar.status);
-	if(rwnx_hw->radar.sta_num > 0)
-		rwnx_hw->radar.sta_num--;
-#endif
 
     /* Send the ME_STA_DEL_REQ message to LMAC FW */
     return rwnx_send_msg(rwnx_hw, req, 1, ME_STA_DEL_CFM, NULL);
@@ -4117,10 +3448,7 @@ int rwnx_send_apm_start_cac_req(struct rwnx_hw *rwnx_hw, struct rwnx_vif *vif,
 	req->chan.center2_freq = chandef->center_freq2;
 	req->chan.tx_power = 20;
 	req->chan.flags = get_chan_flags(chandef->chan->flags);
-#ifdef CONFIG_RADAR_OR_IR_DETECT
-	rwnx_hw->radar.status = RWNX_RADAR_CAC_BUSY;
-	AICWFDBG(LOGINFO, "DFS: radar st = %d\n", rwnx_hw->radar.status);
-#endif
+
     /* Send the APM_START_CAC_REQ message to LMAC FW */
     return rwnx_send_msg(rwnx_hw, req, 1, APM_START_CAC_CFM, cfm);
 }
@@ -4141,10 +3469,6 @@ int rwnx_send_apm_stop_cac_req(struct rwnx_hw *rwnx_hw, struct rwnx_vif *vif)
     req->vif_idx = vif->vif_index;
 
     /* Send the APM_STOP_CAC_REQ message to LMAC FW */
-#ifdef CONFIG_RADAR_OR_IR_DETECT
-	rwnx_hw->radar.status = RWNX_RADAR_CAC_DONE;
-	AICWFDBG(LOGINFO, "DFS: radar st = %d\n", rwnx_hw->radar.status);
-#endif
     return rwnx_send_msg(rwnx_hw, req, 1, APM_STOP_CAC_CFM, NULL);
 }
 
@@ -5049,68 +4373,6 @@ int rwnx_send_reboot(struct rwnx_hw *rwnx_hw)
     ret = rwnx_send_dbg_start_app_req(rwnx_hw, delay, HOST_START_APP_REBOOT);
     return ret;
 }
-
-int rwnx_send_pwm_init_req(struct rwnx_hw *rwnx_hw, u8 pwm_gpidx, u8 mode, u8 run, u32 tmr_cnt,
-    u32 dty_cnt, u32 step_val, u8 gpio_en, u8 gpio_dir, u8 gpio_val)
-{
-    struct dbg_pwm_init_req *pwm_init_req;
-
-    pwm_init_req = rwnx_msg_zalloc(DBG_PWM_INIT_REQ, TASK_DBG, DRV_TASK_ID,
-                                    sizeof(struct dbg_pwm_init_req));
-    if (!pwm_init_req)
-        return -ENOMEM;
-
-    pwm_init_req->pwm_gpidx = pwm_gpidx;
-    pwm_init_req->mode      = mode;
-    pwm_init_req->run       = run;
-    pwm_init_req->tmr_cnt   = tmr_cnt;
-    pwm_init_req->dty_cnt   = dty_cnt;
-    pwm_init_req->step_val  = step_val;
-    pwm_init_req->gpio_en   = gpio_en;
-    pwm_init_req->gpio_dir  = gpio_dir;
-    pwm_init_req->gpio_val  = gpio_val;
-
-
-    return rwnx_send_msg(rwnx_hw, pwm_init_req, 1, DBG_PWM_INIT_CFM, NULL);
-}
-
-int rwnx_send_pwm_deinit_req(struct rwnx_hw *rwnx_hw, u8 pwm_gpidx, u8 gpio_en, u8 gpio_dir, u8 gpio_val)
-{
-    struct dbg_pwm_deinit_req *pwm_deinit_req;
-
-    pwm_deinit_req = rwnx_msg_zalloc(DBG_PWM_DEINIT_REQ, TASK_DBG, DRV_TASK_ID,
-                                    sizeof(struct dbg_pwm_deinit_req));
-    if (!pwm_deinit_req)
-        return -ENOMEM;
-
-    pwm_deinit_req->pwm_gpidx = pwm_gpidx;
-    pwm_deinit_req->gpio_en   = gpio_en;
-    pwm_deinit_req->gpio_dir  = gpio_dir;
-    pwm_deinit_req->gpio_val  = gpio_val;
-
-    return rwnx_send_msg(rwnx_hw, pwm_deinit_req, 1, DBG_PWM_DEINIT_CFM, NULL);
-}
-
-u32 pwm_tbl[][2] = {
-    {0x40504088, 4},
-};
-
-void rwnx_set_pwm_tbl(struct rwnx_hw *rwnx_hw)
-{
-    int patch_num = 0;
-    int cnt = 0;
-    int ret = 0;
-
-    patch_num = sizeof(pwm_tbl) / sizeof(u32) / 2;
-    for (cnt = 0; cnt < patch_num; cnt++) {
-        ret = rwnx_send_dbg_mem_write_req(rwnx_hw, pwm_tbl[cnt][0], pwm_tbl[cnt][1]);
-        if (ret) {
-            break;
-        }
-    }
-}
-
-
 //#endif // CONFIG_USB_BT
 #ifdef CONFIG_WOWLAN
 int rwnx_send_dummy_reboot(struct rwnx_hw *rwnx_hw)

@@ -1275,17 +1275,6 @@ struct mm_set_rf_config_req
     u32_l data[64];
 };
 
-typedef struct
-{ 
-	u32_l magic_num; /*“GWCR” or ’SWCR”*/
-	u32_l info_flag; 
-	u32_l calib_flag; 
-	u32_l reserved0; 	
-	u32_l res_data[536/sizeof(u32_l)];
-}wf_rf_calib_res_drv_t;
-
-#define DRIVER_GET_WIFI_CALRES_MAGIC_NUM 0x52435747
-#define DRIVER_SET_WIFI_CALRES_MAGIC_NUM 0x52435753
 
 struct mm_set_rf_calib_req
 {
@@ -1299,35 +1288,12 @@ struct mm_set_rf_calib_req
 
 };
 
-struct mm_set_rf_calib_req_v2
-{
-	u32_l cal_cfg_24g;
-	u32_l cal_cfg_5g;
-	u32_l param_alpha;
-	u32_l bt_calib_en;
-	u32_l bt_calib_param;
-    u8_l xtal_cap;
-	u8_l xtal_cap_fine;
-	u8_l reserved0[2];
-	wf_rf_calib_res_drv_t cal_res;
-
-};
-
 struct mm_set_rf_calib_cfm
 {
     u32_l rxgain_24g_addr;
     u32_l rxgain_5g_addr;
     u32_l txgain_24g_addr;
     u32_l txgain_5g_addr;
-};
-
-struct mm_set_rf_calib_cfm_v2
-{
-	u32_l rxgain_24g_addr;
-	u32_l rxgain_5g_addr;
-	u32_l txgain_24g_addr;
-	u32_l txgain_5g_addr;
-	wf_rf_calib_res_drv_t cal_res;
 };
 
 struct mm_get_mac_addr_req
@@ -2091,23 +2057,6 @@ enum vendor_hwconfig_tag{
 	KEEPALIVE_PKT_REQ,
 };
 
-enum vendor_hwconfig_tag_x2{
-	ACS_TXOP_REQ_X2 = 0,
-	CHANNEL_ACCESS_REQ_X2,
-	MAC_TIMESCALE_REQ_X2,
-	CCA_THRESHOLD_REQ_X2,
-	BWMODE_REQ_X2,
-	CHIP_TEMP_GET_REQ_X2,
-	STBC_MCS_SET_REQ_X2,
-	MAX_AGG_TX_CNT_REQ_X2,
-	MAX_BW_MCS_THRESH_SET_REQ_X2,
-	DCM_FORCE_EN_REQ_X2,
-	AUTO_CCA_EN_REQ_X2,
-	NSS_1T2R_REQ_X2,
-	ON_AIR_DUTY_CYCLE_REQ_X2,
-};
-
-
 enum {
     BWMODE20M = 0,
     BWMODE10M,
@@ -2176,58 +2125,6 @@ struct mm_get_chip_temp_cfm
     s8_l degree;
 };
 
-struct mm_get_stbc_msc_req
-{
-    u32_l hwconfig_id;
-    u8_l enable;
-    u8_l mcs_thresh;
-};
-
-struct mm_set_max_tx_agg_cnt_req
-{
-    u32_l hwconfig_id;
-    u8_l enale;
-    u8_l mcs_thresh;
-    u8_l max_agg_cnt[AC_MAX];
-};
-
-struct mm_set_max_bw_mcs_thresh_req
-{
-    u32_l hwconfig_id;
-    u8_l enale;
-    u8_l max_bw_mcs_thresh;
-};
-
-struct mm_set_dcm_force_en_req
-{
-    u32_l hwconfig_id;
-    u8_l enable;
-};
-
-
-struct mm_set_auto_cca_en_req
-{
-    u32_l hwconfig_id;
-    u8_l enable;
-    int8_t max_cca_thresh;
-    u8_l default_cca_set;
-    int8_t default_cca_thresh;
-};
-
-struct mm_set_nss_1t2r_req
-{
-    u32_l hwconfig_id;
-    u8_l enable;
-};
-
-struct mm_set_on_air_duty_cycle_req
-{
-    u32_l hwconfig_id;
-    u8_l enable;
-    u8_l percent;//10 means 10%, 1-99
-};
-
-
 struct mm_set_vendor_hwconfig_cfm
 {
     u32_l hwconfig_id;
@@ -2289,18 +2186,6 @@ enum vendor_swconfig_tag
     EXT_FLAGS_GET_REQ,
     EXT_FLAGS_MASK_SET_REQ,
 };
-
-enum vendor_swconfig_tag_x2
-{
-    BCN_CFG_REQ_X2 = 0,
-    TEMP_COMP_SET_REQ_X2,
-    TEMP_COMP_GET_REQ_X2,
-    EXT_FLAGS_SET_REQ_X2,
-    EXT_FLAGS_GET_REQ_X2,
-    EXT_FLAGS_MASK_SET_REQ_X2,
-    TWO_ANT_RSSI_GET_REQ_X2,
-};
-
 
 struct mm_set_bcn_cfg_req
 {
@@ -3463,37 +3348,4 @@ struct mm_set_wakeup_info_req {
 	u16_l length;
 	u8_l mask_and_pattern[];
     };
-
-struct dbg_pwm_init_req
-{
-    /// PWM_CHANNEL_GPIO
-    u8 pwm_gpidx;
-    /// 0 normal 1 breath
-    u8 mode;
-    /// 0 config only 1 run after config
-    u8 run;
-    u32 tmr_cnt;
-    u32 dty_cnt;
-    u32 step_val;
-    /// 0 disable 1 enable
-    u8 gpio_en;
-    /// 0 input 1 output
-    u8 gpio_dir;
-    /// 0 low 1 high
-    u8 gpio_val;
-};
-
-struct dbg_pwm_deinit_req
-{
-    /// PWM_CHANNEL_GPIO
-    u8 pwm_gpidx;
-    /// 0 disable 1 enable
-    u8 gpio_en;
-    /// 0 input 1 output
-    u8 gpio_dir;
-    /// 0 low 1 high
-    u8 gpio_val;
-};
-
-
 #endif // LMAC_MSG_H_

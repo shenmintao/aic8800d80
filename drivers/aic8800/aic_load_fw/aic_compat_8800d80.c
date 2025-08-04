@@ -52,11 +52,7 @@ typedef struct {
 #define CFG_USER_CHAN_MAX_TXPWR_EN  0
 #endif
 #define CFG_USER_TX_USE_ANA_F       0
-#ifdef CONFIG_BAND_STEERING
-#define CFG_USER_APM_PRBRSP_OFFLOAD_DISABLE	1
-#else
 #define CFG_USER_APM_PRBRSP_OFFLOAD_DISABLE	0
-#endif
 
 #define CFG_USER_EXT_FLAGS_EN   (CFG_PWROFST_COVER_CALIB || CFG_USER_CHAN_MAX_TXPWR_EN || CFG_USER_TX_USE_ANA_F|| CFG_USER_APM_PRBRSP_OFFLOAD_DISABLE)
 
@@ -91,7 +87,7 @@ u32 patch_tbl_d80[][2] =
 #endif
 
 #ifdef CONFIG_RADAR_OR_IR_DETECT
-	{0x0019c,0x00000B00},
+	{0x0019c,0x00000100},
 #endif
 };
 
@@ -386,7 +382,6 @@ int aicfw_download_fw_8800d80(struct aic_usb_dev *usb_dev)
 
     int i = 0;
 
-#if 0
     if (chip_id == CHIP_REV_U01) {
         head = aicbt_patch_table_alloc(usb_dev, FW_PATCH_TABLE_NAME_8800D80);
     } else {
@@ -414,11 +409,10 @@ int aicfw_download_fw_8800d80(struct aic_usb_dev *usb_dev)
     }
 
     printk("addr_adid 0x%x, addr_patch 0x%x\n", patch_info.addr_adid, patch_info.addr_patch);
-#endif
+
     if(testmode == FW_NORMAL_MODE){
 
         if (chip_id != CHIP_REV_U01){
-            #if 0
             if(rwnx_plat_bin_fw_upload_android(usb_dev, patch_info.addr_adid, FW_ADID_BASE_NAME_8800D80_U02)) {
                 return -1;
             }
@@ -433,7 +427,6 @@ int aicfw_download_fw_8800d80(struct aic_usb_dev *usb_dev)
             if (aicbt_patch_table_load(usb_dev, head)) {
                 return -1;
             }
-            #endif
 
             if (IS_CHIP_ID_H()){
                 if(rwnx_plat_bin_fw_upload_android(usb_dev, RAM_FMAC_FW_ADDR_8800D80_U02, FW_BASE_NAME_8800D80_H_U02))
@@ -456,7 +449,6 @@ int aicfw_download_fw_8800d80(struct aic_usb_dev *usb_dev)
                 return -1;
             }
         }else {
-            #if 0
             if(rwnx_plat_bin_fw_upload_android(usb_dev, patch_info.addr_adid, FW_ADID_BASE_NAME_8800D80)) {
                 return -1;
             }
@@ -472,7 +464,6 @@ int aicfw_download_fw_8800d80(struct aic_usb_dev *usb_dev)
                 return -1;
             }
             #endif
-            #endif
             if(rwnx_plat_bin_fw_upload_android(usb_dev, RAM_FMAC_FW_ADDR_8800D80, FW_BASE_NAME_8800D80)) {
                 return -1;
              }
@@ -482,7 +473,7 @@ int aicfw_download_fw_8800d80(struct aic_usb_dev *usb_dev)
         }
     }else if(testmode == FW_TEST_MODE){
         if (chip_id != CHIP_REV_U01){
-#if 0
+
             if(rwnx_plat_bin_fw_upload_android(usb_dev, patch_info.addr_adid, FW_ADID_BASE_NAME_8800D80_U02)) {
                 return -1;
             }
@@ -508,7 +499,7 @@ int aicfw_download_fw_8800d80(struct aic_usb_dev *usb_dev)
                     return -1;
                 }
             }
-#endif
+
 			if(rwnx_plat_bin_fw_upload_android(usb_dev, RAM_FMAC_RF_FW_ADDR_8800D80_U02, FW_RF_BASE_NAME_8800D80_U02)) {
 				AICWFDBG(LOGERROR,"%s wifi fw download fail \r\n", __func__);
 				return -1;

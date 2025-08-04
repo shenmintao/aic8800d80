@@ -47,9 +47,6 @@
 #include "aic_priv_cmd.h"
 #include "rwnx_wakelock.h"
 #include "rwnx_msg_tx.h"
-#ifdef CONFIG_BAND_STEERING
-#include "aicwf_manager.h"
-#endif
 
 #ifdef CONFIG_USE_WIRELESS_EXT
 #include "aicwf_wext_linux.h"
@@ -1188,64 +1185,6 @@ void rwnx_update_mesh_power_mode(struct rwnx_vif *vif)
     vif->ap.mesh_pm = mesh_pm;
 }
 
-#ifdef CONFIG_BAND_STEERING
-void aicwf_steering_work(struct work_struct *work)
-{
-	struct rwnx_vif *rwnx_vif = container_of(work, struct rwnx_vif, steer_work);
-	struct rwnx_sta *sta;
-
-	if (rwnx_vif->up == false) {
-		AICWFDBG(LOGERROR, "%s vif is down\n", __func__);
-		return;
-	}
-
-	//printk("%s\n", __func__);
-	aicwf_nl_send_intf_rpt_msg(rwnx_vif);
-	aicwf_nl_send_time_tick_msg(rwnx_vif);
-	aicwf_band_steering_expire(rwnx_vif);
-
-	spin_lock_bh(&rwnx_vif->rwnx_hw->cb_lock);
-	if(list_empty(&rwnx_vif->ap.sta_list)) {
-		spin_unlock_bh(&rwnx_vif->rwnx_hw->cb_lock);
-		goto finish;
-	}
-	list_for_each_entry(sta, &rwnx_vif->ap.sta_list, list) {
-		if (sta->valid) {
-			sta->link_time +=2;
-			aicwf_nl_send_sta_rpt_msg(rwnx_vif, sta);
-		}
-	}
-	spin_unlock_bh(&rwnx_vif->rwnx_hw->cb_lock);
-
-finish:
-	mod_timer(&rwnx_vif->steer_timer, jiffies + msecs_to_jiffies(STEER_UPFATE_TIME));
-}
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 14, 0)
-void aicwf_steering_timeout(ulong data)
-#else
-void aicwf_steering_timeout(struct timer_list *t)
-#endif
-{
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 14, 0)
-	struct rwnx_vif *rwnx_vif = (struct rwnx_vif *)data;
-#else
-	struct rwnx_vif *rwnx_vif = container_of(t, struct rwnx_vif, steer_timer);
-#endif
-
-	if (rwnx_vif->up == false) {
-		AICWFDBG(LOGERROR, "%s vif is down\n", __func__);
-		return;
-	}
-
-	if (!work_pending(&rwnx_vif->steer_work))
-		schedule_work(&rwnx_vif->steer_work);
-
-	return;
-}
-#endif
-
-
 #ifdef CONFIG_BR_SUPPORT
 void netdev_br_init(struct net_device *netdev)
 {
@@ -1505,7 +1444,7 @@ static int rwnx_close(struct net_device *dev)
 		test_counter--;
 		if(test_counter == 0){
 			AICWFDBG(LOGERROR, "%s connecting or disconnecting, not finish\r\n", __func__);
-			//WARN_ON(1);
+			WARN_ON(1);
 			break;
 		}
 	}
@@ -2036,9 +1975,6 @@ void aicwf_p2p_alive_timeout(struct timer_list *t)
     #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 0)
     rwnx_vif = (struct rwnx_vif *)data;
     rwnx_hw = rwnx_vif->rwnx_hw;
-    #elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
-    rwnx_hw = timer_container_of(rwnx_hw, t, p2p_alive_timer);
-    rwnx_vif = rwnx_hw->p2p_dev_vif;
     #else
     rwnx_hw = from_timer(rwnx_hw, t, p2p_alive_timer);
     rwnx_vif = rwnx_hw->p2p_dev_vif;
@@ -2233,8 +2169,6 @@ static void aicwf_pwrloss_timer(struct timer_list *t)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 0)
 	rwnx_vif = (struct rwnx_vif *)data;
 	rwnx_hw = rwnx_vif->rwnx_hw;
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
-    rwnx_hw = timer_container_of(rwnx_hw, t, pwrloss_timer);
 #else
 	rwnx_hw = from_timer(rwnx_hw, t, pwrloss_timer);
 #endif
@@ -2337,7 +2271,7 @@ static struct wireless_dev *rwnx_virtual_interface_add(struct rwnx_hw *rwnx_hw,
  * and a given role.
  */
 
-struct rwnx_sta *rwnx_retrieve_sta(struct rwnx_hw *rwnx_hw,
+static struct rwnx_sta *rwnx_retrieve_sta(struct rwnx_hw *rwnx_hw,
                                           struct rwnx_vif *rwnx_vif, u8 *addr,
                                           __le16 fc, bool ap)
 {
@@ -2682,11 +2616,7 @@ static void rwnx_cfgp2p_stop_p2p_device(struct wiphy *wiphy, struct wireless_dev
 	if (rwnx_vif == rwnx_hw->p2p_dev_vif) {
 		rwnx_hw->is_p2p_alive = 0;
 		if (timer_pending(&rwnx_hw->p2p_alive_timer)) {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
-            timer_delete_sync(&rwnx_hw->p2p_alive_timer);
-#else
 			del_timer_sync(&rwnx_hw->p2p_alive_timer);
-#endif
 		}
 		if (rwnx_vif->up) {
 			rwnx_send_remove_if(rwnx_hw, rwnx_vif->vif_index, true);
@@ -3378,19 +3308,6 @@ static int rwnx_cfg80211_add_station(struct wiphy *wiphy,
                 #endif
 		        cfg80211_new_sta(rwnx_vif->ndev, sta->mac_addr, &sinfo, GFP_KERNEL);
             }
-
-#ifdef CONFIG_BAND_STEERING
-			struct tmp_feature_sta *f_sta = &rwnx_hw->feature_table[rwnx_vif->ap.tmp_sta_idx];
-			AICWFDBG(LOGSTEER, "usb %s idx: %d, supp_band: %d\n ", __func__, rwnx_vif->ap.tmp_sta_idx, f_sta->supported_band);
-			if (rwnx_vif->ap.tmp_sta_idx < NX_REMOTE_STA_MAX + NX_VIRT_DEV_MAX)
-				rwnx_vif->ap.tmp_sta_idx++;
-			else
-				rwnx_vif->ap.tmp_sta_idx = 0;
-
-			sta->support_band = f_sta->supported_band;
-			aicwf_nl_send_new_sta_msg(rwnx_vif, sta->mac_addr);
-#endif
-
 #ifdef CONFIG_RWNX_BFMER
             if (rwnx_hw->mod_params->bfmer)
                 rwnx_send_bfmer_enable(rwnx_hw, sta, params->vht_capa);
@@ -3521,16 +3438,9 @@ static int rwnx_cfg80211_del_station_compat(struct wiphy *wiphy,
 #endif
 
 #ifdef CONFIG_DYNAMIC_PERPWR
-			cur->rssi_save = 0;
 			cur->per_pwrloss = 0;
 			cur->last_jiffies = 0;
 			cancel_work_sync(&cur->per_pwr_work);
-#endif
-#ifdef CONFIG_BAND_STEERING
-			aicwf_nl_send_del_sta_msg(rwnx_vif, cur->mac_addr);
-			cur->link_time = 0;
-			cur->rssi = 0;
-			cur->support_band = 0;
 #endif
 			rwnx_txq_sta_deinit(rwnx_hw, cur);
 			error = rwnx_send_me_sta_del(rwnx_hw, cur->sta_idx, false);
@@ -3918,11 +3828,6 @@ static int rwnx_cfg80211_start_ap(struct wiphy *wiphy, struct net_device *dev,
             #if (defined CONFIG_HE_FOR_OLD_KERNEL) || (defined CONFIG_VHT_FOR_OLD_KERNEL)
             rwnx_vif->ap.aic_index = 0;
             #endif
-#ifdef CONFIG_BAND_STEERING
-			rwnx_vif->ap.band = (enum band_type)((settings->chandef).chan)->band;
-			rwnx_vif->ap.freq = ((settings->chandef).chan)->center_freq;
-			rwnx_vif->ap.tmp_sta_idx = 0;
-#endif
             sta = &rwnx_hw->sta_table[apm_start_cfm.bcmc_idx];
             sta->valid = true;
             sta->aid = 0;
@@ -3978,32 +3883,6 @@ static int rwnx_cfg80211_start_ap(struct wiphy *wiphy, struct net_device *dev,
                     ((settings->chandef).chan)->center_freq,
                     ((settings->chandef).width));
     }
-
-#ifdef CONFIG_BAND_STEERING
-	if (!error) {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 14, 0)
-		init_timer(&rwnx_vif->steer_timer);
-		rwnx_vif->steer_timer.data = (ulong)rwnx_vif;
-		rwnx_vif->steer_timer.function = aicwf_steering_timeout;
-#else
-		timer_setup(&rwnx_vif->steer_timer, aicwf_steering_timeout, 0);
-#endif
-		aicwf_nl_hook(rwnx_vif, rwnx_vif->ap.band, rwnx_vif->rwnx_hw->iface_idx);
-
-		INIT_WORK(&rwnx_vif->steer_work, aicwf_steering_work);
-		for (int i = 0; i < MAX_PENDING_PROBES; i++) {
-			rwnx_vif->pb_pool[i].in_use = false;
-			INIT_WORK(&rwnx_vif->pb_pool[i].rsp_work, rwnx_probersp_work);
-		}
-		rwnx_vif->rsp_wq = create_workqueue("aic_usb_rsp_wq");
-		if (!rwnx_vif->rsp_wq) {
-			AICWFDBG(LOGERROR, "%s create rsp_wq fail\n", __func__);
-			return -ENOBUFS;
-		}
-        rwnx_vif->ap.start = true;
-		mod_timer(&rwnx_vif->steer_timer, jiffies + msecs_to_jiffies(STEER_UPFATE_TIME));
-	}
-#endif
 
   end:
     //rwnx_ipc_elem_var_deallocs(rwnx_hw, &elem);
@@ -4089,20 +3968,6 @@ static int rwnx_cfg80211_stop_ap(struct wiphy *wiphy, struct net_device *dev)
         rwnx_cfg80211_del_station_compat(wiphy, dev, NULL);
     }
 
-#ifdef CONFIG_BAND_STEERING
-	rwnx_vif->ap.start = false;
-	aicwf_nl_hook_deinit(rwnx_vif->ap.band, rwnx_vif->rwnx_hw->iface_idx);
-	if (timer_pending(&rwnx_vif->steer_timer))
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
-        timer_delete_sync(&rwnx_vif->steer_timer);
-#else
-        del_timer_sync(&rwnx_vif->steer_timer);
-#endif
-	cancel_work_sync(&rwnx_vif->steer_work);
-	flush_workqueue(rwnx_vif->rsp_wq);
-	destroy_workqueue(rwnx_vif->rsp_wq);
-#endif
-
     if (rwnx_vif->wdev.iftype == NL80211_IFTYPE_P2P_GO)
         rwnx_hw->is_p2p_connected = 0;
     rwnx_radar_cancel_cac(&rwnx_hw->radar);
@@ -4145,13 +4010,8 @@ cfg80211_chandef_identical(const struct cfg80211_chan_def *chandef1,
 }
 #endif
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0))
-static int rwnx_cfg80211_set_monitor_channel(struct wiphy *wiphy, struct net_device *dev,
-                                             struct cfg80211_chan_def *chandef)
-#else
 static int rwnx_cfg80211_set_monitor_channel(struct wiphy *wiphy,
                                              struct cfg80211_chan_def *chandef)
-#endif
 {
     struct rwnx_hw *rwnx_hw = wiphy_priv(wiphy);
     struct rwnx_vif *rwnx_vif;
@@ -4204,21 +4064,10 @@ static int rwnx_cfg80211_set_monitor_channel(struct wiphy *wiphy,
     return 0;
 }
 
-
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0))
 int rwnx_cfg80211_set_monitor_channel_(struct wiphy *wiphy,
-                                             struct net_device *dev,
-                                             struct cfg80211_chan_def *chandef)
-{
-    return rwnx_cfg80211_set_monitor_channel(wiphy, dev, chandef);
-}
-#else
-int rwnx_cfg80211_set_monitor_channel_(struct wiphy *wiphy,
-                                             struct cfg80211_chan_def *chandef)
-{
+                                             struct cfg80211_chan_def *chandef){
     return rwnx_cfg80211_set_monitor_channel(wiphy, chandef);
 }
-#endif
 
 
 /**
@@ -4693,11 +4542,7 @@ static int rwnx_cfg80211_get_channel(struct wiphy *wiphy,
     if (rwnx_vif->vif_index == rwnx_hw->monitor_vif)
     {
         //retrieve channel from firmware
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0))
-        rwnx_cfg80211_set_monitor_channel(wiphy, wdev->netdev, NULL);
-#else
         rwnx_cfg80211_set_monitor_channel(wiphy, NULL);
-#endif
     }
 
     //Check if channel context is valid
@@ -4792,16 +4637,6 @@ static int rwnx_cfg80211_mgmt_tx(struct wiphy *wiphy, struct wireless_dev *wdev,
             break;
     }
 
-#ifdef CONFIG_BAND_STEERING
-	if (ieee80211_is_assoc_resp(mgmt->frame_control)) {
-		AICWFDBG(LOGSTEER, "usb assoc_resp: da: %pM\n", mgmt->da);
-		if (aicwf_band_steering_block_chk(rwnx_vif, mgmt->da)) {
-			AICWFDBG(LOGSTEER, "[STEERING] usb assoc_rsp refuse temp, %pM\n", mgmt->da);
-			return 0;
-		}
-	}
-#endif
-
     /* Get STA on which management frame has to be sent */
     rwnx_sta = rwnx_retrieve_sta(rwnx_hw, rwnx_vif, mgmt->da,
                                  mgmt->frame_control, ap);
@@ -4891,9 +4726,6 @@ int rwnx_cfg80211_start_radar_detection(struct wiphy *wiphy,
                                     #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 15, 0))
                                         , u32 cac_time_ms
                                     #endif
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0))
-                                        , int link_id
-#endif
                                         )
 {
     struct rwnx_hw *rwnx_hw = wiphy_priv(wiphy);
@@ -5058,11 +4890,6 @@ int rwnx_cfg80211_channel_switch(struct wiphy *wiphy,
 #endif
 
     }
-
-#ifdef CONFIG_BAND_STEERING
-	vif->ap.band = (enum band_type)((params->chandef).chan)->band;
-	vif->ap.freq = ((params->chandef).chan)->center_freq;
-#endif
 
   end:
     return error;
@@ -5322,203 +5149,74 @@ int rwnx_cfg80211_change_bss(struct wiphy *wiphy, struct net_device *dev,
     return res;
 }
 
-enum {
-    PHYMODE_B,
-    PHYMODE_G,
-    PHYMODE_A,
-    PHYMODE_N,
-    PHYMODE_AC,
-    PHYMODE_AX
-};
-
-static const u32 legacy_map_to_rate[12] = { //Kbps
-    1000, 2000, 5500, 11000, 6000, 9000, 12000, 18000, 24000, 36000, 48000, 54000
-};
-
-static const u32 he_mcs_map_to_rate[2][3][3][12] = { //NSS/GI/BW/MCS
-    { //1ss
-        { //0.8us
-            { 8600, 17200, 25800,  34400,  51600,  68800,  77400,  86000,  103200, 114700, 129000, 143400},
-            {17200, 34400, 51600,  68800,  103200, 137600, 154900, 172100, 206500, 229400, 258100, 286800},
-            {36000, 72100, 108100, 144100, 216200, 288200, 324300, 360300, 432400, 480400, 540400, 600400},
-        },
-        { //1.6us
-            { 8100, 16300, 24400,  32500,  48800,  65000,  73100,  81300,  97500,  108300, 121900, 135400}, //20M,
-            {16300, 32500, 48800,  65000,  97500,  130000, 146300, 162500, 195000, 216700, 243800, 270800}, //40M,
-            {34000, 68100, 102100, 136100, 204200, 272200, 306300, 340300, 408300, 453700, 510400, 567100}, //80M,
-        },
-        { //3.2us
-            { 7300, 14600, 21900, 29300,  43900,  58500,  65800,  73100,  87800,  97500,  109700, 121900},
-            {14600, 29300, 43900, 58500,  87800,  117000, 131600, 146300, 175500, 195000, 219400, 243800},
-            {30600, 61300, 91900, 122500, 183800, 245000, 275600, 306300, 367500, 408300, 459400, 510400},
-        }
-    },
-    { //2ss
-        { //0.8us
-            { 17200, 34400, 51600, 68800, 103200, 137600, 154900, 172100, 206500, 229400, 258100, 286800}, //242tone
-            { 34400, 68800, 103200, 137600, 206500, 275300, 309700, 344100, 412900, 458800, 516200, 573500}, //484tone
-            { 72100, 144100, 216200, 288200, 432400, 576500, 648500, 720600, 864700, 960700, 1080900, 1201000}, //996tone
-        },
-        { // 1.6us
-            { 16300, 32500, 48800, 65000, 97500, 130000, 146300, 162500, 195000, 216700, 243800, 270800},
-            { 32500, 65000, 97500, 130000, 195000, 260000, 292500, 325000, 390000, 433300, 487500, 541700},
-            { 68100, 136100, 204200, 272200, 408300, 544400, 612500, 680600, 816700, 907400, 1020800, 1134200},
-        },
-        { // 3.2us
-            { 14600, 29300, 43900, 58500, 87800, 117000, 131600, 146300, 175500, 195000, 219400, 243800},
-            { 29300, 58500, 87800, 117000, 175500, 234000, 263300, 292500, 351000, 390000, 438800, 487500},
-            { 61300, 122500, 183800, 245000, 367500, 490000, 551300, 612500, 735000, 816600, 918800, 1020800}
-        }
-    }
-};
-
-
-static const u32 vht_mcs_map_to_rate[2][2][3][10] = { //NSS//GI/BW/MCS
-    { // 1ss
-        { //LONG GI
-            {  6500,  13000, 19500, 26000,  39000,  52000,  58500,  65000,  78000}, //20M
-            { 13500, 27000, 40500, 54000,  81000,  108000, 121500, 135000, 162000, 180000}, //40M
-            { 29300, 58500, 87800, 117000, 175500, 234000, 263300, 292500, 251000, 390000}, //80M
-
-        },
-
-        { //SHORT GI
-            {  7200,  14400, 21700, 28900,  43300,  57800,  65000,  72200,  86700},
-            { 15000, 30000, 45000, 60000,  90000,  120000, 135000, 150000, 180000, 200000},
-            { 32500, 65000, 97500, 130000, 195000, 260000, 292500, 325000, 390000, 433300},
-
-        }
-    },
-    { //2ss
-        { //LONG GI
-            { 13000, 26000, 39000, 52000, 78000, 104000, 117000, 130000, 156000}, //20M
-            { 27000, 54000, 81000, 108000, 162000, 216000, 243000, 270000, 324000, 360000}, //40M
-            { 58500, 117000, 175500, 234000, 351000, 468000, 526500, 585000, 702000, 780000}, //80M
-        },
-        { //SHORT GI
-            { 14400, 28900, 43300, 57800, 86700, 115600, 130000, 144400, 173300}, //20M
-            { 30000, 60000, 90000, 120000, 180000, 240000, 270000, 300000, 360000, 400000}, //40M
-            { 65000, 130000, 195000, 260000, 390000, 520000, 585000, 650000, 780000, 866700}, //80M
-        }
-    }
-};
-
-
-static const u32 ht_mcs_map_to_rate[2][2][3][8] = { //NSS//GI/BW/MCS
-    { // 1SS
-        { //LONG GI
-            {6500,  13000, 19500, 26000, 39000, 52000,  58500,  65000}, //20M
-            {13500, 27000, 40500, 54000, 81000, 108000, 121500, 135000}, //40M
-        },
-        { //SHORT GI
-            {7200,  14400, 21700, 28900, 43300, 57800,  65000,  72200},
-            {15000, 30000, 45000, 60000, 90000, 120000, 135000, 150000},
-        }
-    },
-    { // 2SS
-        { //LONG GI
-            { 13000, 26000, 39000, 52000, 78000, 104000, 117000, 130000},   //20M
-            { 27000, 54000, 81000, 108000, 162000, 216000, 243000, 270000}, //40M
-        },
-        { //SHORT GI
-            { 14400, 28900, 43300,  57800, 86700, 115600, 130000, 144400}, //20M
-            { 30000, 60000, 90000, 120000, 180000, 240000, 270000, 300000}, //40M
-        }
-
-    },
-};
-
-
-int rwnx_fill_station_info(struct rwnx_sta *sta, struct rwnx_vif *vif,
-								  struct station_info *sinfo, u8 *phymode, u32 *tx_phyrate, u32 *rx_phyrate)
+static int rwnx_fill_station_info(struct rwnx_sta *sta, struct rwnx_vif *vif,
+                                  struct station_info *sinfo)
 {
+
 	struct rwnx_sta_stats *stats = &sta->stats;
 	struct rx_vector_1 *rx_vect1 = &stats->last_rx.rx_vect1;
 	union rwnx_rate_ctrl_info *rate_info;
 	struct mm_get_sta_info_cfm cfm;
-    u8 phymode_local = 0, mcs;
-    u32 tx_phyrate_local = 0;
-    u32 rx_phyrate_local = 0;
 
 	rwnx_send_get_sta_info_req(vif->rwnx_hw, sta->sta_idx, &cfm);
 	sinfo->tx_failed = cfm.txfailed;
 	rate_info = (union rwnx_rate_ctrl_info *)&cfm.rate_info;
 
-	//printk("chan  time=%d, busy=%d, tx succ=%d, tx_fail=%d\n", cfm.chan_busy_time, cfm.chan_time, cfm.ack_succ_stat, cfm.ack_fail_stat);
-    stats->last_chan_busy_time = cfm.chan_busy_time;
-    stats->last_chan_time = cfm.chan_time;
-    stats->tx_ack_succ_stat = cfm.ack_succ_stat;
-    stats->tx_ack_fail_stat = cfm.ack_fail_stat;
-    stats->last_chan_tx_busy_time = cfm.chan_tx_busy_time;
+
+	AICWFDBG(LOGDEBUG, "%s ModTx(%d):%d TxIndex:%d ModRx(%d):%d RxHTIndex:%d RxVHTIndex:%d RxHEIndex:%d RSSI:%d \r\n", __func__,
+		rate_info->bwTx,
+		rate_info->formatModTx,
+		rate_info->mcsIndexTx,
+		rx_vect1->ch_bw,
+		rx_vect1->format_mod,
+		rx_vect1->ht.mcs,
+		rx_vect1->vht.mcs,
+		rx_vect1->he.mcs,
+		(s8)cfm.rssi);
+
 
 	switch (rate_info->formatModTx) {
 	case FORMATMOD_NON_HT:
-        sinfo->txrate.flags = 0;
-        sinfo->txrate.legacy = tx_legrates_lut_rate[rate_info->mcsIndexTx];
-        sinfo->txrate.nss = 1;
-        tx_phyrate_local = legacy_map_to_rate[rate_info->mcsIndexTx];
-        if(sta->band == NL80211_BAND_2GHZ)
-            phymode_local = PHYMODE_B;
-        break;
 	case FORMATMOD_NON_HT_DUP_OFDM:
 		sinfo->txrate.flags = 0;
 		sinfo->txrate.legacy = tx_legrates_lut_rate[rate_info->mcsIndexTx];
         sinfo->txrate.nss = 1;
-        tx_phyrate_local = legacy_map_to_rate[rate_info->mcsIndexTx];
-        if(sta->band == NL80211_BAND_2GHZ)
-            phymode_local = PHYMODE_G;
-        else
-            phymode_local = PHYMODE_A;
 		break;
 	case FORMATMOD_HT_MF:
 	case FORMATMOD_HT_GF:
 		sinfo->txrate.flags = RATE_INFO_FLAGS_MCS;
 		sinfo->txrate.mcs = rate_info->mcsIndexTx & 0x7;
         sinfo->txrate.nss = ((rate_info->mcsIndexTx >> 3) & 0x7) + 1;
-        phymode_local = PHYMODE_N;
-
-        tx_phyrate_local = ht_mcs_map_to_rate[sinfo->txrate.nss - 1][rate_info->giAndPreTypeTx][rate_info->bwTx][sinfo->txrate.mcs];
+        if (rate_info->giAndPreTypeTx)
+            sinfo->txrate.flags |= RATE_INFO_FLAGS_SHORT_GI;
 		break;
 	case FORMATMOD_VHT:
 		sinfo->txrate.flags = RATE_INFO_FLAGS_VHT_MCS;
 		sinfo->txrate.mcs = rate_info->mcsIndexTx & 0xF;
         sinfo->txrate.nss = ((rate_info->mcsIndexTx >> 4) & 0x7) + 1;
-        tx_phyrate_local = vht_mcs_map_to_rate[sinfo->txrate.nss - 1][rate_info->giAndPreTypeTx][rate_info->bwTx][sinfo->txrate.mcs];
-        //printk("phyrate: %d,%d,%d,%d\n", sinfo->txrate.nss - 1, rate_info->giAndPreTypeTx, rate_info->bwTx, sinfo->txrate.mcs);
-        phymode_local = PHYMODE_AC;
 		break;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 0)
 	case FORMATMOD_HE_MU:
 	case FORMATMOD_HE_SU:
 	case FORMATMOD_HE_ER:
 		sinfo->txrate.flags = RATE_INFO_FLAGS_HE_MCS;
-        sinfo->txrate.mcs = rate_info->mcsIndexTx & 0xF;
+		sinfo->txrate.mcs = rate_info->mcsIndexTx & 0xF;
         sinfo->txrate.nss = ((rate_info->mcsIndexTx >> 4) & 0x7) + 1;
-        tx_phyrate_local = he_mcs_map_to_rate[sinfo->txrate.nss - 1][rate_info->giAndPreTypeTx][rate_info->bwTx][sinfo->txrate.mcs];
-        phymode_local = PHYMODE_AX;
-        //printk("phyrate: %d,%d,%d,%d\n", sinfo->txrate.nss - 1, rate_info->giAndPreTypeTx, rate_info->bwTx, sinfo->txrate.mcs);
 		break;
 #else
+	//kernel not support he
 	case FORMATMOD_HE_MU:
 	case FORMATMOD_HE_SU:
 	case FORMATMOD_HE_ER:
 		sinfo->txrate.flags = RATE_INFO_FLAGS_VHT_MCS;
-		sinfo->txrate.mcs = ((rate_info->mcsIndexTx & 0xF) > 9 ? 9 : (rate_info->mcsIndexTx & 0xF));
+        sinfo->txrate.mcs = ((rate_info->mcsIndexTx & 0xF) > 9 ? 9 : (rate_info->mcsIndexTx & 0xF));
         sinfo->txrate.nss = ((rate_info->mcsIndexTx >> 4) & 0x7) + 1;
-        tx_phyrate_local = he_mcs_map_to_rate[sinfo->txrate.nss - 1][rate_info->giAndPreTypeTx][rate_info->bwTx][sinfo->txrate.mcs];
-        phymode_local = PHYMODE_AX;
 		break;
 #endif
 	default:
 		return -EINVAL;
 	}
 
-    if(phymode)
-        *phymode = phymode_local;
-    if(tx_phyrate) {
-        *tx_phyrate = tx_phyrate_local;
-        AICWFDBG(LOGINFO, "phyrate=%d\n", *tx_phyrate);
-    }
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 0, 0)
 	switch (rate_info->bwTx) {
 	case PHY_CHNL_BW_20:
@@ -5543,8 +5241,8 @@ int rwnx_fill_station_info(struct rwnx_sta *sta, struct rwnx_vif *vif,
 	}
 #endif
 
-	//sinfo->txrate.nss = 1;
 	sinfo->filled |= (BIT(NL80211_STA_INFO_TX_BITRATE) | BIT(NL80211_STA_INFO_TX_FAILED));
+
 	sinfo->inactive_time = jiffies_to_msecs(jiffies - vif->rwnx_hw->stats.last_tx);
 	sinfo->rx_bytes = vif->net_stats.rx_bytes;
 	sinfo->tx_bytes = vif->net_stats.tx_bytes;
@@ -5552,7 +5250,7 @@ int rwnx_fill_station_info(struct rwnx_sta *sta, struct rwnx_vif *vif,
 	sinfo->rx_packets = vif->net_stats.rx_packets;
 	sinfo->signal = (s8)cfm.rssi;
 
-	#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 0, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 0, 0)
 	switch (rx_vect1->ch_bw) {
 	case PHY_CHNL_BW_20:
 		sinfo->rxrate.bw = RATE_INFO_BW_20;
@@ -5567,14 +5265,14 @@ int rwnx_fill_station_info(struct rwnx_sta *sta, struct rwnx_vif *vif,
 		sinfo->rxrate.bw = RATE_INFO_BW_160;
 		break;
 	default:
-	#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 0)
 		sinfo->rxrate.bw = RATE_INFO_BW_HE_RU;
-	#else
+#else
 		sinfo->rxrate.bw = RATE_INFO_BW_20;
-	#endif
+#endif
 		break;
 	}
-	#endif
+#endif
 
 	switch (rx_vect1->format_mod) {
 	case FORMATMOD_NON_HT:
@@ -5582,7 +5280,6 @@ int rwnx_fill_station_info(struct rwnx_sta *sta, struct rwnx_vif *vif,
 		sinfo->rxrate.flags = 0;
 		sinfo->rxrate.legacy = legrates_lut[rx_vect1->leg_rate].rate;
         sinfo->rxrate.nss = 1;
-        rx_phyrate_local = legrates_lut[rx_vect1->leg_rate].rate;
 		break;
 	case FORMATMOD_HT_MF:
 	case FORMATMOD_HT_GF:
@@ -5591,19 +5288,6 @@ int rwnx_fill_station_info(struct rwnx_sta *sta, struct rwnx_vif *vif,
 			sinfo->rxrate.flags |= RATE_INFO_FLAGS_SHORT_GI;
 		sinfo->rxrate.mcs = rx_vect1->ht.mcs;
         sinfo->rxrate.nss = rx_vect1->ht.num_extn_ss + 1;
-
-        if(rx_vect1->ht.mcs == 32) {//mcs 32
-            if(rx_vect1->vht.short_gi)
-                rx_phyrate_local = 6700;
-            else
-                rx_phyrate_local = 6000;
-        } else {
-            if(sinfo->rxrate.mcs >= 8)
-                mcs = sinfo->rxrate.mcs - 8;
-            else
-                mcs = sinfo->rxrate.mcs;
-            rx_phyrate_local = ht_mcs_map_to_rate[rx_vect1->ht.num_extn_ss][rx_vect1->ht.short_gi][rx_vect1->ch_bw][mcs];
-        }
 		break;
 	case FORMATMOD_VHT:
 		sinfo->rxrate.flags = RATE_INFO_FLAGS_VHT_MCS;
@@ -5611,8 +5295,6 @@ int rwnx_fill_station_info(struct rwnx_sta *sta, struct rwnx_vif *vif,
 			sinfo->rxrate.flags |= RATE_INFO_FLAGS_SHORT_GI;
 		sinfo->rxrate.mcs = rx_vect1->vht.mcs;
         sinfo->rxrate.nss = rx_vect1->vht.nss + 1;
-        rx_phyrate_local = vht_mcs_map_to_rate[rx_vect1->vht.nss][rx_vect1->vht.short_gi][rx_vect1->ch_bw][sinfo->rxrate.mcs];
-        //printk("rx:%d,%d,%d,%d\n", rx_vect1->vht.nss, rx_vect1->vht.short_gi, rx_vect1->ch_bw, sinfo->rxrate.mcs);
 		break;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 0)
 	case FORMATMOD_HE_MU:
@@ -5622,11 +5304,8 @@ int rwnx_fill_station_info(struct rwnx_sta *sta, struct rwnx_vif *vif,
 		sinfo->rxrate.flags = RATE_INFO_FLAGS_HE_MCS;
 		sinfo->rxrate.mcs = rx_vect1->he.mcs;
 		sinfo->rxrate.he_gi = rx_vect1->he.gi_type;
-        if (rx_vect1->he.gi_type)
-            sinfo->rxrate.flags |= RATE_INFO_FLAGS_SHORT_GI;
 		sinfo->rxrate.he_dcm = rx_vect1->he.dcm;
         sinfo->rxrate.nss = rx_vect1->he.nss + 1;
-        rx_phyrate_local = he_mcs_map_to_rate[rx_vect1->he.nss][rx_vect1->he.gi_type][rx_vect1->ch_bw][sinfo->rxrate.mcs];
 		break;
 #else
 	//kernel not support he
@@ -5634,7 +5313,12 @@ int rwnx_fill_station_info(struct rwnx_sta *sta, struct rwnx_vif *vif,
 	case FORMATMOD_HE_SU:
 	case FORMATMOD_HE_ER:
 		sinfo->rxrate.flags = RATE_INFO_FLAGS_VHT_MCS;
-		sinfo->rxrate.mcs = (rx_vect1->he.mcs > 9 ? 9 : rx_vect1->he.mcs);
+        if(rx_vect1->he.mcs > 9){
+            sinfo->rxrate.mcs = 9;
+        }else{
+            sinfo->rxrate.mcs = rx_vect1->he.mcs;
+        }
+        sinfo->rxrate.mcs = (rx_vect1->he.mcs > 9 ? 9 : rx_vect1->he.mcs);
         sinfo->rxrate.nss = rx_vect1->he.nss + 1;
 		break;
 #endif
@@ -5642,10 +5326,6 @@ int rwnx_fill_station_info(struct rwnx_sta *sta, struct rwnx_vif *vif,
 		return -EINVAL;
 	}
 
-    if(rx_phyrate) {
-        *rx_phyrate = rx_phyrate_local;
-        AICWFDBG(LOGINFO, "rx_phyrate=%d\n", *rx_phyrate);
-    }
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 0, 0)
 	sinfo->filled |= (STATION_INFO_INACTIVE_TIME |
@@ -5667,7 +5347,6 @@ int rwnx_fill_station_info(struct rwnx_sta *sta, struct rwnx_vif *vif,
 
 	return 0;
 }
-
 
 
 /**
@@ -5706,7 +5385,7 @@ static int rwnx_cfg80211_get_station(struct wiphy *wiphy,
     }
 
     if (sta)
-        return rwnx_fill_station_info(sta, vif, sinfo, NULL, NULL, NULL);
+        return rwnx_fill_station_info(sta, vif, sinfo);
 
     return -ENOENT;
 }
@@ -5784,7 +5463,7 @@ static int rwnx_cfg80211_dump_station(struct wiphy *wiphy, struct net_device *de
 #endif
 
     if (sta){
-        rwnx_fill_station_info(sta, rwnx_vif, sinfo, NULL, NULL, NULL);
+        rwnx_fill_station_info(sta, rwnx_vif, sinfo);
     }
 
     return 0;
@@ -8519,11 +8198,13 @@ void aic_ipc_setting(struct rwnx_vif *rwnx_vif){
 	rwnx_send_vendor_hwconfig_req(rwnx_hw, hw_edca, param, NULL);
 	rwnx_send_vendor_hwconfig_req(rwnx_hw, hw_cca, cca, NULL);
 }
-extern int get_adap_test(void);
+
 
 extern void *aicwf_prealloc_txq_alloc(size_t size);
 extern int aicwf_vendor_init(struct wiphy *wiphy);
+#ifdef CONFIG_POWER_LIMIT
 extern char default_ccode[];
+#endif
 int rwnx_cfg80211_init(struct rwnx_plat *rwnx_plat, void **platform_data)
 {
     struct rwnx_hw *rwnx_hw;
@@ -8870,12 +8551,6 @@ if((g_rwnx_plat->usbdev->chipid == PRODUCT_ID_AIC8801) ||
         goto err_register_wiphy;
     }
 
-    if ((rwnx_hw->usbdev->vid == 0x2604 && rwnx_hw->usbdev->pid == 0x001f)
-        || (rwnx_hw->usbdev->vid == 0x2604 && rwnx_hw->usbdev->pid == 0x0020)) {
-        rwnx_send_pwm_init_req(rwnx_hw, 8, 1, 1, 400000, 400000, 100, 1, 1, 1);
-        rwnx_send_pwm_deinit_req(rwnx_hw, 8, 1, 1, 1);
-    }
-
     /* Update regulatory (if needed) and set channel parameters to firmware
        (must be done after WiPHY registration) */
     rwnx_custregd(rwnx_hw, wiphy);
@@ -8885,7 +8560,7 @@ if((g_rwnx_plat->usbdev->chipid == PRODUCT_ID_AIC8801) ||
 		rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800D81 ||
 		rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800D81X2 ||
 		rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800D89X2) && testmode == 0)) {
-		rwnx_send_me_chan_config_req(rwnx_hw, default_ccode);
+		rwnx_send_me_chan_config_req(rwnx_hw, "00");
 	}
     *platform_data = rwnx_hw;
 
@@ -8967,19 +8642,13 @@ if((g_rwnx_plat->usbdev->chipid == PRODUCT_ID_AIC8801) ||
 #endif
 
 #ifdef CONFIG_FOR_IPCAM
-		if(!testmode && !get_adap_test()) {
+		if(!testmode && !adap_test) {
 			aic_ipc_setting(vif);
 		}
 #endif
 #ifdef CONFIG_WOWLAN
     rwnx_send_set_pkt_filter_req(rwnx_hw, wowlan_param1);
 #endif
-
-#ifdef CONFIG_BAND_STEERING
-	rwnx_hw->iface_idx = CONFIG_IFACE_NUMBER - 1;
-	aicwf_nl_init();
-#endif
-
     return 0;
 
 err_add_interface:
@@ -9024,35 +8693,18 @@ void rwnx_cfg80211_deinit(struct rwnx_hw *rwnx_hw)
     rwnx_hw->scanning = 0;
     rwnx_hw->p2p_working = 0;
 
-#ifdef CONFIG_BAND_STEERING
-	aicwf_nl_deinit();
-#endif
-
 #ifdef CONFIG_DYNAMIC_PWR
 	if(timer_pending(&rwnx_hw->pwrloss_timer)){
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
-        timer_delete_sync(&rwnx_hw->pwrloss_timer);
-#else
-		del_timer_sync(&rwnx_hw->pwrloss_timer);
-#endif
+		del_timer_sync(&rwnx_hw->pwrloss_timer);}
 	cancel_work_sync(&rwnx_hw->pwrloss_work);
 #endif
-
-    if ((rwnx_hw->usbdev->vid == 0x2604 && rwnx_hw->usbdev->pid == 0x001f)
-        || (rwnx_hw->usbdev->vid == 0x2604 && rwnx_hw->usbdev->pid == 0x0020)) {
-        rwnx_set_pwm_tbl(rwnx_hw);
-    }
 
     spin_lock_bh(&rwnx_hw->defrag_lock);
     if (!list_empty(&rwnx_hw->defrag_list)) {
         list_for_each_entry(defrag_ctrl, &rwnx_hw->defrag_list, list) {
             list_del_init(&defrag_ctrl->list);
             if (timer_pending(&defrag_ctrl->defrag_timer))
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
-                timer_delete_sync(&defrag_ctrl->defrag_timer);
-#else
                 del_timer_sync(&defrag_ctrl->defrag_timer);
-#endif
             dev_kfree_skb(defrag_ctrl->skb);
             kfree(defrag_ctrl);
         }
@@ -9168,9 +8820,7 @@ module_param(wifi_mac_addr,charp, 0);
 MODULE_PARM_DESC(wifi_mac_addr, "Configures mac addr.");
 module_init(rwnx_mod_init);
 module_exit(rwnx_mod_exit);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0)
-MODULE_IMPORT_NS("VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver");
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
 MODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);
 #endif
 MODULE_FIRMWARE(RWNX_CONFIG_FW_NAME);

@@ -559,7 +559,6 @@ void aicwf_set_cmd_tx(void *dev, struct lmac_msg *msg, uint len)
 {
     u8 *buffer = NULL;
     u16 index = 0;
-    int ret = 0;
 #ifdef AICWF_SDIO_SUPPORT
 	struct aic_sdio_dev *sdiodev = (struct aic_sdio_dev *)dev;
     struct aicwf_bus *bus = sdiodev->bus_if;
@@ -594,9 +593,6 @@ void aicwf_set_cmd_tx(void *dev, struct lmac_msg *msg, uint len)
     index += 2;
     memcpy(&buffer[index], (u8 *)msg->param, msg->param_len);
 
-    ret = aicwf_bus_txmsg(bus, buffer, len + 8);
-    if (ret == -EIO) {
-        ret = aicwf_bus_txmsg(bus, buffer, len + 8);
-    }
+    aicwf_bus_txmsg(bus, buffer, len + 8);
 }
 

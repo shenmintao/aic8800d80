@@ -1,0 +1,4 @@
+*.o
+aicrf_test
+wifi_test
+bt_test

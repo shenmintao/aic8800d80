@@ -194,9 +194,5 @@ int rwnx_dbgfs_print_sta(char *buf, size_t size, struct rwnx_sta *sta,
 void rwnx_txq_credit_update(struct rwnx_hw *rwnx_hw, int sta_idx, u8 tid,
                             s8 update);
 void rwnx_tx_push(struct rwnx_hw *rwnx_hw, struct rwnx_txhdr *txhdr, int flags);
-#ifdef CONFIG_BAND_STEERING
-void rwnx_probersp_work(struct work_struct *work);
-#endif
-
 
 #endif /* _RWNX_TX_H_ */

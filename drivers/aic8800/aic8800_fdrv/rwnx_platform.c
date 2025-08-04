@@ -56,6 +56,20 @@ extern char aic_fw_path[FW_PATH_MAX_LEN];
 #define PRINT 2
 #define GET_VALUE 3
 
+typedef struct
+{
+    txpwr_lvl_conf_t txpwr_lvl;
+    txpwr_lvl_conf_v2_t txpwr_lvl_v2;
+    txpwr_lvl_conf_v3_t txpwr_lvl_v3;
+    txpwr_lvl_conf_v4_t txpwr_lvl_v4;
+    txpwr_lvl_adj_conf_t txpwr_lvl_adj;
+    txpwr_loss_conf_t txpwr_loss;
+    txpwr_ofst_conf_t txpwr_ofst;
+    txpwr_ofst2x_conf_t txpwr_ofst2x;
+    txpwr_ofst2x_conf_v2_t txpwr_ofst2x_v2;
+    xtal_cap_conf_t xtal_cap;
+} userconfig_info_t;
+
 userconfig_info_t userconfig_info = {
     .txpwr_lvl = {
         .enable           = 1,

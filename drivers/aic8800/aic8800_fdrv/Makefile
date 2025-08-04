@@ -121,10 +121,6 @@ CONFIG_MCC = y
 CONFIG_LOAD_BT_PATCH_IN_FDRV = n
 CONFIG_DYNAMIC_PWR = n
 CONFIG_DYNAMIC_PERPWR = n
-CONFIG_BAND_STEERING = n
-
-#support D80X2 can write rf result to file
-CONFIG_WRITE_FILE_D80X2 = n
 
 ifneq ($(CONFIG_WIRELESS_EXT), y)
 CONFIG_USE_WIRELESS_EXT = n
@@ -191,8 +187,6 @@ $(MODULE_NAME)-y := \
 	aicwf_compat_8800d80.o \
 	aicwf_compat_8800d80x2.o
 
-$(MODULE_NAME)-$(CONFIG_BAND_STEERING)    += aicwf_manager.o    \
-	aicwf_steering.o
 $(MODULE_NAME)-$(CONFIG_BR_SUPPORT)       += aic_br_ext.o
 $(MODULE_NAME)-$(CONFIG_RWNX_RADAR)       += rwnx_radar.o
 $(MODULE_NAME)-$(CONFIG_DEBUG_FS)         += rwnx_debugfs.o
@@ -262,8 +256,6 @@ ccflags-$(CONFIG_MCC) += -DCONFIG_MCC
 ccflags-$(CONFIG_LOAD_BT_PATCH_IN_FDRV) += -DCONFIG_LOAD_BT_PATCH_IN_FDRV
 ccflags-$(CONFIG_DYNAMIC_PWR) += -DCONFIG_DYNAMIC_PWR
 ccflags-$(CONFIG_DYNAMIC_PERPWR) += -DCONFIG_DYNAMIC_PERPWR
-ccflags-$(CONFIG_BAND_STEERING) += -DCONFIG_BAND_STEERING
-ccflags-$(CONFIG_WRITE_FILE_D80X2) += -DRF_WRITE_FILE
 
 ifeq ($(CONFIG_SDIO_SUPPORT), y)
 ccflags-y += -DAICWF_SDIO_SUPPORT

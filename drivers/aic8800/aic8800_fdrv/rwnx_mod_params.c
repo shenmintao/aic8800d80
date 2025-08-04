@@ -27,8 +27,6 @@
 #define FULLMAC_PARAM(name, default) .name = default,
 #endif /* CONFIG_RWNX_FULLMAC */
 
-extern int reg_regdb_size;
-
 struct rwnx_mod_params rwnx_mod_params = {
     /* common parameters */
     COMMON_PARAM(ht_on, true, true)
@@ -357,7 +355,7 @@ struct ieee80211_regdomain *getRegdomainFromRwnxDB(struct wiphy *wiphy,
 
 	idx = 0;
 
-	while (reg_regdb[idx] && idx < reg_regdb_size){
+	while (reg_regdb[idx]){
 		if((reg_regdb[idx]->alpha2[0] == alpha2[0]) &&
 			(reg_regdb[idx]->alpha2[1] == alpha2[1])){
 			memcpy(country_code, alpha2, 2);

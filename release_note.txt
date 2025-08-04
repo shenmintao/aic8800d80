@@ -1,1145 +1,242 @@
-update_date:2022_1219_1126
-info:
-    1. [8800d/bt] fix assert.
-    2. [8800dc/wifi] fix assert for enable wifi after enabling bt for a while.
-    3. [8800d/wifi] promote wifi performance in bad env.
-
-commit-id: ef581944f4f08156a4c60e6d7c713ec8fb45accb
-
-Test comment:
-
-
-8800D
-    USB fw version:
-        fmacfw.bin:     di Dec 14 2022 11:08:36 - g84013959
-        fmacfw_rf.bin:  di Oct 11 2022 11:23:34 - gb01a3750
-        fw_patch_table:         Dec 16 2022 14:18:58 - git 88a3221
-        fw_patch_table_u03.bin: Dec 16 2022 14:23:04 - git bc3db5c
-    SDIO fw version:
-        fmacfw.bin:     di Dec 14 2022 11:13:31 - g84013959
-        fmacfw_rf.bin:  di Oct 11 2022 11:30:28 - gb01a3750
-        fw_patch_table.bin:     Dec 16 2022 14:18:58 - git 88a3221
-        fw_patch_table_u03.bin: Dec 16 2022 14:23:04 - git bc3db5c
-
-8800DC
-    fw version:
-        fmacfw_patch_8800dc.bin:    2ed779f13cca75c2a5ba65c848915b32
-        fmacfw_rf_patch_8800dc.bin: ac6f68116a6b78a13dbd9020f307d510
-        lmacfw_rf_8800dc.bin:       ti Oct 21 2022 15:29:11 - gdcee3e4 d9a3b3e1552d8d36bfa7757df9f70f01
-        fw_patch_8800dc.bin:        Oct 25 2022 15:15:00 - git 130d430 d7375f040db0acab3eb2e0890f37d86b
-        fw_patch_table_8800dc.bin:  Oct 25 2022 15:15:00 - git 130d430 f2bd4f13a67a32b8f454c6aab7c251f0
-    fw_u02 version:
-        fmacfw_patch_8800dc_u02.bin:    5539cd428bec04132ce246ca6ae2a0de
-        lmacfw_rf_8800dc.bin:           ti Oct 21 2022 15:29:11 - gdcee3e4 d9a3b3e1552d8d36bfa7757df9f70f01
-        fw_patch_8800dc_u02.bin:        Nov 16 2022 10:54:24 - git c81f3df 225ee3459c5663f0b767c6e7c7a8327f
-        fw_patch_table_8800dc_u02.bin:  Nov 16 2022 10:54:24 - git c81f3df a507e5293c35cbaf304b53ec610a4fe7
-=============================================================
-
-
-update_date:2022_0416_1710
-info:
-    1. [USB/driver] Optimizing aic8800_fdrv and aic_load_fw tx/rx thread to stop when driver deinit.
-    2. [SDIO/patch USB/patch] fix wifi gain table, adaptivity pta of sco and afh assert.
-
-commit-id: 76586809b4e6f883305416d04206cadffbe50595
-
-Test comment:
-
-
-USB fw version:
-        fmacfw.bin:     di Apr 16 2022 17:03:03 - g2fdc0afd
-        fmacfw_rf.bin:  zh Mar 16 2022 14:32:00 - g094d53efm
-        fw_patch_table:         Apr 16 2022 14:09:06 - git 1286399
-        fw_patch_table_u03.bin: Apr 16 2022 14:21:14 - git ee35bea
-SDIO fw version:
-        fmacfw.bin:     di Apr 16 2022 17:05:37 - g2fdc0afd
-        fmacfw_rf.bin:  di Jan 29 2022 12:20:08 - ga0734829
-        fw_patch_table.bin:     Apr 16 2022 14:09:06 - git 1286399
-        fw_patch_table_u03.bin: Apr 16 2022 14:21:14 - git ee35bea
-=============================================================
-
-
-update_date:2022_0411_2122
-info:
-    1. [USB/driver] fix aic_load_fw build error.
-    2. [USB/driver] modify m2d loading process.
-
-commit-id: b39dfdd0c6c45ccf65794732a88301eddd40c884
-
-Test comment:
-
-
-USB fw version:
-        fmacfw.bin:     zh Apr 06 2022 19:20:28 - g90d9767e
-        fmacfw_rf.bin:  zh Mar 16 2022 14:32:00 - g094d53efm
-        fw_patch_table:         Apr 07 2022 17:58:46 - git fc23fc9
-        fw_patch_table_u03.bin: Apr 06 2022 12:29:05 - git cdb0db6
-SDIO fw version:
-        fmacfw.bin:     di Apr 07 2022 16:48:50 - g785b8061
-        fmacfw_rf.bin:  di Jan 29 2022 12:20:08 - ga0734829
-        fw_patch_table.bin:     Apr 07 2022 17:58:46 - git fc23fc9
-        fw_patch_table_u03.bin: Apr 06 2022 12:29:05 - git cdb0db6
-=============================================================
-
-update_date:2022_0409_2307
-info:
-    1. [SDIO/driver] fix aic8800_btlpm kernel crash when rmmod driver.
-    2. [USB/driver] fix build error rxdesc_tag *rxdesc.
-    3. [SDIO/driver USB/driver] add CONFIG_WPA3_FOR_OLD_KERNEL.
-    4. [USB/fw] update m2d_ota.bin.
-    5. [SDIO/patch USB/patch] update bt patch.
-    6. [USB/fw] add fmacfw_m2d.bin
-
-commit-id: e86071484d92aa2201d39954d4962b6a1ba387a0
-
-Test comment:
-
-
-USB fw version:
-        fmacfw.bin:     zh Apr 06 2022 19:20:28 - g90d9767e
-        fmacfw_rf.bin:  zh Mar 16 2022 14:32:00 - g094d53efm
-        fw_patch_table:         Apr 07 2022 17:58:46 - git fc23fc9
-        fw_patch_table_u03.bin: Apr 06 2022 12:29:05 - git cdb0db6
-SDIO fw version:
-        fmacfw.bin:     di Apr 07 2022 16:48:50 - g785b8061
-        fmacfw_rf.bin:  di Jan 29 2022 12:20:08 - ga0734829
-        fw_patch_table.bin:     Apr 07 2022 17:58:46 - git fc23fc9
-        fw_patch_table_u03.bin: Apr 06 2022 12:29:05 - git cdb0db6
-=============================================================
-
-
-
-update_date:2022_0407_1739
-info:
-    1. [SDIO/fw] update wifi fw to enable gpio wakeup.
-
-commit-id: e1a52a5405cce6adcec7eb5dca28b7bf9ac2829f 
-
-Test comment:
-
-
-USB fw version:
-        fmacfw.bin:     zh Apr 06 2022 19:20:28 - g90d9767e
-        fmacfw_rf.bin:  zh Mar 16 2022 14:32:00 - g094d53efm
-        fw_patch_table_u03.bin: Apr 06 2022 12:29:05 - git cdb0db6
-SDIO fw version:
-        di Apr 07 2022 16:48:50 - g785b8061
-        fmacfw_rf.bin:  di Jan 29 2022 12:20:08 - ga0734829
-        fw_patch_table.bin: Apr 01 2022 20:05:14 - git 6273991
-        fw_patch_table_u03.bin: Apr 06 2022 12:29:05 - git cdb0db6
-=============================================================
-
-
-
-update_date:2022_0406_1956
-info:
-    1. [SDIO/driver USB/driver] add setting xtal freq by aic_userconfig.txt.
-    2. [USB/fw] read flash mac addr.
-    3. [USB/libbt-vendor] fix compiler error.
-
-commit-id: 74c4d1f7813b25e41c2bbfef3419e841d2a3258a
-
-Test comment:
-
-
-USB fw version:
-        fmacfw.bin:     zh Apr 06 2022 19:20:28 - g90d9767e
-        fmacfw_rf.bin:  zh Mar 16 2022 14:32:00 - g094d53efm
-        fw_patch_table_u03.bin: Apr 06 2022 12:29:05 - git cdb0db6
-SDIO fw version:
-        fmacfw.bin:     di Jan 25 2022 10:23:44 - g9c46deec
-        fmacfw_rf.bin:  di Jan 29 2022 12:20:08 - ga0734829
-        fw_patch_table.bin: Apr 01 2022 20:05:14 - git 6273991
-        fw_patch_table_u03.bin: Apr 01 2022 20:02:43 - git b3cbc78
-=============================================================
-
-
-update_date:2022_0402_1014
-info:
-    1. [bt/patch] update bt patch, add fw assert report support for USB and fix adv len overflow, ble reconnect, dut mode.
-
-commit-id: 23769f445b7414aa83bbe3844c421c6a86b469fa
-
-Test comment:
-
-
-USB fw version:
-        fmacfw.bin:     bo Mar 14 2022 11:43:55 - g5a39adc1
-        fmacfw_rf.bin:  zh Mar 16 2022 14:32:00 - g094d53efm
-        fw_patch_table_u03.bin: Apr 01 2022 20:02:43 - git b3cbc78
-SDIO fw version:
-        fmacfw.bin:     di Jan 25 2022 10:23:44 - g9c46deec
-        fmacfw_rf.bin:  di Jan 29 2022 12:20:08 - ga0734829
-        fw_patch_table.bin: Apr 01 2022 20:05:14 - git 6273991
-        fw_patch_table_u03.bin: Apr 01 2022 20:02:43 - git b3cbc78
-=============================================================
-
-
-update_date:2022_0401_1825
-info:
-    1. [SDIO/driver] add CONFIG_SUPPORT_REALTIME_CHANGE_MAC is default y.
-    2. [SDIO/driver USB/driver] fix adaptivity patch_tbl in aic_load_fw and aic8800_bsp.
-    3. [SDIO/driver USB/driver] add CONFIG_SET_VENDOR_EXTENSION_IE.
-    4. [SDIO/driver USB/driver] fix workaround for txq->idx == TXQ_INACTIVE BUG_ON().
-    5. [SDIO/patch] add rk3566 Android11 porting patch.
-
-commit-id:  
-
-Test comment:
-
-
-USB fw version:
-        fmacfw.bin:     bo Mar 14 2022 11:43:55 - g5a39adc1
-        fmacfw_rf.bin:  zh Mar 16 2022 14:32:00 - g094d53efm
-        fw_patch_table_u03.bin: Mar 16 2022 16:25:53 - git ecdf1b1
-SDIO fw version:
-        fmacfw.bin:     di Jan 25 2022 10:23:44 - g9c46deec
-        fmacfw_rf.bin:  di Jan 29 2022 12:20:08 - ga0734829
-        fw_patch_table.bin:  Mar 16 2022 16:25:56 - git 4e1c0fc
-        fw_patch_table_u03.bin:  Mar 16 2022 16:25:53 - git ecdf1b1
-=============================================================
-
-update_date:2022_0328_1623
-info:
-    1. [USB/driver] add CONFIG_SUPPORT_REALTIME_CHANGE_MAC is default y
-
-commit-id: 8caff4ac6e513fa2ad4bb13b96894c0493cd29b1 
-
-Test comment:
-
-
-USB fw version:
-        fmacfw.bin:     bo Mar 14 2022 11:43:55 - g5a39adc1
-        fmacfw_rf.bin:  zh Mar 16 2022 14:32:00 - g094d53efm
-        fw_patch_table_u03.bin: Mar 16 2022 16:25:53 - git ecdf1b1
-SDIO fw version:
-        fmacfw.bin:     di Jan 25 2022 10:23:44 - g9c46deec
-        fmacfw_rf.bin:  di Jan 29 2022 12:20:08 - ga0734829
-        fw_patch_table.bin:  Mar 16 2022 16:25:56 - git 4e1c0fc
-        fw_patch_table_u03.bin:  Mar 16 2022 16:25:53 - git ecdf1b1
-=============================================================
-
-update_date:2022_0325_1830
-info:
-    1. [USB/driver] add adaptivity test in aic_load_fw
-    2. [USB/driver] add CONFIG_STA_SCAN_WHEN_P2P_WORKING in aic8800_fdrv for customer to chose.
-
-commit-id: 8485d3fdc2d42b11a1f814ef89b7c33ed1eb449f
-
-Test comment:
-
-
-USB fw version:
-        fmacfw.bin:     bo Mar 14 2022 11:43:55 - g5a39adc1
-        fmacfw_rf.bin:  zh Mar 16 2022 14:32:00 - g094d53efm
-        fw_patch_table_u03.bin: Mar 16 2022 16:25:53 - git ecdf1b1
-SDIO fw version:
-        fmacfw.bin:     di Jan 25 2022 10:23:44 - g9c46deec
-        fmacfw_rf.bin:  di Jan 29 2022 12:20:08 - ga0734829
-        fw_patch_table.bin:  Mar 16 2022 16:25:56 - git 4e1c0fc
-        fw_patch_table_u03.bin:  Mar 16 2022 16:25:53 - git ecdf1b1
-=============================================================
-
-
-update_date:2022_0322_1720
-info:
-    1. [USB/driver]fix aicwf_usb_tx_flowctrl and other fc.
-    2. [USB/driver]add tasklet config for tx(default n).
-
-commit-id:  
-
-Test comment:
-
-
-USB fw version:
-        fmacfw.bin:     bo Mar 14 2022 11:43:55 - g5a39adc1
-        fmacfw_rf.bin:  zh Mar 16 2022 14:32:00 - g094d53efm
-        fw_patch_table_u03.bin: Mar 16 2022 16:25:53 - git ecdf1b1
-SDIO fw version:
-        fmacfw.bin:     di Jan 25 2022 10:23:44 - g9c46deec
-        fmacfw_rf.bin:  di Jan 29 2022 12:20:08 - ga0734829
-        fw_patch_table.bin:  Mar 16 2022 16:25:56 - git 4e1c0fc
-        fw_patch_table_u03.bin:  Mar 16 2022 16:25:53 - git ecdf1b1
-=============================================================
-
-update_date:2022_0321_1008
-info:
-    1. [USB/fw]update msg_ep fmacfw_rf.bin.
-    2. [USB/patch] update bt patch, disable le ch_up_proc, modify le itf ver, add lpm indicate.
-
-commit-id: 85ba6a1a319f4f824f91eeb11ba7337d1567b908 
-
-Test comment:
-
-
-USB fw version:
-        fmacfw.bin:     bo Mar 14 2022 11:43:55 - g5a39adc1
-        fmacfw_rf.bin:  zh Mar 16 2022 14:32:00 - g094d53efm
-        fw_patch_table_u03.bin: Mar 16 2022 16:25:53 - git ecdf1b1
-SDIO fw version:
-        fmacfw.bin:     di Jan 25 2022 10:23:44 - g9c46deec
-        fmacfw_rf.bin:  di Jan 29 2022 12:20:08 - ga0734829
-        fw_patch_table.bin:  Mar 16 2022 16:25:56 - git 4e1c0fc
-        fw_patch_table_u03.bin:  Mar 16 2022 16:25:53 - git ecdf1b1
-=============================================================
-
-update_date:2022_0315_0959
-info:
-    1. [USB/fw]Set wifi rx msg pkt size to 1028.
-    2. [USB/driver] fix can not create wlan0 in /proc/net/wireless.
-
-commit-id: 79939aaba6a8517b47108dc6f18a75b57bc63f00
-
-Test comment:
-	1. [USB] usb plug out/in.
-	2. [USB] Wifi and Bt Enable/Disable.
-	3. [USB] Wifi connect/disconnect to ap.
-	4. [USB] Bt connect to device of headset, phone, and other.
-	5. [USB] Bt RF testing.
-
-USB fw version:
-        fmacfw.bin:     bo Mar 14 2022 11:43:55 - g5a39adc1
-        fmacfw_rf.bin:  zh Jan 12 2022 11:38:42 - g0a2dfff4
-        fw_patch_table_u03.bin: Mar 08 2022 11:04:57 - git 4653c9b
-SDIO fw version:
-        fmacfw.bin:     di Jan 25 2022 10:23:44 - g9c46deec
-        fmacfw_rf.bin:  di Jan 29 2022 12:20:08 - ga0734829
-        fw_patch_table.bin:  Mar 11 2022 21:00:58 - git 86d7a3c
-        fw_patch_table_u03.bin:  Mar 12 2022 09:45:59 - git 8d08eeb
-=============================================================
-
-
-update_date:2022_0312_1017
-info:
-	1. [SDIO/driver]add lpm_enable.
-	2. [SDIO/patch]add lpm_enable.
-
-
-commit-id: 929cbffc6ed48df8b38e3bf3f094694fcaa94ebc 
-
-Test comment:
-
-USB fw version:
-        fmacfw.bin:     bo Mar 09 2022 14:49:29 - g583f5d26
-        fmacfw_rf.bin:  zh Jan 12 2022 11:38:42 - g0a2dfff4
-        fw_patch_table_u03.bin: Mar 08 2022 11:04:57 - git 4653c9b
-SDIO fw version:
-        fmacfw.bin:     di Jan 25 2022 10:23:44 - g9c46deec
-        fmacfw_rf.bin:  di Jan 29 2022 12:20:08 - ga0734829
-        fw_patch_table.bin:  Mar 11 2022 21:00:58 - git 86d7a3c
-        fw_patch_table_u03.bin:  Mar 12 2022 09:45:59 - git 8d08eeb
-=============================================================
-
-update_date:2022_0310_1812
-info:
-	1. [SDIO/libbt-vendor]fix crash when disable bt.
-	2. [USB/driver] modify udelay(100) to mdelay(1) when wait cmd queue empty
-	3. [USB/fw] add fmacfw_usbbt_txadaptivity.bin.
-
-commit-id: 561b345b1db42bffbf480fe8864c650e2500f950
-
-Test comment:
-
-USB fw version:
-        fmacfw.bin:     bo Mar 09 2022 14:49:29 - g583f5d26
-        fmacfw_rf.bin:  zh Jan 12 2022 11:38:42 - g0a2dfff4
-        fw_patch_table_u03.bin: Mar 08 2022 11:04:57 - git 4653c9b
-SDIO fw version:
-        fmacfw.bin:     di Jan 25 2022 10:23:44 - g9c46deec
-        fmacfw_rf.bin:  di Jan 29 2022 12:20:08 - ga0734829
-        fw_patch_table_u03.bin: Mar 08 2022 11:04:57 - git 4653c9b
-=============================================================
-
-update_date:2022_0310_0952
-info:
-	1. [USB]1.Separate wlan msg buffer from data buffer, enable MSG_EP.
-
-commit-id: 58cfa3efebd11f96c1ff33175645990c6f39c2a7
-
-Test comment:
-
-USB fw version:
-        fmacfw.bin:     bo Mar 09 2022 14:49:29 - g583f5d26
-        fmacfw_rf.bin:  zh Jan 12 2022 11:38:42 - g0a2dfff4
-        fw_patch_table_u03.bin: Mar 08 2022 11:04:57 - git 4653c9b
-SDIO fw version:
-        fmacfw.bin:     di Jan 25 2022 10:23:44 - g9c46deec
-        fmacfw_rf.bin:  di Jan 29 2022 12:20:08 - ga0734829
-        fw_patch_table_u03.bin: Mar 08 2022 11:04:57 - git 4653c9b
-=============================================================
-
-
-update_date:2022_0308_1131
-info:
-	1. [bt/patch] update bt patch, modify for acl duplicate and sniff err ,disable ble ch map up proc
-
-commit-id: dc53883505572640065827873218fa3d436d3500 
-
-Test comment:
-
-USB fw version:
-        fmacfw.bin:     di Jan 24 2022 20:49:02 - g9c46deec
-        fmacfw_rf.bin:  zh Jan 12 2022 11:38:42 - g0a2dfff4
-        fw_patch_table_u03.bin: Mar 08 2022 11:04:57 - git 4653c9b
-SDIO fw version:
-        fmacfw.bin:     di Jan 25 2022 10:23:44 - g9c46deec
-        fmacfw_rf.bin:  di Jan 29 2022 12:20:08 - ga0734829
-        fw_patch_table_u03.bin: Mar 08 2022 11:04:57 - git 4653c9b
-=============================================================
-
-update_date:2022_0304_1808
-info:
-	1. [SDIO/driver] fix the problem that WiFi or Bluetooth cannot be enabled repeatedly for Rockchip platform.
-
-commit-id: 01943c1cdbbd090682f75be124b63d1c10be106d 
-
-Test comment:
-
-USB fw version:
-        fmacfw.bin:     di Jan 24 2022 20:49:02 - g9c46deec
-        fmacfw_rf.bin:  zh Jan 12 2022 11:38:42 - g0a2dfff4
-        fw_patch_table_u03.bin: Feb 26 2022 11:11:56 - git 7a4d47f
-SDIO fw version:
-        fmacfw.bin:     di Jan 25 2022 10:23:44 - g9c46deec
-        fmacfw_rf.bin:  di Jan 29 2022 12:20:08 - ga0734829
-        fw_patch_table_u03.bin: Feb 26 2022 11:11:56 - git 7a4d47f
-=============================================================
-
-
-update_date:2022_0303_1053
-info:
-	1. [USB/driver] add CONFIG_USB_MSG_EP in aic_load_fw Makefile.(defualt n)
-	2. [USB/driver] add CONFIG_SUPPORT_REALTIME_CHANGE_MAC in aic8800_fdrv Makefile.
-commit-id: 63df4a58c966ddaa2ce3d6c470ada844e1201162 
-
-Test comment:
-
-USB fw version:
-        fmacfw.bin:     di Jan 24 2022 20:49:02 - g9c46deec
-        fmacfw_rf.bin:  zh Jan 12 2022 11:38:42 - g0a2dfff4
-        fw_patch_table_u03.bin: Feb 26 2022 11:11:56 - git 7a4d47f
-SDIO fw version:
-        fmacfw.bin:     di Jan 25 2022 10:23:44 - g9c46deec
-        fmacfw_rf.bin:  di Jan 29 2022 12:20:08 - ga0734829
-        fw_patch_table_u03.bin: Feb 26 2022 11:11:56 - git 7a4d47f
-=============================================================
-
-update_date:2022_0302_1428
-info:
-	1. [SDIO/driver] add CONFIG_GPIO_WAKEUP in Makefile.
-commit-id: 6e31feb491e13079215cf80d005c9d1d881a10f3
-
-Test comment:
-
-USB fw version:
-        fmacfw.bin:     di Jan 24 2022 20:49:02 - g9c46deec
-        fmacfw_rf.bin:  zh Jan 12 2022 11:38:42 - g0a2dfff4
-        fw_patch_table_u03.bin: Feb 26 2022 11:11:56 - git 7a4d47f
-SDIO fw version:
-        fmacfw.bin:     di Jan 25 2022 10:23:44 - g9c46deec
-        fmacfw_rf.bin:  di Jan 29 2022 12:20:08 - ga0734829
-        fw_patch_table_u03.bin: Feb 26 2022 11:11:56 - git 7a4d47f
-=============================================================
-
-update_date:2022_0228_1730
-info:
-	1. [SDIO/USB/bt_patch] update bt patch for U02&&U03, modify for pta and afh, remote feats.
-	2. [SDIO/driver] add CONFIG_COEX in Makefile.
-	3. [SDIO/libbt-vendor] modify rfkill path.
-commit-id: 7bdc2f2151dc6a7ea5ddd7dadc8ce34f0e6edf0b
-
-Test comment:
-
-USB fw version:
-        fmacfw.bin:     di Jan 24 2022 20:49:02 - g9c46deec
-        fmacfw_rf.bin:  zh Jan 12 2022 11:38:42 - g0a2dfff4
-        fw_patch_table_u03.bin: Feb 26 2022 11:11:56 - git 7a4d47f
-SDIO fw version:
-        fmacfw.bin:     di Jan 25 2022 10:23:44 - g9c46deec
-        fmacfw_rf.bin:  di Jan 29 2022 12:20:08 - ga0734829
-        fw_patch_table_u03.bin: Feb 26 2022 11:11:56 - git 7a4d47f
-=============================================================
-
-
-update_date:2022_0224_1614
-info:
-	1. [SDIO/USB/bt_patch] update bt patch for u02&&u03,for afh err, le con timeout,rf test and tx pwr's rd and wr
-commit-id: 2a3085ef7848fe6fb80ecc3a938894e5179b2404
-
-Test comment:
-
-USB fw version:
-        fmacfw.bin:     di Jan 24 2022 20:49:02 - g9c46deec
-        fmacfw_rf.bin:  zh Jan 12 2022 11:38:42 - g0a2dfff4
-        fw_patch_table_u03.bin:  Feb 24 2022 15:09:19 - git 6ffede3
-SDIO fw version:
-        fmacfw.bin:     di Jan 25 2022 10:23:44 - g9c46deec
-        fmacfw_rf.bin:  di Jan 29 2022 12:20:08 - ga0734829
-        fw_patch_table_u03.bin:  Feb 24 2022 15:09:19 - git 6ffede3
-=============================================================
-
-update_date:2022_0223_1539
-info:
-	1. [SDIO/drver]modify rftest_result len to 9.
-	2. [tool] update rftest tool.
-commit-id: 38f007cea3f548502c0be625f689ffa75a34fbb7
-
-Test comment: 
-
-USB fw version:
-        fmacfw.bin:     di Jan 24 2022 20:49:02 - g9c46deec
-        fmacfw_rf.bin:  zh Jan 12 2022 11:38:42 - g0a2dfff4
-        fw_patch_table_u03.bin:  Feb 16 2022 15:15:22 - git bf2497c
-SDIO fw version:
-        fmacfw.bin:     di Jan 25 2022 10:23:44 - g9c46deec
-        fmacfw_rf.bin:  di Jan 29 2022 12:20:08 - ga0734829
-        fw_patch_table_u03.bin:  Feb 16 2022 15:15:22 - git bf2497c
-=============================================================
-
-
-update_date:2022_0222_1647
-info:
-	1. [USB/driver] fix can not parser Minus Sign for aic_userconfig.txt.
-
-commit-id: d45cf6e082e023f6d9237c6d797ff844b22d9776 
-	
-Test comment:
-
-USB fw version:
-        fmacfw.bin:     di Jan 24 2022 20:49:02 - g9c46deec
-        fmacfw_rf.bin:  zh Jan 12 2022 11:38:42 - g0a2dfff4
-        fw_patch_table_u03.bin:  Feb 16 2022 15:15:22 - git bf2497c
-SDIO fw version:
-        fmacfw.bin:	di Jan 25 2022 10:23:44 - g9c46deec
-        fmacfw_rf.bin:  di Jan 29 2022 12:20:08 - ga0734829
-        fw_patch_table_u03.bin:  Feb 16 2022 15:15:22 - git bf2497c
-=============================================================
-
-update_date:2022_0218_1614
-info:
-	1. [SDIO/USB] add CREATE_TRACE_POINT in Makefile.
-
-commit-id: 523ac419970f431ad9b86f54ae6f4d6a8f83a2c8
-	
-Test comment:
-
-USB fw version:
-        fmacfw.bin:     di Jan 24 2022 20:49:02 - g9c46deec
-        fmacfw_rf.bin:  zh Jan 12 2022 11:38:42 - g0a2dfff4
-        fw_patch_table_u03.bin:  Feb 16 2022 15:15:22 - git bf2497c
-SDIO fw version:
-        fmacfw.bin:	di Jan 25 2022 10:23:44 - g9c46deec
-        fmacfw_rf.bin:  di Jan 29 2022 12:20:08 - ga0734829
-        fw_patch_table_u03.bin:  Feb 16 2022 15:15:22 - git bf2497c
-=============================================================
-
-update_date:2022_0211_1530
-info:
-	1. [SDIO/driver] discard tdls feature for aic8800_fdrv.
-	2. [USB/driver] add wowlan config(default n).
-	3. [USB/driver] fix crash for tx flow control.
-	4. [USB/driver] fix crash for usb plug out.
-	5. [USB/SDIO] modify Makefile for build all driver.
-
-commit-id: a33288d81da772672832c9ee991423f29b8f6da6
-	
-Test comment:
-	1. [USB] usb plug out/in.
-
-USB fw version:
-        fmacfw.bin:     di Jan 24 2022 20:49:02 - g9c46deec
-        fmacfw_rf.bin:  zh Jan 12 2022 11:38:42 - g0a2dfff4
-        fw_patch_table_u03.bin:  Jan 19 2022 20:55:29 - git 08d031b
-SDIO fw version:
-        fmacfw.bin:	di Jan 25 2022 10:23:44 - g9c46deec
-        fmacfw_rf.bin:  di Jan 29 2022 12:20:08 - ga0734829
-        fw_patch_table_u03.bin:  Jan 19 2022 20:55:29 - git 08d031b
-=============================================================
-
-update_date:2022_0126_1649
-info:
-	1. [USB/driver] discard tdls feature for aic8800_fdrv .
-
-commit-id: 9ebba80cef9982bebb7679edb2ffd0c4a7b12af7
-
-Test comment:
-	1. [USB]Using support tdls phone and ping or iperf to 8800.
-
-
-USB fw version:
-        fmacfw.bin:     di Jan 24 2022 20:49:02 - g9c46deec
-        fmacfw_rf.bin:  zh Jan 12 2022 11:38:42 - g0a2dfff4
-        fw_patch_table_u03.bin:  Jan 19 2022 20:55:29 - git 08d031b
-SDIO fw version:
-        fmacfw.bin:	di Jan 25 2022 10:23:44 - g9c46deec
-        fmacfw_rf.bin:  di Jan 06 2022 09:53:42 - gcc1cd5dd
-        fw_patch_table_u03.bin:  Jan 19 2022 20:55:29 - git 08d031b
-=============================================================
-
-update_date:2022_0125_1054
-info:
-	1. [USB/fw] fix can not connect to ap that ax only .
-	2. [USB/driver] update htc handle.
-
-commit-id: 7b5aaf3e82f3d7906da3de6b2f9d231b668b0f02
-
-Test comment:
-	1. [USB] Try to connect ap that ax only.
-
-
-USB fw version:
-        fmacfw.bin:     di Jan 24 2022 20:49:02 - g9c46deec
-        fmacfw_rf.bin:  zh Jan 12 2022 11:38:42 - g0a2dfff4
-        fw_patch_table_u03.bin:  Jan 19 2022 20:55:29 - git 08d031b
-SDIO fw version:
-        fmacfw.bin:	di Jan 25 2022 10:23:44 - g9c46deec
-        fmacfw_rf.bin:  di Jan 06 2022 09:53:42 - gcc1cd5dd
-        fw_patch_table_u03.bin:  Jan 19 2022 20:55:29 - git 08d031b
-=============================================================
-
-update_date:2022_0124_2322
-info:
-	1. [USB/driver] add MM_APM_STALOSS_IND handle.
-	2. [USB/driver] fix driver deadlock for ap mode.
-	3. [USB/driver] fix wifi can not scan for wpa3 connect failed.
-
-commit-id: b250aa23adf278086ce1917ea588a55460a5225e
-
-Test comment:
-	1. [USB] Try turning on the hotspot and connecting using a WiFi device.
-	2. [USB] Deliberately use the wrong password to connect to the WPA3 route,Then try WiFi scanning.
-
-USB fw version:
-        fmacfw.bin:     di Jan 18 2022 15:49:25 - ge44bcf97
-        fmacfw_rf.bin:  zh Jan 12 2022 11:38:42 - g0a2dfff4
-        fw_patch_table_u03.bin:  Jan 19 2022 20:55:29 - git 08d031b
-SDIO fw version:
-        fmacfw.bin:	di Jan 18 2022 15:51:48 - ge44bcf97
-        fmacfw_rf.bin:  di Jan 06 2022 09:53:42 - gcc1cd5dd
-        fw_patch_table_u03.bin:  Jan 19 2022 20:55:29 - git 08d031b
-=============================================================
-
-update_date:2022_0122_1425
-info:
-	1. [USB/driver] fix can not connect to wpa3 ap.
-	2. [USB/driver] fix null point for country code.
-
-commit-id: ad94518e3dd72d876c4171807987f604ffb8f058 
-
-Test comment:
-	1. [USB]reconnet to wpa3 ap
-	2. [USB]try to select undefine country code.
-
-USB fw version:
-        fmacfw.bin:     di Jan 18 2022 15:49:25 - ge44bcf97
-        fmacfw_rf.bin:  zh Jan 12 2022 11:38:42 - g0a2dfff4
-        fw_patch_table_u03.bin:  Jan 19 2022 20:55:29 - git 08d031b
-SDIO fw version:
-        fmacfw.bin:	di Jan 18 2022 15:51:48 - ge44bcf97
-        fmacfw_rf.bin:  di Jan 06 2022 09:53:42 - gcc1cd5dd
-        fw_patch_table_u03.bin:  Jan 19 2022 20:55:29 - git 08d031b
-=============================================================
-
-update_date:2022_0120_1003
-info:
-	1. [USB/driver] fix can not connect to wep ap. 
-
-commit-id: 5f4030ddbe8f3b9dfc461d93b4ba0cb820d7e403 
-
-Test comment:
-	1. [USB]reconnet to wep ap.
-
-USB fw version:
-        fmacfw.bin:     di Jan 18 2022 15:49:25 - ge44bcf97
-        fmacfw_rf.bin:  zh Jan 12 2022 11:38:42 - g0a2dfff4
-        fw_patch_table_u03.bin:  Jan 19 2022 20:55:29 - git 08d031b
-SDIO fw version:
-        fmacfw.bin:	di Jan 18 2022 15:51:48 - ge44bcf97
-        fmacfw_rf.bin:  di Jan 06 2022 09:53:42 - gcc1cd5dd
-        fw_patch_table_u03.bin:  Jan 19 2022 20:55:29 - git 08d031b
-=============================================================
-
-update_date:2022_0118_1819
-info:
-	1. [USB/fw patch] fix can not scan ap if load fw. 
-
-commit-id: cf265d4fb9ce1e533a389bb92cc057199f5f69f6 
-
-Test comment:
-	1. [USB]power on/off board to check wifi scan ap or not.
-
-USB fw version:
-        fmacfw.bin:     di Jan 18 2022 15:49:25 - ge44bcf97
-        fmacfw_rf.bin:  zh Jan 12 2022 11:38:42 - g0a2dfff4
-        fw_patch_table_u03.bin:  Jan 17 2022 19:27:53 - git 673d32a
-SDIO fw version:
-        fmacfw.bin:		di Jan 18 2022 15:51:48 - ge44bcf97
-        fmacfw_rf.bin:  di Jan 06 2022 09:53:42 - gcc1cd5dd
-        fw_patch_table_u03.bin:  Jan 17 2022 19:27:53 - git 673d32a
-=============================================================
-
-
-update_date:2022_0117_0955
-info:
-	1. [USB/driver] add br featrue.
-	2. [USB/driver] fix null point when rwnx_close.
-	3. [USB/driver] fix fw crash probability for power on/off test.
-	4. [SDIO/driver] fix can not load aic_userconfig.txt when ic no write vendor_info.
-
-commit-id: ec2f2bc043c9ff217639434fc755503d40829f7b 
-
-Test comment:
-	1. [USB]test hotspot turn on/off.
-	2. [USB]power on/off board to check wifi enable or not.
-	3. [SDIO] insmod wifi driver to check aic_userconfig.txt loading or not.
-
-USB fw version:
-        fmacfw.bin:     li Jan 04 2022 19:18:29 - gcc1cd5dd
-        fmacfw_rf.bin:  zh Jan 12 2022 11:38:42 - g0a2dfff4
-        fw_patch_table_u03.bin:  Jan 12 2022 17:28:36 - git 14b7cd5
-SDIO fw version:
-        fmacfw.bin:             di Dec 29 2021 14:59:47 - g2b0f7f21
-        fmacfw_rf.bin:  	di Jan 06 2022 09:53:42 - gcc1cd5dd
-        fw_patch_table_u03.bin:  Jan 12 2022 17:28:36 - git 14b7cd5
-=============================================================
-
-update_date:2022_0112_1227
-info:
-	1. [USB/fw_rf] update fw_rf for get firmware version.
-	2. [USB/aic_btusb] comment suspend set_bt_onoff().
-
-commit-id: 
-
-USB fw version:
-        fmacfw.bin:     li Jan 04 2022 19:18:29 - gcc1cd5dd
-        fmacfw_rf.bin:  zh Jan 12 2022 11:38:42 - g0a2dfff4
-        fw_patch_table_u03.bin:  Jan 06 2022 20:25:33 - git ee558e4
-SDIO fw version:
-        fmacfw.bin:             di Dec 29 2021 14:59:47 - g2b0f7f21
-        fmacfw_rf.bin:  	di Jan 06 2022 09:53:42 - gcc1cd5dd
-        fw_patch_table_u03.bin:  Jan 06 2022 20:25:33 - git ee558e4
-=============================================================
-
-update_date:2022_0108_1843
-info:
-	1. [USB/driver] fix usb holdup for driver rmmod.
-	2. [SDIO/driver] add country setting.
-
-commit-id: 4b947bff6e3310a81d0d1d9058ffdd2c6628e3d6
-
-USB fw version:
-        fmacfw.bin:     li Jan 04 2022 19:18:29 - gcc1cd5dd
-        fmacfw_rf.bin:  zh Dec 15 2021 17:00:03 - gf6281463
-        fw_patch_table_u03.bin:  Jan 06 2022 20:25:33 - git ee558e4
-SDIO fw version:
-        fmacfw.bin:             di Dec 29 2021 14:59:47 - g2b0f7f21
-        fmacfw_rf.bin:  	di Jan 06 2022 09:53:42 - gcc1cd5dd
-        fw_patch_table_u03.bin:  Jan 06 2022 20:25:33 - git ee558e4
-=============================================================
-
-update_date:2022_0107_1226
-info:
-        1. [USB/driver] Update regdb.c
-
-commit-id: f28c6c237d68c56398de8e25945947f972e3111e 
-
-USB fw version:
-        fmacfw.bin:     li Jan 04 2022 19:18:29 - gcc1cd5dd
-        fmacfw_rf.bin:  zh Dec 15 2021 17:00:03 - gf6281463
-        fw_patch_table_u03.bin:  Jan 06 2022 20:25:33 - git ee558e4
-SDIO fw version:
-        fmacfw.bin:             di Dec 29 2021 14:59:47 - g2b0f7f21
-        fmacfw_rf.bin:  	di Jan 06 2022 09:53:42 - gcc1cd5dd
-        fw_patch_table_u03.bin:  Jan 06 2022 20:25:33 - git ee558e4
-=============================================================
-
-update_date:2022_0107_0938
-info:
-        1. [USB SDIO/bt patch] Fix txpwr done time induced RF such as ACP fail.
-
-commit-id: b8a390164f58b741d6245d61fbe09ce053ee9809 
-
-USB fw version:
-        fmacfw.bin:     li Jan 04 2022 19:18:29 - gcc1cd5dd
-        fmacfw_rf.bin:  zh Dec 15 2021 17:00:03 - gf6281463
-        fw_patch_table_u03.bin:  Jan 06 2022 20:25:33 - git ee558e4
-SDIO fw version:
-        fmacfw.bin:             di Dec 29 2021 14:59:47 - g2b0f7f21
-        fmacfw_rf.bin:  	di Jan 06 2022 09:53:42 - gcc1cd5dd
-        fw_patch_table_u03.bin:  Jan 06 2022 20:25:33 - git ee558e4
-=============================================================
-
-update_date:2022_0106_1347
-info:
-        1. [SDIO/driver] aic8800_fdrv get fw_path form aic8800_bsp.
-		2. [SDIO/driver] aic8800_bsp support testmode.
-
-commit-id: ccce528499c7dbea9977e0531336be965eb4b50c
-
-USB fw version:
-        fmacfw.bin:     li Jan 04 2022 19:18:29 - gcc1cd5dd
-        fmacfw_rf.bin:  zh Dec 15 2021 17:00:03 - gf6281463
-        fw_patch_table_u03.bin: Jan 04 2022 20:08:29 - git 42982a2
-SDIO fw version:
-        fmacfw.bin:             di Dec 29 2021 14:59:47 - g2b0f7f21
-        fmacfw_rf.bin:  	di Jan 06 2022 09:53:42 - gcc1cd5dd
-        fw_patch_table_u03.bin: Jan 04 2022 20:08:29 - git 42982a2
-=============================================================
-
-update_date:2022_0105_1102
-info:
-        1. [USB/driver] Switch country code for below 3.14 old kernel.
-
-commit-id: 739943831abf0a172e427102cabe851c5094ad44
-
-USB fw version:
-        fmacfw.bin:     li Jan 04 2022 19:18:29 - gcc1cd5dd
-        fmacfw_rf.bin:  zh Dec 15 2021 17:00:03 - gf6281463
-        fw_patch_table_u03.bin: Jan 04 2022 20:08:29 - git 42982a2
-SDIO fw version:
-        fmacfw.bin:             di Dec 29 2021 14:59:47 - g2b0f7f21
-        fmacfw_rf.bin:  di Dec 15 2021 16:34:37 - ge0aaa5a3m
-        fw_patch_table_u03.bin: Jan 04 2022 20:08:29 - git 42982a2
-=============================================================
-
-update_date:2022_0105_0941
-info:
-        1. [USB/bt patch] Improve BT performance 2M to 3M.
-
-commit-id: f958f6c66449e8d6957e513b3912d8d2d5be65b7
-
-USB fw version:
-        fmacfw.bin:     li Jan 04 2022 19:18:29 - gcc1cd5dd
-        fmacfw_rf.bin:  zh Dec 15 2021 17:00:03 - gf6281463
-        fw_patch_table_u03.bin: Jan 04 2022 20:08:29 - git 42982a2
-SDIO fw version:
-        fmacfw.bin:             di Dec 29 2021 14:59:47 - g2b0f7f21
-        fmacfw_rf.bin:  di Dec 15 2021 16:34:37 - ge0aaa5a3m
-        fw_patch_table_u03.bin: Jan 04 2022 20:08:29 - git 42982a2
-=============================================================
-
-update_date:2022_0104_1948
-info:
-        1. [USB/driver] fix bt can't send hci command for ubuntu.
-        2. [USB/driver] support kernel 5.11.
-commit-id: ba0f9e429721b851b203c662518b2ad0671ab493 
-
-USB fw version:
-        fmacfw.bin:     li Jan 04 2022 19:18:29 - gcc1cd5dd
-        fmacfw_rf.bin:  zh Dec 15 2021 17:00:03 - gf6281463
-        fw_patch_table_u03.bin: Dec 31 2021 21:06:45 - git 8638e37
-SDIO fw version:
-        fmacfw.bin:             di Dec 29 2021 14:59:47 - g2b0f7f21
-        fmacfw_rf.bin:  di Dec 15 2021 16:34:37 - ge0aaa5a3m
-        fw_patch_table_u03.bin: Dec 31 2021 21:06:45 - git 8638e37
-=============================================================
-
-update_date:2022_0104_1026
-info:
-	1. [USB SDIO/bt patch] optimize pta.
-	2. [USB/driver] fix country code rule.
-commit-id: 40f8485dbf6ce5c14f026c1809db6718d2ca00c9 
-
-USB fw version:
-        fmacfw.bin:     di Dec 29 2021 15:01:04 - g2b0f7f21
-        fmacfw_rf.bin:  zh Dec 15 2021 17:00:03 - gf6281463
-        fw_patch_table_u03.bin: Dec 31 2021 21:06:45 - git 8638e37
-SDIO fw version:
-	fmacfw.bin:		di Dec 29 2021 14:59:47 - g2b0f7f21
-	fmacfw_rf.bin:	di Dec 15 2021 16:34:37 - ge0aaa5a3m
-	fw_patch_table_u03.bin:	Dec 31 2021 21:06:45 - git 8638e37
-=============================================================
-
-update_date:2021_1231_1103
-info:
-	1. [SDIO/driver] fix driver insmod crash for he_on is false.
-commit-id: 11b374e2b207828f5ad1f9b7a8b02ce0b555c629 
-
-USB fw version:
-        fmacfw.bin:     di Dec 29 2021 15:01:04 - g2b0f7f21
-        fmacfw_rf.bin:  zh Dec 15 2021 17:00:03 - gf6281463
-        fw_patch_table_u03.bin: Dec 27 2021 19:19:33 - git 91e17e5
-SDIO fw version:
-	fmacfw.bin:		di Dec 29 2021 14:59:47 - g2b0f7f21
-	fmacfw_rf.bin:	di Dec 15 2021 16:34:37 - ge0aaa5a3m
-	fw_patch_table_u03.bin:	Dec 27 2021 19:19:33 - git 91e17e5
-=============================================================
-
-update_date:2021_1231_1036
-info:
-	1. [USB/driver] add display fw version.
-	2. [USB/driver] fix reord for resend package.
-commit-id: da2630d4244b3402ee633eeb42d9ac98b33cfbf8
-
-USB fw version:
-        fmacfw.bin:     di Dec 29 2021 15:01:04 - g2b0f7f21
-        fmacfw_rf.bin:  zh Dec 15 2021 17:00:03 - gf6281463
-        fw_patch_table_u03.bin: Dec 27 2021 19:19:33 - git 91e17e5
-SDIO fw version:
-	fmacfw.bin:		di Dec 29 2021 14:59:47 - g2b0f7f21
-	fmacfw_rf.bin:	di Dec 15 2021 16:34:37 - ge0aaa5a3m
-	fw_patch_table_u03.bin:	Dec 27 2021 19:19:33 - git 91e17e5
-=============================================================
-
-update_date:2021_1228_1605
-info:
-	1. [USB/driver] modify reorder featrue.
-commit-id: d534a5524836e64e53f9d8b932c03b6d92241307
-
-fw version:
-        fmacfw.bin:     di Dec 25 2021 17:47:34 - g70393c8c
-        fmacfw_rf.bin:  zh Dec 15 2021 17:00:03 - gf6281463
-        fw_patch_table_u03.bin: Dec 27 2021 19:19:33 - git 91e17e5
-=============================================================
-
-update_date:2021_1227_1931
-info:
-        1. [USB/bt patch] update bt patch for U03, remove read before write the tx abort regs.
-commit-id: d886e4ac44b9e9589b41032207bc9a9505ea7304
-
-fw version:
-        fmacfw.bin:     di Dec 25 2021 17:47:34 - g70393c8c
-        fmacfw_rf.bin:  zh Dec 15 2021 17:00:03 - gf6281463
-        fw_patch_table_u03.bin: Dec 27 2021 19:19:33 - git 91e17e5
-=============================================================
-
-update_date:2021_1227_0947
-info:
-	1. [USB and SDIO/fw and bt patch] update fw and bt patch for bt only coex when wifi tput.
-commit-id: bb0221de8daccfc1746d263612f2b5176d6b1c12 
-
-fw version:
-	fmacfw.bin:	di Dec 25 2021 17:47:34 - g70393c8c
-	fmacfw_rf.bin:	zh Dec 15 2021 17:00:03 - gf6281463
-	fw_patch_table_u03.bin: Dec 24 2021 21:12:33 - git 3c11860
-=============================================================
-
-
-update_date:2021_1224_1908
-info:
-	1. [USB/patch]add Android7.1 patch for rk3229
-commit-id: 7bee61ccc635c3374d5e37d0c347550efb2979b1 
-
-fw version:
-        fmacfw.bin:     di Dec 21 2021 21:16:47 - ge1c43efc
-        fmacfw_rf.bin:  zh Dec 15 2021 17:00:03 - gf6281463
-        fw_patch_table_u03.bin: Dec 22 2021 11:15:25 - git 3ec66e3
-=============================================================
-
-update_date:2021_1224_1627
-info:
-	1. [SDIO/driver]support kernel 3.10.
-	2. [SDIO/driver]fix sdio error for tx aggr size long than 32768 bytes for old kernel.
-commit-id: c0d9c910c08b3467f9cd7deb762ed99753b086de 
-
-fw version:
-        fmacfw.bin:     di Dec 21 2021 21:16:47 - ge1c43efc
-        fmacfw_rf.bin:  zh Dec 15 2021 17:00:03 - gf6281463
-        fw_patch_table_u03.bin: Dec 22 2021 11:15:25 - git 3ec66e3
-=============================================================
-
-
-update_date:2021_1222_1556
-info:
-        1. [USB/fw]update fmacfw.bin to fix usb communication for wifi and bt coex.
-	2. [USB/patch]update bt patch for U03, for coex , afh, and btmode info.
-commit-id: b0c30a0c0ae1282190818af483a09d2dd5b229b4 
-
-fw version:
-        fmacfw.bin:     di Dec 21 2021 21:16:47 - ge1c43efc
-        fmacfw_rf.bin:  zh Dec 15 2021 17:00:03 - gf6281463
-        fw_patch_table_u03.bin: Dec 22 2021 11:15:25 - git 3ec66e3
-=============================================================
-
-update_date:2021_1221_1134
-info:
-        1. [USB/driver]support kernel 3.14
-
-commit-id: 1bc82d65639c23ff2ab8eb327c6c570f04702230
-
-fw version:
-        fmacfw.bin:     di Dec 15 2021 15:50:54 - ge0aaa5a3
-        fmacfw_rf.bin:  zh Dec 15 2021 17:00:03 - gf6281463
-        fw_patch_table_u03.bin: Dec 17 2021 20:05:39 - git c09292a
-=============================================================
-
-update_date:2021_1217_2009
-info:
-        1. [USB/bt patch]update wifi bt coex.
-
-commit-id: 0d134f98568482ff2ec272333f50348d28faee8d
-
-fw version:
-        fmacfw.bin:     di Dec 15 2021 15:50:54 - ge0aaa5a3
-        fmacfw_rf.bin:  zh Dec 15 2021 17:00:03 - gf6281463
-        fw_patch_table_u03.bin: Dec 17 2021 20:05:39 - git c09292a
-=============================================================
-
-
-update_date:2021_1217_1504
-info:
-        1. [USB/driver]update reorder featrue.
-
-commit-id: a9fa6d33a56a5a3ac446f3611fb5ec7bda5bc886
-
-fw version:
-        fmacfw.bin:     di Dec 15 2021 15:50:54 - ge0aaa5a3
-        fmacfw_rf.bin:  zh Dec 15 2021 17:00:03 - gf6281463
-        fw_patch_table_u03.bin: Dec 13 2021 20:30:59 - git 083f531-dirty
-=============================================================
-
-update_date:2021_1215_1727
-info:
-	1. [USB/driver]fix get_station.
-	2. [USB/driver]fix hiden ssid connection.
-	3. [USB/fw]fix hiden ssid connection.
-	4. [USB/fw_rf] update fmacfw_rf.bin
-
-commit-id: 68b92524ae033ad3b98b32e7511e6cb92f677370 
-
-fw version:
-	fmacfw.bin: 	di Dec 15 2021 15:50:54 - ge0aaa5a3
-	fmacfw_rf.bin:	zh Dec 15 2021 17:00:03 - gf6281463
-	fw_patch_table_u03.bin: Dec 13 2021 20:30:59 - git 083f531-dirty
-=============================================================
-
-update_date:2021_1214_0956
-info:
-	1. [USB/bt patch]fix lag for iphone6 play music.
-	2. [USB/driver]add bt rx test.
-	3. [USB/drvier]fix miracast do not deal with sequence problems.
-commit-id: 6f95ce436916da227e4bf1ab6abf310c23ddb7a7 
-
-fw version:
-	fmacfw.bin: di Dec 06 2021 12:24:15 - git 0d60f8f7
-	fw_patch_table_u03.bin: Dec 13 2021 20:30:59 - git 083f531-dirty
-=============================================================
-
-update_date:2021_1213_1121
-info:
-	1. [USB/bt patch]Optimize bt reconnect.
-commit-id: 8b422a09df61ee1d714fb7766aa9334d4dea4e7d
-
-fw version:
-	fmacfw.bin: di Dec 06 2021 12:24:15 - git 0d60f8f7
-	fw_patch_table_u03.bin: Dec 11 2021 14:36:22 - git 78bcd14-dirty
-=============================================================
-
-update_date:2021_1207_1043
-info:
-	1. [USB/fw]fix p2p NoA and roc cancel.
-	2. [USB/bt patch]fix bt coex and le connection and sniffer mode connection.
-commit-id: 32b94c70dc87ede4859476200dff192c59991ad7 
-
-fw version:
-	fmacfw.bin: di Dec 06 2021 12:24:15 - git 0d60f8f7
-	fw_patch_table_u03.bin: Dec 06 2021 21:25:20 - git 52bc883-dirty
-=============================================================
-
-update_date:2021_1203_1806
-info:
-	1. [USB/fw]fix watchdog for ic reboot.
-	2. [USB/driver]add CONFIG option for usb rx tasklet.
-commit-id: 6d9f92f9e3f01658909cb4f4358923fa4853af5c 
-
-=============================================================
-
-update_date:2021_1202_2226
-info:
-    1. [USB/SDIO/bt patch]fix for ble remote reconnect.
-commit-id: 2ed74f33ed10269e4d87c294216e96eea82e8265
-
-=============================================================
-
-update_date:2021_1201_1629
-info:
-    1. [SDIO/driver]fix build error.
-	2. [SDIO/driver]porting to rk3288 Android10.
-	3. [SDIO/bt patch]update bt patch.
-commit-id: 13e50fcc8b7f8f4543b4f1ee0427abbf80204a03
-
-=============================================================
-
-update_date:2021_1128_2300
-info:
-        1. [USB/bt patch]update bt patch.
-commit-id: c19c68e143a63a4bf3df5d5d2f3748abb62dfb32 
-
-=============================================================
-
-update_date:2021_1125_2140
-info:
-        1. [USB/bt patch]fix airpods reconnect.
-commit-id: f635978e2af20a2f59821579360c798aacef7310 
-
-=============================================================
-update_date:2021_1125_1824
-info:
-        1. [USB/driver]add read ic vendor info to check 5g support or not.
-        2. [USB/driver]fix crash for sta and p2p concurrent.
-commit-id: 73b169651e675b5aa19cee56f5ae8d711003ad97
-
-=============================================================
-update_date:2021_1125_0009
-info:
-        1. [USB/driver]update align function for usb.
-        2. [USB/fw]fix p2p feature.
-	3. [USB/patch]fix airpods reconnect.
-commit-id: 96a36100997cef2644ad59b1218637235612a53c
-
-=============================================================
-update_date:2021_1122_1554
-info:
-        1. [USB/driver]fix aic_btusb for sco.
-        2. [USB/fw]fix ADDBA for fmacfw.bin.
-commit-id: 55cbf57ac6814e66638677f7795675927793b8f5
-
-=============================================================
-update_date:2021_1116_1044
-info:
-	1. [USB/driver]add country code setting for android private command.
-	2. [USB/fw]compatible not support power control max power device.
-commit-id: 36608824b5a82b479fd5f1d38f134615491eafd2
-
-=============================================================
-update_date:2021_1109_1723
-info:
-	1. [USB/driver]fix p2p discover and connect featrue.
-	2. [USB/fw]update fmacfw.bin for p2p featrue.
-commit-id: 0015564e505352af48d377025d44c4dc0d8eca39 
-
-=============================================================
-update_date:2021_1105_1427
-info:
-        1. [USB/driver]add struct rwnx_cmd array for rwnx_send_msg.
-commit-id: 6289ff0202a71c9627f4777424d5dbd380cb0412 
-
-=============================================================
-update_date:2021_1103_1124
-info:
-        1. [USB/driver]support align 16 for usb controller, this feature is disabled by default.
-commit-id: 34d18f7d996d6f63f66629b877590f59c41f842a
-
-=============================================================
-update_date:2021_1027_1610
-info:
-	1. [USB/driver]btusb support bt HSP.
-commit-id: 768da6fca245d7c4d2fbe5878bfc3ec2ac51b29e 
-
-=============================================================
-update_date:2021_1026_2357
-info:
-	1. [USB/fw]fix usb 8801 enumerate.
-commit-id: 3a5e3daf1f978de8e46219c05a830e5bd6d57e39 
-
+==================================Driver Version======================================
+aic8800d_linux_sdk_V4.0_2025_0410_b99ca8b6
+======================================================================================
+
+==================================Update Instructions=================================
+[USB/SDIO/PCIE driver update]
+1. [SDIO/driver]fix sdio mode auto ps; 
+				add sdio bt in linux ,match for blueZ;
+				
+2. [USB/driver] add module_param wifi_mac_addr;
+				fix kernel panic when deinit cmd_mgr;
+				d80x2 support adaptivity test;
+				
+3. [PCIE/driver] add private cmd: GET_CS_INFO;
+				fix pcie remove before mod_exit;
+				d80x2 support adaptivity test;
+				add PCIE_FW_ERR_BIT;
+				add CONFIG_LOAD_BT_CONF;
+				fix he_old_kernel_mcs_nss_cap_elem and vht for old kernel mcs nss trx highest;
+
+4. [driver] modify err txrate.mcs for D80X2;
+			add debugfs remove_1m2m;
+			fix android and wifi test command conflicts;
+			D80D40 add CFG_USER_APM_PRBRSP_OFFLOAD_DISABLE;
+			update some country in regdb.c;
+			modify he_phy_cap_info[7] bit2 for disable 4XLTF;
+			support d80x2 dfs ,CONFIG_RADAR_OR_IR_DETECT default n;
+			add support dynamic pwr;
+			fix powerlimit txt not ending with a newline;
+			fix SAE connect fail cause by cfg80211_external_auth_params mld_addr is random not zero in rwnx_rx_sm_external_auth_required_ind();
+			default support bt/ap mode coex .
+		
+5. [aic_btusb] add CONFIG_PLATFORM_MTK_LINUX;
+			fix build err;
+
+6. [AIC_Docs] update wifi RF guide.pdf;
+			add pdf for adap test;
+
+7.[USB libbt-vendor] add USERIAL_HWERR_CODE_USB_RESUME;
+
+[USB/SDIO/PCIE firmware update]
+1. [aic8800d80] fix p2p go + sta scan case, fix bcnlink loss. 
+2. [aic8800d80x2] fix calib problem, fix 6m/1m arp/dhcp/eapol, reduce pcie/lna/rf current, improve USB stability.
+
+3.bt_patch
+	[aic8800d] Added page duration and init interval
+	[aic8800d80] Added a patch for tp test mode, defaulting to false.
+	[aic8800d80] Removed the restriction on pwr_pc_max.
+	[aic8800d80] Enabled the delay for le con evt.
+	[aic8800d80] Removed con_skp_evt when con_intv is less than 72.
+	[aic8800d80] Added functionality to allow set scan disable in BLE even when scan enable is not configured.
+	[aic8800d80] Fixed the issue of slow BLE scanning under multiple connections.
+	[aic8800d80] Resolved the issue of unable to obtain features during Bluetooth reconnection.
+	[aic8800d80] Fixed the pll lock calibration error.
+	[aic8800d80] Merged some RF-related components from u02
+	[aic8800d80x2] Added BT PA calibration.
+	[aic8800d80x2] Modified the adv ret timeout value.
+	[aic8800d80x2] Disabled LPM in the DFT state.
+	[aic8800d80x2] Added values to the FEM TX & RX gain table.
+	[aic8800d80x2] Added re_rf_config for DeepSleep.
+	[aic8800d80x2] Modified the tx_gain_table value for coant.
+	[aic8800d80x2] Made adjustments for adv delay start.
+	[aic8800d80x2] Added GPIO14 as a BT wake-up source.
+	[aic8800d80x2] Changed the btsys clock to 80MHz.
+	[aic8800d80x2] Modified the PA ibias calibration.
+	[aic8800d80x2] Added WiFi RF config.
+	[aic8800d80x2] Set HCLK = 320MHz and BTCLK = 80MHz.
+	[aic8800d80x2] Fixed the assert issue caused by the lack of a cmd handler and modified the PCM IOMUX.
+	[aic8800d80x2] Added IPC for WLAN down, included an ext patch, and modified the BT wake and PTA edge IRQ.
+	[aic8800d80x2] Adjusted LPM and pscan interval for DJI.
+	[aic8800dc] Fixed the EM code error in Deep Sleep mode.
+	[aic8800dc] Resolved the issue of WiFi failing to turn on in coexistence scenarios.
+	[aic8800dc] Modified the PATCH_FAST_RAM_SIZE.
+	[aic8800dc] Updated the frm_cbk address for iscan/pscan.
+	[aic8800dc] Fixed the issue of Bluetooth turning off due to Command double replies.
+	[aic8800dch] Fixed the encryption issue in SSP.
+	[aic8800dch] Resolved the disconnection problem caused by the proc_instant parameter in BLE connections.
+	[aic8800dch] Enabled LE Extended Length.
+	[aic8800dch] Activated the pscan function during inquiry.
+
+
+======================================================================================
+
+==================================Firmware Update=====================================
+
+SDIO/driver_fw/fw
+	SDIO/driver_fw/fw/aic8800
+		SDIO/driver_fw/fw/aic8800/aic_userconfig.txt	5f135f0abb011e18bfecdc41ca2b27ed
+		SDIO/driver_fw/fw/aic8800/fmacfw.bin	56dcd664d810208e2fcb037e14ff528b
+		SDIO/driver_fw/fw/aic8800/fmacfw_8800m_custmsg.bin	22db5a84972deb84eb37b54aac27e398
+		SDIO/driver_fw/fw/aic8800/fmacfw_patch.bin	7fb3df536e5ce604762ef81ccd0f9c13
+		SDIO/driver_fw/fw/aic8800/fmacfw_rf.bin	c9ca1bb26054c7427096605fa8473528
+		SDIO/driver_fw/fw/aic8800/fmacfwbt.bin	b65c6ab8501acaf91d7d9cfc8ced9d30
+		SDIO/driver_fw/fw/aic8800/fw_adid.bin	75ad9d37ebbd2e078392067ee568b432
+		SDIO/driver_fw/fw/aic8800/fw_adid_u03.bin	cf3ee68167beda73aaa5cb7a17169b4d
+		SDIO/driver_fw/fw/aic8800/fw_patch.bin	bea524b9eaccb9f539138b5a8adf0926
+		SDIO/driver_fw/fw/aic8800/fw_patch_table.bin	ea92c8dfa257426ef55d2f2eef8fd239
+		SDIO/driver_fw/fw/aic8800/fw_patch_table_u03.bin	5c24e8296f473f754a50cdbe219b2a9d
+		SDIO/driver_fw/fw/aic8800/fw_patch_test.bin	3876dbe0e910ab1b9e8ad78bd6af29ed
+		SDIO/driver_fw/fw/aic8800/fw_patch_u03.bin	532f7a2a2feca3d05b6fa62579052d2d
+	SDIO/driver_fw/fw/aic8800D80
+		SDIO/driver_fw/fw/aic8800D80/aic_powerlimit_8800d80.txt	d5831864e5cead4df2cc207c563c4bb3
+		SDIO/driver_fw/fw/aic8800D80/aic_userconfig_8800d80.txt	4c1619f2ad65562412588a297dfbc86f
+		SDIO/driver_fw/fw/aic8800D80/fmacfw_8800d80_h_u02.bin	ee2b069a95406730633d8b70fe4d2fbf
+		SDIO/driver_fw/fw/aic8800D80/fmacfw_8800d80_h_u02_ipc.bin	4d328a42493f956b48b880b4c51fb6a7
+		SDIO/driver_fw/fw/aic8800D80/fmacfw_8800d80_u02.bin	2a1b4cfb1d8f590b719f43b10ff65a89
+		SDIO/driver_fw/fw/aic8800D80/fmacfw_8800d80_u02_ipc.bin	5fa9b468def368a040577533372466b1
+		SDIO/driver_fw/fw/aic8800D80/fmacfwbt_8800d80_h_u02.bin	49833b81ef162c9133d197d7caecaa3f
+		SDIO/driver_fw/fw/aic8800D80/fmacfwbt_8800d80_u02.bin	ea97bed7aacade1e8e9919b597b5bff6
+		SDIO/driver_fw/fw/aic8800D80/fw_adid_8800d80_u02.bin	f546881a81b960d89a672578eb45a809
+		SDIO/driver_fw/fw/aic8800D80/fw_patch_8800d80_u02.bin	8a96b6d133dfc768aadf1ac3b1e15bd2
+		SDIO/driver_fw/fw/aic8800D80/fw_patch_8800d80_u02_ext0.bin	7f0966305d8637e86ad1c13b24a0a728
+		SDIO/driver_fw/fw/aic8800D80/fw_patch_8800d80_u04.bin	3761e5ee1d9ed73409057a0627e0109a
+		SDIO/driver_fw/fw/aic8800D80/fw_patch_table_8800d80_u02.bin	cf3ad67820e4659c02b2e76498d85eb3
+		SDIO/driver_fw/fw/aic8800D80/fw_patch_table_8800d80_u04.bin	43327ec4d2282f64c065688f92f892d3
+		SDIO/driver_fw/fw/aic8800D80/lmacfw_rf_8800d80_u02.bin	0cc2666fb211309cf28e9ee86ce8aa5f
+	SDIO/driver_fw/fw/aic8800D80X2
+		SDIO/driver_fw/fw/aic8800D80X2/aic_powerlimit_8800d80x2.txt	d5831864e5cead4df2cc207c563c4bb3
+		SDIO/driver_fw/fw/aic8800D80X2/aic_userconfig_8800d80x2.txt	cf1c5c7c68b248d108254ddfdf757a72
+		SDIO/driver_fw/fw/aic8800D80X2/fmacfw_8800d80x2.bin	89a12e7a024af5d76c9db09f52c68aa4
+		SDIO/driver_fw/fw/aic8800D80X2/fw_adid_8800d80x2_u05.bin	cdf8e2a582a88c765a47ca0538711390
+		SDIO/driver_fw/fw/aic8800D80X2/fw_patch_8800d80x2_u05.bin	fd6846f4f6bc53e56f0d70cb08fe6f48
+		SDIO/driver_fw/fw/aic8800D80X2/fw_patch_table_8800d80x2_u05.bin	da25cc52b525a6f0db7ca7ba0856379a
+		SDIO/driver_fw/fw/aic8800D80X2/lmacfw_rf_8800d80x2.bin	7ca4d9409b40b1d8495dfcc5b09ea698
+	SDIO/driver_fw/fw/aic8800DC
+		SDIO/driver_fw/fw/aic8800DC/aic_userconfig_8800dc.txt	159af09b93ce2f8f042cb57d287e0df2
+		SDIO/driver_fw/fw/aic8800DC/aic_userconfig_8800dw.txt	159af09b93ce2f8f042cb57d287e0df2
+		SDIO/driver_fw/fw/aic8800DC/fmacfw_calib_8800dc_h_u02.bin	eec0bdabca0dd125821dda69af52acaf
+		SDIO/driver_fw/fw/aic8800DC/fmacfw_calib_8800dc_hbt_u02.bin	6dc27a3623e38505f725fdcfa6a5c4d0
+		SDIO/driver_fw/fw/aic8800DC/fmacfw_calib_8800dc_u02.bin	061790c6181e5974a4c44c515e6d0b69
+		SDIO/driver_fw/fw/aic8800DC/fmacfw_patch_8800dc_h_u02.bin	b5e3882d7592e3207a6c0168c7df4ac0
+		SDIO/driver_fw/fw/aic8800DC/fmacfw_patch_8800dc_hbt_u02.bin	9974b96f77cbf8fab0cec8ab0bf515fd
+		SDIO/driver_fw/fw/aic8800DC/fmacfw_patch_8800dc_ipc_u02.bin	2f2098cd33848cebe0942fda4e182c5e
+		SDIO/driver_fw/fw/aic8800DC/fmacfw_patch_8800dc_u02.bin	ec8ee791723f4bf9825a6c153a7f0a8f
+		SDIO/driver_fw/fw/aic8800DC/fmacfw_patch_tbl_8800dc_h_u02.bin	a967ba5ac2d4c38fe7e66257b1f07784
+		SDIO/driver_fw/fw/aic8800DC/fmacfw_patch_tbl_8800dc_hbt_u02.bin	660b7fbb6947b72eb256a2bc41037d16
+		SDIO/driver_fw/fw/aic8800DC/fmacfw_patch_tbl_8800dc_ipc_u02.bin	ce22bd9812ed63686bfdff1aaf389106
+		SDIO/driver_fw/fw/aic8800DC/fmacfw_patch_tbl_8800dc_u02.bin	c0538d7493963b1f37938e6e87f9e304
+		SDIO/driver_fw/fw/aic8800DC/fw_adid_8800dc_u02.bin	95d10e6288e4d3413c0e3508cb9d711a
+		SDIO/driver_fw/fw/aic8800DC/fw_adid_8800dc_u02h.bin	f00fbd9fe6509b786018967936203dd3
+		SDIO/driver_fw/fw/aic8800DC/fw_patch_8800dc_u02.bin	675951fc926375001f974d729f097164
+		SDIO/driver_fw/fw/aic8800DC/fw_patch_8800dc_u02_ext0.bin	d783d229be5a485fdb39cc018abaf55b
+		SDIO/driver_fw/fw/aic8800DC/fw_patch_8800dc_u02h.bin	cb7bff473be9f6d8082ca89b9ec1b9cf
+		SDIO/driver_fw/fw/aic8800DC/fw_patch_table_8800dc_u02.bin	34860725322202bfc2d80843297562ee
+		SDIO/driver_fw/fw/aic8800DC/fw_patch_table_8800dc_u02h.bin	bf32cb6cb0d4ff9717ea8d5ef18701ee
+		SDIO/driver_fw/fw/aic8800DC/lmacfw_rf_8800dc.bin	46a8b47a237c7b4c21f903a6c6456c57
+
+USB/driver_fw/fw
+	USB/driver_fw/fw/aic8800
+		USB/driver_fw/fw/aic8800/aic_userconfig.txt	818dd65893c9dcc5879a0ff3112bb485
+		USB/driver_fw/fw/aic8800/fmacfw.bin	b9f89ccb6f3b33a68a396ee183f439e3
+		USB/driver_fw/fw/aic8800/fmacfw_m2d.bin	861e413d729d5513fd89bc7213c13ebe
+		USB/driver_fw/fw/aic8800/fmacfw_no_msg_ep.bin	e2b630ee121a5197c5206242a92a4254
+		USB/driver_fw/fw/aic8800/fmacfw_no_msg_ep_rf.bin	09fc9d03437de57df3b8d238eb16dd1f
+		USB/driver_fw/fw/aic8800/fmacfw_rf.bin	f439f6dafebdda683039098704bf3dc0
+		USB/driver_fw/fw/aic8800/fw_adid.bin	75ad9d37ebbd2e078392067ee568b432
+		USB/driver_fw/fw/aic8800/fw_adid_rf.bin	75ad9d37ebbd2e078392067ee568b432
+		USB/driver_fw/fw/aic8800/fw_adid_u03.bin	cf3ee68167beda73aaa5cb7a17169b4d
+		USB/driver_fw/fw/aic8800/fw_ble_scan.bin	0bb8aedaaff9ae9164b8a30acd46fd20
+		USB/driver_fw/fw/aic8800/fw_ble_scan_ad_filter_dcdc.bin	f40504b87e4825d0eabfe1a384744947
+		USB/driver_fw/fw/aic8800/fw_ble_scan_ad_filter_ldo.bin	b0e76b51791647f22ab98e7c8f6d2c4d
+		USB/driver_fw/fw/aic8800/fw_patch.bin	bea524b9eaccb9f539138b5a8adf0926
+		USB/driver_fw/fw/aic8800/fw_patch_rf.bin	471fcd92e2bf52454e47fb217a8482cf
+		USB/driver_fw/fw/aic8800/fw_patch_table.bin	ea92c8dfa257426ef55d2f2eef8fd239
+		USB/driver_fw/fw/aic8800/fw_patch_table_u03.bin	5c24e8296f473f754a50cdbe219b2a9d
+		USB/driver_fw/fw/aic8800/fw_patch_u03.bin	532f7a2a2feca3d05b6fa62579052d2d
+		USB/driver_fw/fw/aic8800/m2d_ota.bin	2a1f97f1a6233fbed482f2115ff80084
+	USB/driver_fw/fw/aic8800D80
+		USB/driver_fw/fw/aic8800D80/aic_powerlimit_8800d80.txt	d5831864e5cead4df2cc207c563c4bb3
+		USB/driver_fw/fw/aic8800D80/aic_userconfig_8800d80.txt	4c1619f2ad65562412588a297dfbc86f
+		USB/driver_fw/fw/aic8800D80/calibmode_8800d80.bin	34d63c0b5377f73d9a03f6868ef7412a
+		USB/driver_fw/fw/aic8800D80/fmacfw_8800d80_h_u02.bin	d05df82af8501ea5d1d768d808145761
+		USB/driver_fw/fw/aic8800D80/fmacfw_8800d80_h_u02_ipc.bin	bc7b85b9aac8e1eab1faac5fd7aaa21d
+		USB/driver_fw/fw/aic8800D80/fmacfw_8800d80_u02.bin	41623ecab09521f3ca4dad0a0b8c1718
+		USB/driver_fw/fw/aic8800D80/fmacfw_8800d80_u02_ipc.bin	1f7ac4c68c84b20c432bfc730b607bbf
+		USB/driver_fw/fw/aic8800D80/fw_adid_8800d80_u02.bin	f546881a81b960d89a672578eb45a809
+		USB/driver_fw/fw/aic8800D80/fw_ble_scan_ad_filter.bin	bd566a8fe7126a5518e922cb0f3295d5
+		USB/driver_fw/fw/aic8800D80/fw_patch_8800d80_u02.bin	8a96b6d133dfc768aadf1ac3b1e15bd2
+		USB/driver_fw/fw/aic8800D80/fw_patch_8800d80_u02_ext0.bin	7f0966305d8637e86ad1c13b24a0a728
+		USB/driver_fw/fw/aic8800D80/fw_patch_8800d80_u04.bin	3761e5ee1d9ed73409057a0627e0109a
+		USB/driver_fw/fw/aic8800D80/fw_patch_table_8800d80_u02.bin	cf3ad67820e4659c02b2e76498d85eb3
+		USB/driver_fw/fw/aic8800D80/fw_patch_table_8800d80_u04.bin	43327ec4d2282f64c065688f92f892d3
+		USB/driver_fw/fw/aic8800D80/lmacfw_rf_8800d80_u02.bin	d812873a6309823604bbf4b609e41e2c
+	USB/driver_fw/fw/aic8800D80X2
+		USB/driver_fw/fw/aic8800D80X2/aic_powerlimit_8800d80x2.txt	d5831864e5cead4df2cc207c563c4bb3
+		USB/driver_fw/fw/aic8800D80X2/aic_userconfig_8800d80x2.txt	cf1c5c7c68b248d108254ddfdf757a72
+		USB/driver_fw/fw/aic8800D80X2/fmacfw_8800d80x2.bin	c685fc481ffa1a53b97ff8b45f82fe7d
+		USB/driver_fw/fw/aic8800D80X2/fw_adid_8800d80x2_u03.bin	046f0272f2c274e11233bddebbd8f887
+		USB/driver_fw/fw/aic8800D80X2/fw_adid_8800d80x2_u05.bin	cdf8e2a582a88c765a47ca0538711390
+		USB/driver_fw/fw/aic8800D80X2/fw_patch_8800d80x2_u03.bin	57ef1c09e1769db1c32940e404ac825a
+		USB/driver_fw/fw/aic8800D80X2/fw_patch_8800d80x2_u05.bin	fd6846f4f6bc53e56f0d70cb08fe6f48
+		USB/driver_fw/fw/aic8800D80X2/fw_patch_table_8800d80x2_u03.bin	2c4f3266f2dcef1111038d2ba833a0c8
+		USB/driver_fw/fw/aic8800D80X2/fw_patch_table_8800d80x2_u05.bin	da25cc52b525a6f0db7ca7ba0856379a
+		USB/driver_fw/fw/aic8800D80X2/lmacfw_rf_8800d80x2.bin	d8a70db04bbb4614096f75f8b8ccb4b7
+	USB/driver_fw/fw/aic8800DC
+		USB/driver_fw/fw/aic8800DC/aic_powerlimit_8800dc.txt	d5831864e5cead4df2cc207c563c4bb3
+		USB/driver_fw/fw/aic8800DC/aic_powerlimit_8800dw.txt	d5831864e5cead4df2cc207c563c4bb3
+		USB/driver_fw/fw/aic8800DC/aic_userconfig_8800dc.txt	546adac966d71ca97cd9ca247d92180c
+		USB/driver_fw/fw/aic8800DC/aic_userconfig_8800dw.txt	546adac966d71ca97cd9ca247d92180c
+		USB/driver_fw/fw/aic8800DC/fmacfw_calib_8800dc_h_u02.bin	eec0bdabca0dd125821dda69af52acaf
+		USB/driver_fw/fw/aic8800DC/fmacfw_calib_8800dc_u02.bin	061790c6181e5974a4c44c515e6d0b69
+		USB/driver_fw/fw/aic8800DC/fmacfw_patch_8800dc_h_u02.bin	b5e3882d7592e3207a6c0168c7df4ac0
+		USB/driver_fw/fw/aic8800DC/fmacfw_patch_8800dc_ipc_u02.bin	2f2098cd33848cebe0942fda4e182c5e
+		USB/driver_fw/fw/aic8800DC/fmacfw_patch_8800dc_u02.bin	ec8ee791723f4bf9825a6c153a7f0a8f
+		USB/driver_fw/fw/aic8800DC/fmacfw_patch_tbl_8800dc_h_u02.bin	a967ba5ac2d4c38fe7e66257b1f07784
+		USB/driver_fw/fw/aic8800DC/fmacfw_patch_tbl_8800dc_ipc_u02.bin	ce22bd9812ed63686bfdff1aaf389106
+		USB/driver_fw/fw/aic8800DC/fmacfw_patch_tbl_8800dc_u02.bin	c0538d7493963b1f37938e6e87f9e304
+		USB/driver_fw/fw/aic8800DC/fw_adid_8800dc_u02.bin	95d10e6288e4d3413c0e3508cb9d711a
+		USB/driver_fw/fw/aic8800DC/fw_adid_8800dc_u02h.bin	f00fbd9fe6509b786018967936203dd3
+		USB/driver_fw/fw/aic8800DC/fw_patch_8800dc_u02.bin	675951fc926375001f974d729f097164
+		USB/driver_fw/fw/aic8800DC/fw_patch_8800dc_u02_ext0.bin	d783d229be5a485fdb39cc018abaf55b
+		USB/driver_fw/fw/aic8800DC/fw_patch_8800dc_u02h.bin	cb7bff473be9f6d8082ca89b9ec1b9cf
+		USB/driver_fw/fw/aic8800DC/fw_patch_table_8800dc_u02.bin	34860725322202bfc2d80843297562ee
+		USB/driver_fw/fw/aic8800DC/fw_patch_table_8800dc_u02h.bin	bf32cb6cb0d4ff9717ea8d5ef18701ee
+		USB/driver_fw/fw/aic8800DC/lmacfw_rf_8800dc.bin	9a90e1b0006a13126eab49e77bfa4941
+
+PCIE/driver_fw/fw
+	PCIE/driver_fw/fw/aic8800D80
+		PCIE/driver_fw/fw/aic8800D80/aic_powerlimit_8800d80.txt	d5831864e5cead4df2cc207c563c4bb3
+		PCIE/driver_fw/fw/aic8800D80/aic_userconfig_8800d80.txt	4c1619f2ad65562412588a297dfbc86f
+		PCIE/driver_fw/fw/aic8800D80/fmacfw_8800D80_pcie.bin	259981dcc14e79de48b30f7ec4142461
+		PCIE/driver_fw/fw/aic8800D80/fmacfwbt_8800D80_pcie.bin	b984388088a06fc64e49db8d3b4773fb
+		PCIE/driver_fw/fw/aic8800D80/fw_adid_8800d80_u02.bin	f546881a81b960d89a672578eb45a809
+		PCIE/driver_fw/fw/aic8800D80/fw_patch_8800d80_u02.bin	8a96b6d133dfc768aadf1ac3b1e15bd2
+		PCIE/driver_fw/fw/aic8800D80/fw_patch_8800d80_u02_ext0.bin	7f0966305d8637e86ad1c13b24a0a728
+		PCIE/driver_fw/fw/aic8800D80/fw_patch_8800d80_u04.bin	3761e5ee1d9ed73409057a0627e0109a
+		PCIE/driver_fw/fw/aic8800D80/fw_patch_table_8800d80_u02.bin	cf3ad67820e4659c02b2e76498d85eb3
+		PCIE/driver_fw/fw/aic8800D80/fw_patch_table_8800d80_u04.bin	43327ec4d2282f64c065688f92f892d3
+		PCIE/driver_fw/fw/aic8800D80/lmacfw_rf_pcie.bin	29e729cf19e6fd1d06e32065928d9826
+	PCIE/driver_fw/fw/aic8800D80X2
+		PCIE/driver_fw/fw/aic8800D80X2/aic_powerlimit_8800d80x2.txt	d5831864e5cead4df2cc207c563c4bb3
+		PCIE/driver_fw/fw/aic8800D80X2/aic_userconfig_8800d80x2.txt	cf1c5c7c68b248d108254ddfdf757a72
+		PCIE/driver_fw/fw/aic8800D80X2/aicbt.conf	7b95b8618eff025e8e53cab65dff4dcb
+		PCIE/driver_fw/fw/aic8800D80X2/fmacfw_8800D80X2_pcie.bin	e099346b652c884b35a201c36d3098db
+		PCIE/driver_fw/fw/aic8800D80X2/fw_adid_8800d80x2_u05.bin	cdf8e2a582a88c765a47ca0538711390
+		PCIE/driver_fw/fw/aic8800D80X2/fw_flsgen2_m80x2p.bin	fb39b569161584e585f7682d180674f4
+		PCIE/driver_fw/fw/aic8800D80X2/fw_flsupg_m80x2p.bin	a031681dc6eff4cbe10af324a60c26eb
+		PCIE/driver_fw/fw/aic8800D80X2/fw_patch_8800d80x2_u05.bin	fd6846f4f6bc53e56f0d70cb08fe6f48
+		PCIE/driver_fw/fw/aic8800D80X2/fw_patch_8800d80x2_u05_ext0.bin	a0b30855b9eb85c7d5679ce407530d84
+		PCIE/driver_fw/fw/aic8800D80X2/fw_patch_table_8800d80x2_u05.bin	da25cc52b525a6f0db7ca7ba0856379a
+		PCIE/driver_fw/fw/aic8800D80X2/lmacfw_rf_8800D80X2_pcie.bin	c3d24420944c19b27652ef1b41c223df
 =============================================================
-update_date:2021_1024_2215
-info:
-	1. [USB/driver]update rf test function.
-	2. [USB/driver]fix driver work crash.
-	3. [USB/driver]fix plug out 8801 driver crash.
-	4. [USB/driver]align 8 bytes function.
-	5. [USB/fw]fix 8801 enumerate.
-	6. [USB/fw]fix wifi can't scan ap when wifi enable.
-	7. [USB/fw]fix bt assert.
-commit-id: 916eb9026576a30beb664466b5f42f9f8e941591

@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "rwnx_version_gen.h": "c",
+        "aicwf_debug.h": "c",
+        "aicwf_usb.h": "c"
+    }
+}

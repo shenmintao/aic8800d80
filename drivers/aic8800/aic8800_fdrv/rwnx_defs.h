@@ -33,9 +33,6 @@
 #ifdef CONFIG_FILTER_TCP_ACK
 #include "aicwf_tcp_ack.h"
 #endif
-#ifdef CONFIG_BAND_STEERING
-#include "aicwf_steering.h"
-#endif
 
 #ifdef AICWF_SDIO_SUPPORT
 #include "aicwf_sdio.h"
@@ -79,33 +76,12 @@
 
 
 #if LINUX_VERSION_CODE >= HIGH_KERNEL_VERSION
-#ifndef IEEE80211_MAX_AMPDU_BUF
 #define IEEE80211_MAX_AMPDU_BUF                             IEEE80211_MAX_AMPDU_BUF_HE
-#endif
-#ifndef IEEE80211_HE_PHY_CAP6_TRIG_MU_BEAMFORMER_FB
 #define IEEE80211_HE_PHY_CAP6_TRIG_MU_BEAMFORMER_FB         IEEE80211_HE_PHY_CAP6_TRIG_MU_BEAMFORMING_PARTIAL_BW_FB
-#endif
-#ifndef IEEE80211_HE_PHY_CAP6_TRIG_SU_BEAMFORMER_FB
 #define IEEE80211_HE_PHY_CAP6_TRIG_SU_BEAMFORMER_FB         IEEE80211_HE_PHY_CAP6_TRIG_SU_BEAMFORMING_FB
-#endif
-#ifndef IEEE80211_HE_PHY_CAP3_RX_HE_MU_PPDU_FROM_NON_AP_STA 
 #define IEEE80211_HE_PHY_CAP3_RX_HE_MU_PPDU_FROM_NON_AP_STA IEEE80211_HE_PHY_CAP3_RX_PARTIAL_BW_SU_IN_20MHZ_MU
 #endif
-#endif
 
-
-#ifndef IEEE80211_MAX_AMPDU_BUF
-#define IEEE80211_MAX_AMPDU_BUF                             0x100
-#endif
-#ifndef IEEE80211_HE_PHY_CAP6_TRIG_MU_BEAMFORMER_FB
-#define IEEE80211_HE_PHY_CAP6_TRIG_MU_BEAMFORMER_FB         0x08
-#endif
-#ifndef IEEE80211_HE_PHY_CAP6_TRIG_SU_BEAMFORMER_FB
-#define IEEE80211_HE_PHY_CAP6_TRIG_SU_BEAMFORMER_FB         0x04
-#endif
-#ifndef IEEE80211_HE_PHY_CAP3_RX_HE_MU_PPDU_FROM_NON_AP_STA
-#define IEEE80211_HE_PHY_CAP3_RX_HE_MU_PPDU_FROM_NON_AP_STA 0x40
-#endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 5, 0) || defined(CONFIG_VHT_FOR_OLD_KERNEL)
 enum nl80211_ac {
@@ -213,38 +189,6 @@ enum nl80211_mesh_power_mode {
 };
 #endif
 
-#ifdef CONFIG_BAND_STEERING
-enum band_type {
-	BAND_ON_24G = 0,
-	BAND_ON_5G = 1,
-	BAND_ON_60G = 2,
-	BAND_ON_6G = 3,
-	BAND_MAX,
-};
-
-enum WIFI_FRAME_TYPE {
-	WIFI_MGT_TYPE  = (0),
-};
-
-enum WIFI_FRAME_SUBTYPE {
-	WIFI_ASSOCREQ       = (0 | WIFI_MGT_TYPE),
-	WIFI_PROBEREQ       = (BIT(6) | WIFI_MGT_TYPE),
-	WIFI_AUTH           = (BIT(7) | BIT(5) | BIT(4) | WIFI_MGT_TYPE),
-};
-
-struct tmp_feature_sta {
-	u8_l sta_idx;
-	u8_l supported_band;
-};
-
-#define MAX_PENDING_PROBES 3
-struct ap_probe_rsp {
-	u8_l da[6];
-	struct work_struct rsp_work;
-	bool in_use;
-};
-#endif
-
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 9, 0)
 #define NL80211_MESHCONF_POWER_MODE 26
 
@@ -261,7 +205,6 @@ struct ap_probe_rsp {
 #define WLAN_TDLS_SNAP_RFTYPE	0x2
 
 #endif
-
 
 /**
  * struct rwnx_bcn - Information of the beacon in used (AP mode)
@@ -452,12 +395,6 @@ struct rwnx_vif {
             bool create_path;            /* Indicate if we are waiting for a MESH_CREATE_PATH_CFM
                                             message */
             int generation;              /* Increased each time the list of Mesh Paths is updated */
-#ifdef CONFIG_BAND_STEERING
-			u8_l tmp_sta_idx;
-			enum band_type band;
-			u32_l freq;
-			bool start;
-#endif
             enum nl80211_mesh_power_mode mesh_pm; /* mesh power save mode currently set in firmware */
             enum nl80211_mesh_power_mode next_mesh_pm; /* mesh power save mode for next peer */
         } ap;
@@ -486,13 +423,6 @@ struct rwnx_vif {
 
 	struct br_ext_info		ethBrExtInfo;
     #endif /* CONFIG_BR_SUPPORT */
-#ifdef CONFIG_BAND_STEERING
-	struct workqueue_struct *rsp_wq;
-	struct timer_list steer_timer;
-	struct work_struct steer_work;
-	struct b_steer_priv bsteerpriv;
-	struct ap_probe_rsp pb_pool[MAX_PENDING_PROBES];
-#endif
 
 };
 
@@ -537,18 +467,10 @@ struct rwnx_rx_rate_stats {
  * @rx_rate: Statistics of the received rates
  */
 struct rwnx_sta_stats {
-    u32 rx_pkts;
-    u32 tx_pkts;
-    u64 rx_bytes;
-    u64 tx_bytes;
-    unsigned long last_act;
+//#ifdef CONFIG_RWNX_DEBUGFS
     struct hw_vect last_rx;
     struct rwnx_rx_rate_stats rx_rate;
-    u32 last_chan_time;
-    u32 last_chan_busy_time;
-    u32 tx_ack_succ_stat;
-    u32 tx_ack_fail_stat;
-    u32 last_chan_tx_busy_time;
+//#endif
 };
 
 #if (defined CONFIG_HE_FOR_OLD_KERNEL) || (defined CONFIG_VHT_FOR_OLD_KERNEL)
@@ -616,11 +538,6 @@ struct rwnx_sta {
 	s8_l per_pwrloss;
 	struct work_struct per_pwr_work;
 	unsigned long last_jiffies;
-#endif
-#ifdef CONFIG_BAND_STEERING
-	u32_l link_time;
-	s8_l rssi;
-	u8_l support_band;
 #endif
 };
 
@@ -892,10 +809,6 @@ struct rwnx_hw {
 	s8 pwrloss_lvl;
 	u8 sta_rssi_idx;
 #endif
-#endif
-#ifdef CONFIG_BAND_STEERING
-	u8_l iface_idx;
-	struct tmp_feature_sta feature_table[NX_REMOTE_STA_MAX + NX_VIRT_DEV_MAX];
 #endif
 };
 

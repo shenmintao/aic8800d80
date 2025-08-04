@@ -10,7 +10,6 @@
 #define LOGTRACE		0x0004
 #define LOGDEBUG		0x0008
 #define LOGDATA			0x0010
-#define LOGSTEER		0x0020
 
 extern int aicwf_dbg_level;
 void rwnx_data_dump(char* tag, void* data, unsigned long len);

@@ -15,9 +15,6 @@
 
 int rwnx_cfg80211_init(struct rwnx_plat *rwnx_plat, void **platform_data);
 void rwnx_cfg80211_deinit(struct rwnx_hw *rwnx_hw);
-int rwnx_fill_station_info(struct rwnx_sta *sta, struct rwnx_vif *vif,
-								  struct station_info *sinfo, u8 *phymode, u32 *tx_phyrate, u32 *rx_phyrate);
-
 extern int testmode;
 extern u8 chip_id;
 extern u8 chip_sub_id;
@@ -37,20 +34,6 @@ extern u8 chip_mcu_id;
 #define PWR_LOSS_LVL3                     (0)//(2)          //RSSI <RSSI_THD_2
 
 #define PWR_DELAY_TIME                   (10 * 1000)   //pwr reduced latency time (ms)
-
-struct rwnx_sta *rwnx_retrieve_sta(struct rwnx_hw *rwnx_hw,
-                                          struct rwnx_vif *rwnx_vif, u8 *addr,
-                                          __le16 fc, bool ap);
-
-
-#ifdef CONFIG_BAND_STEERING
-void aicwf_steering_work(struct work_struct *work);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 14, 0)
-void aicwf_steering_timeout(ulong data);
-#else
-void aicwf_steering_timeout(struct timer_list *t);
-#endif
-#endif
 
 #ifdef CONFIG_DYNAMIC_PERPWR
 void rssi_update_txpwrloss(struct rwnx_sta *sta, s8_l rssi);
