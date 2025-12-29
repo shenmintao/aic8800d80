@@ -1,4 +1,5 @@
 KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="5721",  SYMLINK+="aicudisk", RUN+="/usr/bin/eject /dev/%k"
 KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="5723",  SYMLINK+="tendaudisk", RUN+="/usr/bin/eject /dev/%k"
+KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="5724",  SYMLINK+="ugreenax900", RUN+="/usr/bin/eject /dev/%k"
 KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="5725",  SYMLINK+="tendaudiskv2", RUN+="/usr/bin/eject /dev/%k"
 KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="572c",  SYMLINK+="cudydiskv2", RUN+="/usr/bin/eject /dev/%k"
