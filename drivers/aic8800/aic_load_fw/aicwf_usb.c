@@ -1651,7 +1651,7 @@ int aicfw_download_fw(struct aic_usb_dev *usb_dev)
 {
     if(usb_dev->chipid == PRODUCT_ID_AIC8800){
         return aicfw_download_fw_8800(usb_dev);
-    }else if(usb_dev->chipid == PRODUCT_ID_AIC8800D80){
+    }else if(usb_dev->chipid == PRODUCT_ID_AIC8800D80 || usb_dev->chipid == PRODUCT_ID_AIC8800D81){
         return aicfw_download_fw_8800d80(usb_dev);
     }else if(usb_dev->chipid == PRODUCT_ID_AIC8800D80X2){
         return aicfw_download_fw_8800d80x2(usb_dev);
