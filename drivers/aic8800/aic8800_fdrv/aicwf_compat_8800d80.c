@@ -42,12 +42,14 @@ int	rwnx_plat_userconfig_load_8800d80(struct rwnx_hw *rwnx_hw){
     char *filename = FW_USERCONFIG_NAME_8800D80;
     if (rwnx_hw->usbdev->pid == USB_PRODUCT_ID_TENDA_U11
         || rwnx_hw->usbdev->pid == USB_PRODUCT_ID_AIC8800M80_CUS1
-        || rwnx_hw->usbdev->pid == USB_PRODUCT_ID_AIC8800M80_CUS4) {
+        || rwnx_hw->usbdev->pid == USB_PRODUCT_ID_AIC8800M80_CUS4
+        || rwnx_hw->usbdev->pid == USB_PRODUCT_ID_AIC8800M80_CUS7) {
         filename = FW_USERCONFIG_NAME_8800D80_U11;
     } else if (rwnx_hw->usbdev->pid == USB_PRODUCT_ID_TENDA_U11_PRO
         || rwnx_hw->usbdev->pid == USB_PRODUCT_ID_AIC8800M80_CUS3
         || rwnx_hw->usbdev->pid == USB_PRODUCT_ID_AIC8800M80_CUS5
-        || rwnx_hw->usbdev->pid == USB_PRODUCT_ID_AIC8800M80_CUS6) {
+        || rwnx_hw->usbdev->pid == USB_PRODUCT_ID_AIC8800M80_CUS6
+        || rwnx_hw->usbdev->pid == USB_PRODUCT_ID_AIC8800M80_CUS8) {
         filename = FW_USERCONFIG_NAME_8800D80_U11_PRO;
     } else if (rwnx_hw->usbdev->pid == USB_PRODUCT_ID_AIC8800M80_CUS2) {
         filename = FW_USERCONFIG_NAME_8800D80_U11_CUS;

@@ -405,8 +405,4 @@ struct element {
 #endif
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
-#define UNKNOWN_LINK_ID -1
-#endif
-
 #endif /* _RWNX_RX_H_ */

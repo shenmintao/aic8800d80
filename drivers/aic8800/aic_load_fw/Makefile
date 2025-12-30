@@ -67,7 +67,7 @@ ccflags-$(CONFIG_PLATFORM_ROCKCHIP) += -DCONFIG_PLATFORM_ROCKCHIP
 #ARCH ?= arm
 #CROSS_COMPILE ?= /home/yaya/E/Rockchip/3229/Android7/RK3229_ANDROID7.1_v1.01_20170914/rk3229_Android7.1_v1.01_xml0914/prebuilts/gcc/linux-x86/arm/arm-eabi-4.6/bin/arm-eabi-
 KDIR  := /home/yaya/E/Rockchip/3229/Android9/rk3229_android9.0_box/kernel
-ARCH ?= arm
+ARCH ?=$(shell uname -m | sed -e s/i.86/i386/ -e s/armv.l/arm/ -e s/aarch64/arm64/)
 CROSS_COMPILE ?= /home/yaya/E/Rockchip/3229/Android9/rk3229_android9.0_box/prebuilts/gcc/linux-x86/arm/gcc-linaro-6.3.1-2017.05-x86_64_arm-linux-gnueabihf/bin/arm-linux-gnueabihf-
 #KDIR  := /home/yaya/E/Rockchip/3399/rk3399-android-10/kernel
 #ARCH ?= arm64
@@ -91,13 +91,12 @@ endif
 
 ifeq ($(CONFIG_PLATFORM_UBUNTU), y)
 ccflags-$(CONFIG_PLATFORM_UBUNTU) += -DCONFIG_PLATFORM_UBUNTU
-KDIR  := /lib/modules/$(shell uname -r)/build
-PWD   := $(shell pwd)
-KVER := $(shell uname -r)
-MODDESTDIR := /lib/modules/$(KVER)/kernel/drivers/net/wireless/aic8800
-SUBARCH = $(shell uname -m | sed -e s/i.86/i386/ -e s/armv.l/arm/ -e s/aarch64/arm64/)
-ARCH ?= $(SUBARCH)
-CROSS_COMPILE :=
+KVER := $(or $(KVER), $(kernelver), $(KERNELRELEASE), $(shell uname -r))
+KDIR ?= /lib/modules/$(KVER)/build
+PWD  ?= $(shell pwd)
+MODDESTDIR ?= /lib/modules/$(KVER)/kernel/drivers/net/wireless/aic8800
+ARCH ?= $(shell uname -m | sed -e s/i.86/i386/ -e s/armv.l/arm/ -e s/aarch64/arm64/)
+CROSS_COMPILE ?=
 endif
 
 

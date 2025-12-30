@@ -408,7 +408,7 @@ int rwnx_send_dbg_mem_write_req(struct aic_usb_dev *usbdev, u32 mem_addr, u32 me
 {
     struct dbg_mem_write_req *mem_write_req;
 
-	//printk("%s mem_addr:%x mem_data:%x\r\n", __func__, mem_addr, mem_data);
+//	printk("%s mem_addr:%x mem_data:%x\r\n", __func__, mem_addr, mem_data);
 
     /* Build the DBG_MEM_WRITE_REQ message */
     mem_write_req = rwnx_msg_zalloc(DBG_MEM_WRITE_REQ, TASK_DBG, DRV_TASK_ID,
