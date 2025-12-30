@@ -2036,11 +2036,11 @@ void aicwf_p2p_alive_timeout(struct timer_list *t)
     #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 0)
     rwnx_vif = (struct rwnx_vif *)data;
     rwnx_hw = rwnx_vif->rwnx_hw;
-    #elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
-    rwnx_hw = timer_container_of(rwnx_hw, t, p2p_alive_timer);
+    #elif LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0)
+    rwnx_hw = from_timer(rwnx_hw, t, p2p_alive_timer);
     rwnx_vif = rwnx_hw->p2p_dev_vif;
     #else
-    rwnx_hw = from_timer(rwnx_hw, t, p2p_alive_timer);
+    rwnx_hw = timer_container_of(rwnx_hw, t, p2p_alive_timer);
     rwnx_vif = rwnx_hw->p2p_dev_vif;
     #endif
 
@@ -2233,10 +2233,10 @@ static void aicwf_pwrloss_timer(struct timer_list *t)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 0)
 	rwnx_vif = (struct rwnx_vif *)data;
 	rwnx_hw = rwnx_vif->rwnx_hw;
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
-    rwnx_hw = timer_container_of(rwnx_hw, t, pwrloss_timer);
-#else
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0)
 	rwnx_hw = from_timer(rwnx_hw, t, pwrloss_timer);
+#else
+	rwnx_hw =  timer_container_of(rwnx_hw, t, pwrloss_timer);
 #endif
 	if (!work_pending(&rwnx_hw->pwrloss_work))
 		schedule_work(&rwnx_hw->pwrloss_work);
@@ -2682,8 +2682,8 @@ static void rwnx_cfgp2p_stop_p2p_device(struct wiphy *wiphy, struct wireless_dev
 	if (rwnx_vif == rwnx_hw->p2p_dev_vif) {
 		rwnx_hw->is_p2p_alive = 0;
 		if (timer_pending(&rwnx_hw->p2p_alive_timer)) {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
-            timer_delete_sync(&rwnx_hw->p2p_alive_timer);
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0))
+			 timer_delete_sync(&rwnx_hw->p2p_alive_timer);
 #else
 			del_timer_sync(&rwnx_hw->p2p_alive_timer);
 #endif
@@ -4092,12 +4092,13 @@ static int rwnx_cfg80211_stop_ap(struct wiphy *wiphy, struct net_device *dev)
 #ifdef CONFIG_BAND_STEERING
 	rwnx_vif->ap.start = false;
 	aicwf_nl_hook_deinit(rwnx_vif->ap.band, rwnx_vif->rwnx_hw->iface_idx);
-	if (timer_pending(&rwnx_vif->steer_timer))
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
-        timer_delete_sync(&rwnx_vif->steer_timer);
+	if (timer_pending(&rwnx_vif->steer_timer)) {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0))
+		timer_delete_sync(&rwnx_vif->steer_timer);
 #else
-        del_timer_sync(&rwnx_vif->steer_timer);
+		del_timer_sync(&rwnx_vif->steer_timer);
 #endif
+	}
 	cancel_work_sync(&rwnx_vif->steer_work);
 	flush_workqueue(rwnx_vif->rsp_wq);
 	destroy_workqueue(rwnx_vif->rsp_wq);
@@ -4278,11 +4279,11 @@ void rwnx_cfg80211_mgmt_frame_register(struct wiphy *wiphy,
  *	have changed. The actual parameter values are available in
  *	struct wiphy. If returning an error, no value should be changed.
  */
-static int rwnx_cfg80211_set_wiphy_params(struct wiphy *wiphy, 
-    #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
-        int radio_idx,
-    #endif
-    u32 changed)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
+static int rwnx_cfg80211_set_wiphy_params(struct wiphy *wiphy, int radio_idx, u32 changed)
+#else
+static int rwnx_cfg80211_set_wiphy_params(struct wiphy *wiphy, u32 changed)
+#endif
 {
     return 0;
 }
@@ -4300,7 +4301,7 @@ static int rwnx_cfg80211_set_tx_power(struct wiphy *wiphy,
  struct wireless_dev *wdev,
 #endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
- int radio_idx,
+int radio_idx,
 #endif
                                       enum nl80211_tx_power_setting type, int mbm)
 {
@@ -9037,11 +9038,13 @@ void rwnx_cfg80211_deinit(struct rwnx_hw *rwnx_hw)
 
 #ifdef CONFIG_DYNAMIC_PWR
 	if(timer_pending(&rwnx_hw->pwrloss_timer)){
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
-        timer_delete_sync(&rwnx_hw->pwrloss_timer);
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0))
+		timer_delete_sync(&rwnx_hw->pwrloss_timer);
 #else
 		del_timer_sync(&rwnx_hw->pwrloss_timer);
 #endif
+	}
+
 	cancel_work_sync(&rwnx_hw->pwrloss_work);
 #endif
 
@@ -9054,12 +9057,13 @@ void rwnx_cfg80211_deinit(struct rwnx_hw *rwnx_hw)
     if (!list_empty(&rwnx_hw->defrag_list)) {
         list_for_each_entry(defrag_ctrl, &rwnx_hw->defrag_list, list) {
             list_del_init(&defrag_ctrl->list);
-            if (timer_pending(&defrag_ctrl->defrag_timer))
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
+            if (timer_pending(&defrag_ctrl->defrag_timer)) {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0))
                 timer_delete_sync(&defrag_ctrl->defrag_timer);
 #else
                 del_timer_sync(&defrag_ctrl->defrag_timer);
 #endif
+	    }
             dev_kfree_skb(defrag_ctrl->skb);
             kfree(defrag_ctrl);
         }
