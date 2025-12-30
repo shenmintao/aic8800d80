@@ -2143,7 +2143,7 @@ static int aicwf_parse_usb(struct aic_usb_dev *usb_dev, struct usb_interface *in
 
     /* Check interface number */
 #ifdef CONFIG_USB_BT
-    if (usb->actconfig->desc.bNumInterfaces != 3)
+    if (usb->actconfig->desc.bNumInterfaces != 1 && usb->actconfig->desc.bNumInterfaces != 3)
 #else
     if (usb->actconfig->desc.bNumInterfaces != 1)
 #endif
@@ -2153,7 +2153,8 @@ static int aicwf_parse_usb(struct aic_usb_dev *usb_dev, struct usb_interface *in
 		if(usb_dev->chipid == PRODUCT_ID_AIC8800DC){
 			AICWFDBG(LOGERROR, "AIC8800DC change to AIC8800DW\n");
 			usb_dev->chipid = PRODUCT_ID_AIC8800DW;
-		}
+		}else if (usb_dev->chipid == PRODUCT_ID_AIC8800DW) {
+            AICWFDBG(LOGINFO, "AIC8800DW\n");}
          else if (usb_dev->chipid == PRODUCT_ID_AIC8800D81) {
             AICWFDBG(LOGINFO, "AIC8800D80\n");
 		} else if(usb_dev->chipid == PRODUCT_ID_AIC8800D81X2 ||
