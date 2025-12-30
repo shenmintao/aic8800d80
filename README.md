@@ -14,8 +14,12 @@ I did not develop this software, The code is sourced from the Tenda U11 driver. 
 Before installing the driver, delete all aic8800-related folders under /lib/firmware. Using an incorrect firmware version may cause the system to freeze.
 
 ### Installation Steps
-#### Copy udev rules:
 
+#### Method 1: [Quick Installation](INSTALL_SCRIPT.md) (Recommended)
+
+#### Method 2: Manual Installation
+
+#### Copy udev rules:
 Copy the aic.rules file to /lib/udev/rules.d/:
 
 ```bash
