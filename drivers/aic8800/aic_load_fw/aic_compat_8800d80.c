@@ -382,59 +382,61 @@ int aicfw_download_fw_8800d80(struct aic_usb_dev *usb_dev)
         .reset_val         = 0,
         .adid_flag_addr    = 0,
         .adid_flag         = 0,
+        .ext_patch_nb      = 0,
+        .ext_patch_nb_addr = 0,
+        .ext_patch_param   = NULL,
     };
 
     int i = 0;
 
-#if 0
+    // Load patch table to get extended patch information
     if (chip_id == CHIP_REV_U01) {
         head = aicbt_patch_table_alloc(usb_dev, FW_PATCH_TABLE_NAME_8800D80);
     } else {
         head = aicbt_patch_table_alloc(usb_dev, FW_PATCH_TABLE_NAME_8800D80_U02);
     }
-    if (head == NULL){
-        printk("aicbt_patch_table_alloc fail\n");
-        return -1;
+    
+    if (head != NULL) {
+        if (chip_id == CHIP_REV_U01) {
+            patch_info.addr_adid = FW_RAM_ADID_BASE_ADDR_8800D80;
+            patch_info.addr_patch = FW_RAM_PATCH_BASE_ADDR_8800D80;
+        } else if (chip_id == CHIP_REV_U02 || chip_id == CHIP_REV_U03) {
+            patch_info.addr_adid = FW_RAM_ADID_BASE_ADDR_8800D80_U02;
+            patch_info.addr_patch = FW_RAM_PATCH_BASE_ADDR_8800D80_U02;
+        }
+        aicbt_patch_info_unpack(&patch_info, head);
+        AICWFDBG(LOGINFO, "BT patch info: addr_adid=0x%x, addr_patch=0x%x, ext_patch_nb=%d\n",
+                 patch_info.addr_adid, patch_info.addr_patch, patch_info.ext_patch_nb);
+    } else {
+        AICWFDBG(LOGINFO, "BT patch table not found, using default addresses\n");
+        if (chip_id == CHIP_REV_U01) {
+            patch_info.addr_adid = FW_RAM_ADID_BASE_ADDR_8800D80;
+            patch_info.addr_patch = FW_RAM_PATCH_BASE_ADDR_8800D80;
+        } else {
+            patch_info.addr_adid = FW_RAM_ADID_BASE_ADDR_8800D80_U02;
+            patch_info.addr_patch = FW_RAM_PATCH_BASE_ADDR_8800D80_U02;
+        }
     }
-
-    if(head == NULL){
-        return -1;
-    }
-    if (chip_id == CHIP_REV_U01) {
-        patch_info.addr_adid = FW_RAM_ADID_BASE_ADDR_8800D80;
-        patch_info.addr_patch = FW_RAM_PATCH_BASE_ADDR_8800D80;
-    } else if (chip_id == CHIP_REV_U02 || chip_id == CHIP_REV_U03) {
-        patch_info.addr_adid = FW_RAM_ADID_BASE_ADDR_8800D80_U02;
-        patch_info.addr_patch = FW_RAM_PATCH_BASE_ADDR_8800D80_U02;
-    }
-    aicbt_patch_info_unpack(&patch_info, head);
-    if(patch_info.info_len == 0) {
-        printk("%s, aicbt_patch_info_unpack fail\n", __func__);
-        return -1;
-    }
-
-    printk("addr_adid 0x%x, addr_patch 0x%x\n", patch_info.addr_adid, patch_info.addr_patch);
-#endif
     if(testmode == FW_NORMAL_MODE){
 
         if (chip_id != CHIP_REV_U01){
-            #if 0
-            if(rwnx_plat_bin_fw_upload_android(usb_dev, patch_info.addr_adid, FW_ADID_BASE_NAME_8800D80_U02)) {
+            // Load Bluetooth firmware patches
+            if(rwnx_plat_bin_fw_upload_android(usb_dev, FW_RAM_ADID_BASE_ADDR_8800D80_U02, FW_ADID_BASE_NAME_8800D80_U02)) {
+                AICWFDBG(LOGERROR, "BT ADID firmware upload failed\n");
                 return -1;
             }
-            if(rwnx_plat_bin_fw_upload_android(usb_dev, patch_info.addr_patch, FW_PATCH_BASE_NAME_8800D80_U02)) {
+            if(rwnx_plat_bin_fw_upload_android(usb_dev, FW_RAM_PATCH_BASE_ADDR_8800D80_U02, FW_PATCH_BASE_NAME_8800D80_U02)) {
+                AICWFDBG(LOGERROR, "BT patch firmware upload failed\n");
                 return -1;
             }
 
+            // Load extended patch if exists
             if (aicbt_ext_patch_data_load(usb_dev, &patch_info)) {
-                return -1;
+                AICWFDBG(LOGINFO, "BT ext patch load skipped or failed\n");
+                // Don't return error, ext patch may not exist
             }
 
-            if (aicbt_patch_table_load(usb_dev, head)) {
-                return -1;
-            }
-            #endif
-
+            // Load WiFi firmware
             if (IS_CHIP_ID_H()){
                 if(rwnx_plat_bin_fw_upload_android(usb_dev, RAM_FMAC_FW_ADDR_8800D80_U02, FW_BASE_NAME_8800D80_H_U02))
                     return -1;
