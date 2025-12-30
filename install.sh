@@ -21,18 +21,18 @@ print_info() {
 }
 
 print_success() {
-    echo -e "${GREEN}[SUCESSO]${NC} $1"
-    echo "[SUCESSO] $1" >> "$LOG_FILE"
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+    echo "[SUCCESS] $1" >> "$LOG_FILE"
 }
 
 print_warning() {
-    echo -e "${YELLOW}[AVISO]${NC} $1"
-    echo "[AVISO] $1" >> "$LOG_FILE"
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+    echo "[WARNING] $1" >> "$LOG_FILE"
 }
 
 print_error() {
-    echo -e "${RED}[ERRO]${NC} $1"
-    echo "[ERRO] $1" >> "$LOG_FILE"
+    echo -e "${RED}[ERROR]${NC} $1"
+    echo "[ERROR] $1" >> "$LOG_FILE"
 }
 
 print_step() {
@@ -66,7 +66,7 @@ check_secure_boot() {
             print_error "Secure Boot is ENABLED!"
             echo ""
             echo -e "${RED}╔════════════════════════════════════════════════════════════════════╗${NC}"
-            echo -e "${RED}║  SECURE BOOT IS ENABLED - INSTALLATION CANNOT PROCEED       ║${NC}"
+            echo -e "${RED}║  SECURE BOOT IS ENABLED - INSTALLATION CANNOT PROCEED              ║${NC}"
             echo -e "${RED}╚════════════════════════════════════════════════════════════════════╝${NC}"
             echo ""
             echo -e "${YELLOW}Why does Secure Boot need to be disabled?${NC}"
@@ -357,7 +357,7 @@ verify_installation() {
 show_final_instructions() {
     echo ""
     echo -e "${GREEN}╔════════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║            INSTALLATION COMPLETED SUCCESSFULLY!                      ║${NC}"
+    echo -e "${GREEN}║            INSTALLATION COMPLETED SUCCESSFULLY!                    ║${NC}"
     echo -e "${GREEN}╚════════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
     echo -e "${CYAN}Next steps:${NC}"
@@ -399,7 +399,7 @@ main() {
     
     echo -e "${CYAN}"
     echo "╔════════════════════════════════════════════════════════════════════╗"
-    echo "║       Installation script for AIC8800D80 WiFi 6 driver           ║"
+    echo "║       Installation script for AIC8800D80 WiFi 6 driver             ║"
     echo "║                  Version 1.0 - 2025-12-29                          ║"
     echo "╚════════════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
