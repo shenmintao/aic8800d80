@@ -638,6 +638,7 @@ void rwnx_txq_vif_for_each_sta(struct rwnx_hw *rwnx_hw, struct rwnx_vif *rwnx_vi
     }
     case NL80211_IFTYPE_AP_VLAN:
         rwnx_vif = rwnx_vif->ap_vlan.master;
+        fallthrough;
     case NL80211_IFTYPE_AP:
     case NL80211_IFTYPE_MESH_POINT:
     case NL80211_IFTYPE_P2P_GO:
