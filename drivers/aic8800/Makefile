@@ -46,9 +46,9 @@ KDIR = /home/yaya/D/Workspace/CyberQuantum/JinHaoYue/amls905x3/SDK/20191101-0tt-
 endif
 
 ifeq ($(CONFIG_PLATFORM_UBUNTU), y)
-KDIR  = /lib/modules/$(shell uname -r)/build
+KVER ?= $(shell uname -r)
+KDIR  = /lib/modules/$(KVER)/build
 PWD   = $(shell pwd)
-KVER = $(shell uname -r)
 MODDESTDIR = /lib/modules/$(KVER)/kernel/drivers/net/wireless/aic8800
 SUBARCH = $(shell uname -m | sed -e s/i.86/i386/ -e s/armv.l/arm/ -e s/aarch64/arm64/ -e s/loongarch64/loongarch/ -e s/loong64/loongarch/)
 ARCH ?= $(SUBARCH)
