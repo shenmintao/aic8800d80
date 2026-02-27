@@ -278,6 +278,31 @@ install_firmware() {
         print_warning "Udev rules file not found: $rules_source"
     fi
     
+    # Install modprobe configuration for Bluetooth
+    local modprobe_source="${SCRIPT_DIR}/modprobe/aic8800-bt.conf"
+    local modprobe_dest="/etc/modprobe.d/aic8800-bt.conf"
+    
+    if [ -f "$modprobe_source" ]; then
+        print_info "Installing modprobe configuration to $modprobe_dest..."
+        cp "$modprobe_source" "$modprobe_dest" >> "$LOG_FILE" 2>&1
+        print_success "Modprobe configuration installed successfully."
+    else
+        print_warning "Modprobe configuration file not found: $modprobe_source"
+    fi
+    
+    # Install usb_modeswitch configuration
+    local modeswitch_source="${SCRIPT_DIR}/usb_modeswitch/1111_1111"
+    local modeswitch_dest="/etc/usb_modeswitch.d/1111:1111"
+    
+    if [ -f "$modeswitch_source" ]; then
+        print_info "Installing usb_modeswitch configuration to $modeswitch_dest..."
+        mkdir -p /etc/usb_modeswitch.d >> "$LOG_FILE" 2>&1 || true
+        cp "$modeswitch_source" "$modeswitch_dest" >> "$LOG_FILE" 2>&1
+        print_success "USB modeswitch configuration installed successfully."
+    else
+        print_warning "USB modeswitch configuration file not found: $modeswitch_source"
+    fi
+    
     print_success "Firmware installed successfully."
 }
 

@@ -1,0 +1,16 @@
+# AIC8800D80 "Pandora" clone adapter (VID:PID 1111:1111)
+# Sends vendor-specific SCSI CDB to trigger mode switch from
+# USB Mass Storage to WiFi+BT mode.
+#
+# The 16-byte CDB is: FD 00 00 00 00 00 00 00 00 00 00 00 00 00 00 F2
+# Wrapped in a standard 31-byte SCSI CBW (Command Block Wrapper).
+#
+# Install as: /etc/usb_modeswitch.d/1111:1111
+# (The filename must contain a colon on Linux; this file is named
+#  1111_1111 in the repo because Windows/git can't handle colons.)
+
+DefaultVendor=0x1111
+DefaultProduct=0x1111
+TargetVendor=0xa69c
+TargetProduct=0x8d80
+MessageContent="55534243123456780000000000001000fd000000000000000000000000000000f200000000000000000000000000000000"
