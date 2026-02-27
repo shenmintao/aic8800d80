@@ -263,6 +263,21 @@ install_firmware() {
     print_info "Copying firmware to $fw_dest..."
     cp -r "$fw_source" "$fw_dest" >> "$LOG_FILE" 2>&1
     
+    # Install udev rules
+    local rules_source="${SCRIPT_DIR}/aic.rules"
+    local rules_dest="/usr/lib/udev/rules.d/aic.rules"
+    
+    if [ -f "$rules_source" ]; then
+        print_info "Installing udev rules to $rules_dest..."
+        cp "$rules_source" "$rules_dest" >> "$LOG_FILE" 2>&1
+        # Reload udev rules
+        udevadm control --reload-rules >> "$LOG_FILE" 2>&1 || true
+        udevadm trigger >> "$LOG_FILE" 2>&1 || true
+        print_success "Udev rules installed successfully."
+    else
+        print_warning "Udev rules file not found: $rules_source"
+    fi
+    
     print_success "Firmware installed successfully."
 }
 
