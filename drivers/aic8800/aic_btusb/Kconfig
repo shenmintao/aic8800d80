@@ -1,0 +1,8 @@
+config AIC8800_BTUSB_SUPPORT
+	tristate "AIC8800 Bluetooth USB Support"
+	depends on BT && USB
+	help
+	  This is support for AIC8800 Bluetooth USB driver.
+	  Select this option if you have an AIC8800 USB WiFi/Bluetooth
+	  combo adapter and want to use Bluetooth functionality.
+
