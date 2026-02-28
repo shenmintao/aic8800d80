@@ -10,6 +10,7 @@ obj-$(CONFIG_AIC8800_BTUSB_SUPPORT) += aic_btusb/
 export CONFIG_USE_FW_REQUEST = n
 export CONFIG_PREALLOC_RX_SKB = y
 export CONFIG_PREALLOC_TXQ = y
+export CONFIG_AIC8800_BTUSB_SUPPORT
 ###################################
 
 ########## platform support list ##########

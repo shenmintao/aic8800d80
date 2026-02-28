@@ -1,9 +1,9 @@
 MODULE_NAME = aic_btusb
 
-CONFIG_AIC8800_BTUSB_SUPPORT = m
-CONFIG_SUPPORT_VENDOR_APCF = n
+CONFIG_AIC8800_BTUSB_SUPPORT ?= m
+CONFIG_SUPPORT_VENDOR_APCF ?= n
 # Need to set fw path in BOARD_KERNEL_CMDLINE
-CONFIG_USE_FW_REQUEST = n
+CONFIG_USE_FW_REQUEST ?= n
 
 ifeq ($(CONFIG_SUPPORT_VENDOR_APCF), y)
 obj-$(CONFIG_AIC8800_BTUSB_SUPPORT) := $(MODULE_NAME).o aic_btusb_external_featrue.o
@@ -53,13 +53,17 @@ endif
 
 ifeq ($(CONFIG_PLATFORM_UBUNTU), y)
 ccflags-$(CONFIG_PLATFORM_UBUNTU) += -DCONFIG_PLATFORM_UBUNTU
+ifndef KDIR
 KDIR  := /lib/modules/$(shell uname -r)/build
+endif
 PWD   := $(shell pwd)
+ifndef KVER
 KVER := $(shell uname -r)
+endif
 MODDESTDIR := /lib/modules/$(KVER)/kernel/drivers/net/wireless/aic8800
 SUBARCH = $(shell uname -m | sed -e s/i.86/i386/ -e s/armv.l/arm/ -e s/aarch64/arm64/)
 ARCH ?= $(SUBARCH)
-CROSS_COMPILE :=
+CROSS_COMPILE ?=
 endif
 
 ifeq ($(CONFIG_PLATFORM_MTK_LINUX), y)
