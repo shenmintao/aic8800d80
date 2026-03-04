@@ -303,6 +303,7 @@ int system_config_8800d80(struct aic_usb_dev *usb_dev){
 		int syscfg_num;
 		int ret, cnt;
 		const u32 mem_addr = 0x40500000;
+		const u32 cache_mem_addr = 0x40100020;
 		struct dbg_mem_read_cfm rd_mem_addr_cfm;
 		ret = rwnx_send_dbg_mem_read_req(usb_dev, mem_addr, &rd_mem_addr_cfm);
 		if (ret) {
@@ -314,6 +315,19 @@ int system_config_8800d80(struct aic_usb_dev *usb_dev){
         }
 		chip_id = (u8)(rd_mem_addr_cfm.memdata >> 16);
 		printk("chip_id=%x, chip_mcu_id = %d\n", chip_id, chip_mcu_id);
+		if (chip_mcu_id) {
+			ret = rwnx_send_dbg_mem_read_req(usb_dev, cache_mem_addr, &rd_mem_addr_cfm);
+			if (ret) {
+				printk("%x rd fail: %d\n", mem_addr, ret);
+				return ret;
+			}
+			rd_mem_addr_cfm.memdata |= 0x01;
+			ret = rwnx_send_dbg_mem_write_req(usb_dev, cache_mem_addr, rd_mem_addr_cfm.memdata);
+			if (ret) {
+				printk("%x write fail: %d\n", cache_mem_addr, ret);
+				return ret;
+			}
+		}
     #if 1
 		syscfg_num = sizeof(syscfg_tbl_8800d80) / sizeof(u32) / 2;
 		for (cnt = 0; cnt < syscfg_num; cnt++) {
