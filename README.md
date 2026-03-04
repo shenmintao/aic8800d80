@@ -5,7 +5,7 @@ Added support for devices with Vendor ID 368B (tested).
 
 Tested on Linux kernel 6.16 with Ubuntu 25.04 and 6.1.0.27 with Debian 12.
 
-Bluetooth not working.
+This branch (`bluetooth`) fully supports both **Wi-Fi** and **Bluetooth**.
 
 ### Disclaimer
 I did not develop this software, The code is sourced from the Tenda U11 driver. I only made some modifications to the code to adapt it to newer kernel versions. Apart from compilation issues, I am unable to address other problems.
@@ -97,3 +97,57 @@ If the device is still not active, check the kernel logs for any errors related 
 ```bash
 sudo dmesg
 ```
+
+### Bluetooth Support
+
+The `aic_load_fw` module loads the Bluetooth firmware during initialization. After the firmware is correctly uploaded, the standard Linux `btusb` driver handles the Bluetooth interface — no custom `aic_btusb` module is needed (see [PR #35](https://github.com/shenmintao/aic8800d80/pull/35) for details).
+
+#### Verify Bluetooth is Working
+
+After loading the driver and plugging in the USB device, check if the Bluetooth HCI device is registered:
+
+```bash
+hciconfig -a
+```
+
+You should see an HCI device (e.g., `hci0`) listed. If the device is down, bring it up:
+
+```bash
+sudo hciconfig hci0 up
+```
+
+You can also use `bluetoothctl` to scan and connect to Bluetooth devices:
+
+```bash
+bluetoothctl
+# Inside bluetoothctl:
+power on
+scan on
+```
+
+#### Bluetooth Troubleshooting
+
+If Bluetooth is not working, run the diagnostic script:
+
+```bash
+chmod +x diagnose_bt.sh
+sudo ./diagnose_bt.sh
+```
+
+Common issues and solutions:
+
+1. **Firmware not found**: Ensure the firmware files are correctly copied to `/lib/firmware/aic8800D80/`. Key Bluetooth firmware files include:
+   - `fw_patch_8800d80_u02.bin`
+   - `fw_patch_table_8800d80_u02.bin`
+   - `fw_adid_8800d80_u02.bin`
+
+2. **Check kernel logs** for Bluetooth-related errors:
+   ```bash
+   sudo dmesg | grep -iE "aicbt|bluetooth|hci|fw_patch"
+   ```
+
+3. **RF-Kill blocking Bluetooth**:
+   ```bash
+   rfkill list bluetooth
+   sudo rfkill unblock bluetooth
+   ```
