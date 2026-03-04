@@ -340,11 +340,6 @@ BUILT_MODULE_NAME[1]="aic_load_fw"
 BUILT_MODULE_LOCATION[1]="drivers/aic8800/aic_load_fw"
 DEST_MODULE_LOCATION[1]="/updates/dkms"
 
-# Módulo Bluetooth USB (aic_btusb)
-BUILT_MODULE_NAME[2]="aic_btusb"
-BUILT_MODULE_LOCATION[2]="drivers/aic8800/aic_btusb"
-DEST_MODULE_LOCATION[2]="/updates/dkms"
-
 AUTOINSTALL="yes"
 EOF
     
@@ -413,12 +408,6 @@ load_module() {
     print_info "Updating module dependencies..."
     depmod -a >> "$LOG_FILE" 2>&1
     
-    # Unload modules if already loaded
-    if lsmod | grep -q "aic_btusb"; then
-        print_info "Bluetooth module already loaded. Reloading..."
-        modprobe -r aic_btusb >> "$LOG_FILE" 2>&1 || true
-    fi
-    
     if lsmod | grep -q "$MODULE_NAME"; then
         print_info "WiFi module already loaded. Reloading..."
         modprobe -r "$MODULE_NAME" >> "$LOG_FILE" 2>&1 || true
@@ -451,31 +440,8 @@ load_module() {
         print_info "Try rebooting or check: sudo dmesg | grep aic8800"
     fi
     
-    # Load the Bluetooth module
-    print_info "Loading aic_btusb..."
-    if modprobe aic_btusb >> "$LOG_FILE" 2>&1; then
-        print_success "Bluetooth module loaded successfully."
-        
-        # Verify module is loaded
-        local bt_module_loaded=false
-        for i in {1..10}; do
-            if lsmod | grep -q "aic_btusb"; then
-                bt_module_loaded=true
-                break
-            fi
-            sleep 0.5
-        done
-        
-        if [ "$bt_module_loaded" = true ]; then
-            print_success "Bluetooth module is active in kernel."
-        else
-            print_warning "Bluetooth module may not be fully initialized yet."
-        fi
-    else
-        print_warning "Bluetooth module installed but could not be loaded immediately."
-        print_info "This may be due to Secure Boot or missing hardware."
-        print_info "Try rebooting or check: sudo dmesg | grep aic_btusb"
-    fi
+    # Bluetooth is handled by the standard btusb driver after firmware upload
+    print_info "Bluetooth will be available via the standard btusb driver once hardware is connected."
 }
 
 #############################################################################
@@ -502,11 +468,11 @@ verify_installation() {
         print_info "WiFi module not currently loaded (this is OK if no hardware is connected)."
     fi
     
-    # Check if Bluetooth module is loaded
-    if lsmod | grep -q "aic_btusb"; then
-        print_success "Bluetooth kernel module is loaded."
+    # Check if Bluetooth is available via standard btusb
+    if lsmod | grep -q "btusb"; then
+        print_success "Bluetooth kernel module (btusb) is loaded."
     else
-        print_info "Bluetooth module not currently loaded (this is OK if no hardware is connected)."
+        print_info "Bluetooth module (btusb) not currently loaded (this is OK if no hardware is connected)."
     fi
     
     # Show all loaded AIC modules
@@ -549,7 +515,7 @@ show_final_instructions() {
     echo -e "${CYAN}Important Information:${NC}"
     echo ""
     echo "✓ WiFi driver installed via DKMS"
-    echo "✓ Bluetooth driver (aic_btusb) installed via DKMS"
+    echo "✓ Bluetooth supported via standard btusb driver (after firmware upload)"
     echo "✓ Automatic rebuild enabled for kernel updates"
     echo "✓ Firmware installed in /lib/firmware/"
     echo ""
@@ -564,7 +530,7 @@ show_final_instructions() {
     echo ""
     echo "3. View kernel messages about the driver:"
     echo "   ${BLUE}sudo dmesg | grep aic8800${NC}"
-    echo "   ${BLUE}sudo dmesg | grep aic_btusb${NC}"
+    echo "   ${BLUE}sudo dmesg | grep btusb${NC}"
     echo ""
     echo "4. Connect to a WiFi network:"
     echo "   ${BLUE}nmcli device wifi list${NC}"
@@ -586,7 +552,7 @@ show_final_instructions() {
     echo "  ${BLUE}sudo modprobe aic8800_fdrv${NC}"
     echo ""
     echo "• Manually load the Bluetooth module:"
-    echo "  ${BLUE}sudo modprobe aic_btusb${NC}"
+    echo "  ${BLUE}sudo modprobe btusb${NC}"
     echo ""
     echo "• View detailed logs:"
     echo "  ${BLUE}cat $LOG_FILE${NC}"
