@@ -1,3 +1,4 @@
+nartykaly@bazzite:~/rpmbuild/SPECS$ cat aic8800d80.spec
 Name:           aic8800d80
 Version:        453feef
 Release:        1%{?dist}
@@ -6,7 +7,7 @@ Summary:        This driver is for the AIC8800D80 chipset, supported by devices 
 License:        Unknown
 URL:            https://github.com/shenmintao/aic8800d80
 Source0:        https://github.com/shenmintao/aic8800d80/archive/453feef9547eafdf2725fdd4129a716600ecd03f.zip
-Source1:        https://github.com/radxa-pkg/aic8800/blob/main/src/USB/driver_fw/fw/aic8800D80/fmacfw_8800d80_u02.bin
+Source1:        https://github.com/radxa-pkg/aic8800/raw/refs/heads/main/src/USB/driver_fw/fw/aic8800D80/fmacfw_8800d80_u02.bin
 
 BuildRequires: make
 BuildRequires: gcc
@@ -73,7 +74,7 @@ install -m 0644 aic8800d80/fw/aic8800D80/lmacfw_rf_8800d80_u02.bin          %{bu
 rm -rf %{buildroot}
 
 %post
-/usr/bin/depmod -a
+/usr/bin/depmod -a %{uname}
 
 %files
 %defattr(-,root,root,-)
