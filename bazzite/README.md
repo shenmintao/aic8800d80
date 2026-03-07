@@ -50,7 +50,7 @@ sudo rpm-ostree usroverlay
 Build SRPM package
 
 ~~~bash
-rpmbuild -bb $HOME/rpmbuild/SPECS/aic8800d80.spec
+rpmbuild --define "uname $(uname -r)" -bb $HOME/rpmbuild/SPECS/aic8800d80.spec
 ~~~
 
 Install RPM package
