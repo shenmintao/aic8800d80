@@ -50,7 +50,7 @@ install -d -m 0755 %{buildroot}/usr/lib/firmware/aic8800
 
 install -d -m 0755 %{buildroot}/etc/udev/rules.d
 install -d -m 0755 %{buildroot}/etc/modprobe.d
-install -d -m 0755 %{buildroot}/etc/usb_switch.d
+install -d -m 0755 %{buildroot}/etc/usb_modeswitch.d
 
 
 install -m 0644 \
