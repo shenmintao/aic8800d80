@@ -3,7 +3,7 @@ Version:        b0787d9
 Release:        4%{?dist}
 Summary:        This driver is for the AIC8800D80 chipset, supported by devices such as the Tenda U11 and AX913B.
 
-License:        Unknown
+License:        GPL v2
 URL:            https://github.com/shenmintao/aic8800d80
 Source0:        https://github.com/shenmintao/aic8800d80/archive/b0787d9989dc364a04ea8f11d6d824f391f77594.zip
 
@@ -68,6 +68,10 @@ install -m 0644 \
 install -m 0644 \
   aic8800d80/drivers/aic8800/aic8800_fdrv/aic8800_fdrv.ko \
   %{buildroot}/usr/lib/modules/%{uname}/kernel/drivers/net/wireless/aic8800/aic8800_fdrv.ko
+
+install -m 0644 \
+  aic8800d80/drivers/aic8800/aic_btusb/aic_btusb.ko \
+  %{buildroot}/usr/lib/modules/%{uname}/kernel/drivers/net/wireless/aic8800/aic_btusb.ko
 
 install -m 0644 \
   aic8800d80/drivers/aic8800/aic_load_fw/aic_load_fw.ko \
@@ -362,6 +366,7 @@ rm -rf %{buildroot}
 /etc/modprobe.d/aic8800-bt.conf
 /etc/usb_modeswitch.d/1111:1111
 /usr/lib/modules/%{uname}/kernel/drivers/net/wireless/aic8800/aic8800_fdrv.ko
+/usr/lib/modules/%{uname}/kernel/drivers/net/wireless/aic8800/aic_btusb.ko
 /usr/lib/modules/%{uname}/kernel/drivers/net/wireless/aic8800/aic_load_fw.ko
 /usr/lib/firmware/aic8800DC/lmacfw_rf_8800dc.bin
 /usr/lib/firmware/aic8800DC/fw_patch_table_8800dc_u02h.bin
