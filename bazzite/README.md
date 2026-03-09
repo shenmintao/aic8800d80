@@ -56,10 +56,9 @@ rpmbuild --define "uname $(uname -r)" -bb $HOME/rpmbuild/SPECS/aic8800d80.spec
 Install RPM package
 
 ~~~bash
-sudo rpm-ostree install $HOME/rpmbuild/RPMS/x86_64/aic8800d80-454feef-1.fc43.x86_64.rpm
+sudo rpm-ostree install $HOME/rpmbuild/RPMS/x86_64/aic8800d80-b0787d9-4.fc43.x86_64.rpm
 sudo systemctl reboot
 ~~~
-
 
 After reboot wifi module will load automatically.
 

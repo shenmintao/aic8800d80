@@ -1,6 +1,6 @@
 Name:           aic8800d80
 Version:        b0787d9
-Release:        3%{?dist}
+Release:        4%{?dist}
 Summary:        This driver is for the AIC8800D80 chipset, supported by devices such as the Tenda U11 and AX913B.
 
 License:        Unknown
@@ -29,8 +29,8 @@ mv aic8800d80{-b0787d9989dc364a04ea8f11d6d824f391f77594,}
 %build
 
 cd aic8800d80/drivers/aic8800
-make clean
-make
+make KDIR=/usr/src/kernels/%{uname} clean
+make KDIR=/usr/src/kernels/%{uname}
 
 %install
 
@@ -41,16 +41,29 @@ mkdir -p %{buildroot}/usr/lib/modules/%{uname}/kernel/drivers/net/wireless/aic88
          %{buildroot}/etc/udev/rules.d
 
 install -d -m 0755 %{buildroot}/usr/lib/modules/%{uname}/kernel/drivers/net/wireless/aic8800
+
 install -d -m 0755 %{buildroot}/usr/lib/firmware
 install -d -m 0755 %{buildroot}/usr/lib/firmware/aic8800DC
 install -d -m 0755 %{buildroot}/usr/lib/firmware/aic8800D80X2
 install -d -m 0755 %{buildroot}/usr/lib/firmware/aic8800D80
 install -d -m 0755 %{buildroot}/usr/lib/firmware/aic8800
+
 install -d -m 0755 %{buildroot}/etc/udev/rules.d
+install -d -m 0755 %{buildroot}/etc/modprobe.d
+install -d -m 0755 %{buildroot}/etc/usb_switch.d
+
 
 install -m 0644 \
   aic8800d80/aic.rules \
   %{buildroot}/etc/udev/rules.d/90-aic8800-mode-switch.rules
+
+install -m 0644 \
+  aic8800d80/modprobe/aic8800-bt.conf \
+  %{buildroot}/etc/modprobe.d/aic8800-bt.conf
+
+install -m 0644 \
+  aic8800d80/usb_modeswitch/1111_1111 \
+  %{buildroot}/etc/usb_modeswitch.d/1111:1111
 
 install -m 0644 \
   aic8800d80/drivers/aic8800/aic8800_fdrv/aic8800_fdrv.ko \
@@ -250,15 +263,15 @@ install -m 0644 \
 
 install -m 0644 \
   aic8800d80/fw/aic8800D80/aic_userconfig_8800d80_u11.txt \
-  %{buildroot}/usr/lib/firmware/./aic8800D80/aic_userconfig_8800d80_u11.txt
+  %{buildroot}/usr/lib/firmware/aic8800D80/aic_userconfig_8800d80_u11.txt
 
 install -m 0644 \
   aic8800d80/fw/aic8800D80/aic_userconfig_8800d80.txt \
-  %{buildroot}/usr/lib/firmware/./aic8800D80/aic_userconfig_8800d80.txt
+  %{buildroot}/usr/lib/firmware/aic8800D80/aic_userconfig_8800d80.txt
 
 install -m 0644 \
   aic8800d80/fw/aic8800D80/aic_powerlimit_8800d80.txt \
-  %{buildroot}/usr/lib/firmware/./aic8800D80/aic_powerlimit_8800d80.txt
+  %{buildroot}/usr/lib/firmware/aic8800D80/aic_powerlimit_8800d80.txt
 
 install -m 0644 \
   aic8800d80/fw/aic8800/m2d_ota.bin \
@@ -341,9 +354,13 @@ rm -rf %{buildroot}
 %files
 %defattr(-,root,root,-)
 %dir /usr/lib/modules/%{uname}/kernel/drivers/net/wireless/aic8800
-%dir /usr/lib/firmware
-%dir /etc/udev/rules.d
+%dir /usr/lib/firmware/aic8800DC
+%dir /usr/lib/firmware/aic8800D80X2
+%dir /usr/lib/firmware/aic8800D80
+%dir /usr/lib/firmware/aic8800
 /etc/udev/rules.d/90-aic8800-mode-switch.rules
+/etc/modprobe.d/aic8800-bt.conf
+/etc/usb_modeswitch.d/1111:1111
 /usr/lib/modules/%{uname}/kernel/drivers/net/wireless/aic8800/aic8800_fdrv.ko
 /usr/lib/modules/%{uname}/kernel/drivers/net/wireless/aic8800/aic_load_fw.ko
 /usr/lib/firmware/aic8800DC/lmacfw_rf_8800dc.bin
