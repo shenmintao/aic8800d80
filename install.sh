@@ -451,8 +451,15 @@ load_module() {
         print_info "Try rebooting or check: sudo dmesg | grep aic8800"
     fi
     
-    # Bluetooth is handled by the standard btusb driver after firmware upload
-    print_info "Bluetooth will be available via the standard btusb driver once hardware is connected."
+    # Load the standard Bluetooth driver (btusb)
+    # The aic_load_fw module uploads the Bluetooth firmware, then btusb handles the BT interface
+    print_info "Loading standard Bluetooth driver (btusb)..."
+    if modprobe btusb >> "$LOG_FILE" 2>&1; then
+        print_success "Bluetooth driver (btusb) loaded successfully."
+    else
+        print_warning "Could not load btusb driver automatically."
+        print_info "You can manually load it with: sudo modprobe btusb"
+    fi
 }
 
 #############################################################################
