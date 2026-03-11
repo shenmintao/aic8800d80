@@ -82,7 +82,7 @@ CONFIG_BR_SUPPORT = n
 CONFIG_USB_MSG_OUT_EP = y
 CONFIG_USB_MSG_IN_EP = y
 CONFIG_USB_RX_REASSEMBLE = n
-CONFIG_WOWLAN = n
+CONFIG_WOWLAN ?= n
 
 #DCDW support tx aggr, D80 support both
 CONFIG_USB_RX_AGGR = n
@@ -93,7 +93,7 @@ CONFIG_GPIO_WAKEUP = n
 CONFIG_CREATE_TRACE_POINTS = n
 CONFIG_SUPPORT_REALTIME_CHANGE_MAC = y
 CONFIG_USE_USB_ZERO_PACKET = y
-CONFIG_DEBUG_FS = n
+CONFIG_DEBUG_FS ?= n
 CONFIG_STA_SCAN_WHEN_P2P_WORKING = y
 CONFIG_SET_VENDOR_EXTENSION_IE = n
 CONFIG_VENDOR_GPIO = n
@@ -114,6 +114,7 @@ CONFIG_LOFT_CALIB = n
 CONFIG_GKI = n
 CONFIG_SCHED_SCAN = n
 CONFIG_TEMP_COMP = n
+CONFIG_TEMP_CONTROL = n
 CONFIG_POWER_LIMIT = n
 CONFIG_EXT_FEM_8800DCDW = n
 # CONFIG_MCC = n for sta and p2p concurrent in same channel.
@@ -122,6 +123,8 @@ CONFIG_LOAD_BT_PATCH_IN_FDRV = n
 CONFIG_DYNAMIC_PWR = n
 CONFIG_DYNAMIC_PERPWR = n
 CONFIG_BAND_STEERING = n
+CONFIG_PRBREQ_REPORT = n
+CONFIG_SUPPORT_4ADDR = n
 
 #support D80X2 can write rf result to file
 CONFIG_WRITE_FILE_D80X2 = n
@@ -189,7 +192,9 @@ $(MODULE_NAME)-y := \
         aic_priv_cmd.o         \
 	aicwf_compat_8800dc.o  \
 	aicwf_compat_8800d80.o \
-	aicwf_compat_8800d80x2.o
+	aicwf_compat_8800d80x2.o \
+	aicwf_compat_8800d80n.o \
+	aicwf_compat_8800dln.o
 
 $(MODULE_NAME)-$(CONFIG_BAND_STEERING)    += aicwf_manager.o    \
 	aicwf_steering.o
@@ -263,6 +268,8 @@ ccflags-$(CONFIG_LOAD_BT_PATCH_IN_FDRV) += -DCONFIG_LOAD_BT_PATCH_IN_FDRV
 ccflags-$(CONFIG_DYNAMIC_PWR) += -DCONFIG_DYNAMIC_PWR
 ccflags-$(CONFIG_DYNAMIC_PERPWR) += -DCONFIG_DYNAMIC_PERPWR
 ccflags-$(CONFIG_BAND_STEERING) += -DCONFIG_BAND_STEERING
+ccflags-$(CONFIG_PRBREQ_REPORT) += -DCONFIG_PRBREQ_REPORT
+ccflags-$(CONFIG_SUPPORT_4ADDR) += -DCONFIG_SUPPORT_4ADDR
 ccflags-$(CONFIG_WRITE_FILE_D80X2) += -DRF_WRITE_FILE
 
 ifeq ($(CONFIG_SDIO_SUPPORT), y)
@@ -338,9 +345,11 @@ ccflags-$(CONFIG_GKI) += -DCONFIG_GKI
 ccflags-$(CONFIG_SCHED_SCAN) += -DCONFIG_SCHED_SCAN
 ccflags-$(CONFIG_FILTER_TCP_ACK) += -DCONFIG_FILTER_TCP_ACK
 ccflags-$(CONFIG_TEMP_COMP) += -DCONFIG_TEMP_COMP
+ccflags-$(CONFIG_TEMP_CONTROL) += -DCONFIG_TEMP_CONTROL
 ccflags-$(CONFIG_POWER_LIMIT) += -DCONFIG_POWER_LIMIT
 ccflags-$(CONFIG_EXT_FEM_8800DCDW) += -DCONFIG_EXT_FEM_8800DCDW
 ccflags-$(CONFIG_WOWLAN) += -DCONFIG_WOWLAN
+MAKEFLAGS +=-j$(shell nproc)
 
 # Platform support list
 CONFIG_PLATFORM_ROCKCHIP ?= n
@@ -380,11 +389,13 @@ KDIR ?= /home/yaya/D/Workspace/CyberQuantum/JinHaoYue/amls905x3/SDK/20191101-0tt
 endif
 
 ifeq ($(CONFIG_PLATFORM_UBUNTU), y)
-KVER := $(or $(KVER), $(kernelver), $(KERNELRELEASE), $(shell uname -r))
-KDIR ?= /lib/modules/$(KVER)/build
+KDIR  ?= /lib/modules/$(shell uname -r)/build
+#KDIR ?= ~/D/Workspace/CyberQuantum/Linux/linux-4.15/
 PWD   ?= $(shell pwd)
+KVER ?= $(shell uname -r)
 MODDESTDIR ?= /lib/modules/$(KVER)/kernel/drivers/net/wireless/aic8800
-ARCH ?= $(shell uname -m | sed -e s/i.86/i386/ -e s/armv.l/arm/ -e s/aarch64/arm64/)
+SUBARCH = $(shell uname -m | sed -e s/i.86/i386/ -e s/armv.l/arm/ -e s/aarch64/arm64/)
+ARCH ?= $(SUBARCH)
 CROSS_COMPILE ?=
 endif
 

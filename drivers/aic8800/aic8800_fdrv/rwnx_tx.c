@@ -1833,7 +1833,7 @@ int rwnx_start_mgmt_xmit(struct rwnx_vif *vif, struct rwnx_sta *sta,
     return 0;
 }
 
-#ifdef CONFIG_BAND_STEERING
+#if 0//def CONFIG_BAND_STEERING
 void rwnx_probersp_work(struct work_struct *work)
 {
 	struct ap_probe_rsp *rsp = container_of(work, struct ap_probe_rsp, rsp_work);
@@ -1841,7 +1841,6 @@ void rwnx_probersp_work(struct work_struct *work)
 	struct rwnx_hw *rwnx_hw = rwnx_vif->rwnx_hw;
 	struct sk_buff *skb = NULL;
 	struct rwnx_bcn *bcn = &rwnx_vif->ap.bcn;
-	unsigned int len = bcn->len;
 	u8_l *buf;
 	struct ieee80211_mgmt *mgmt;
 	bool robust;
@@ -1852,13 +1851,13 @@ void rwnx_probersp_work(struct work_struct *work)
 	struct rwnx_sw_txhdr *sw_txhdr;
 	struct txdesc_api *desc;
 	headroom = sizeof(struct rwnx_txhdr);
-	frame_len = len;
+	frame_len = bcn->len;
 
 	if (aicwf_band_steering_block_chk(rwnx_vif, rsp->da)) {
 		AICWFDBG(LOGSTEER, "usb %s, %d, probe_rsp refuse temp  %pM\n", __func__, rwnx_vif->ap.freq, rsp->da);
 		goto free_use;
 	}
-	if (!bcn->head || bcn->head_len == 0 || bcn->head_len > frame_len) {
+	if (frame_len == 0 || !bcn->head || bcn->head_len == 0 || bcn->head_len > frame_len) {
 		AICWFDBG(LOGSTEER, "%s bcn head NULL\n", __func__);
 		goto free_use;
 	}
@@ -2347,7 +2346,8 @@ int rwnx_txdatacfm(void *pthis, void *host_id)
     /* Check status in the header. If status is null, it means that the buffer
      * was not transmitted and we have to return immediately */
     if (rwnx_txst.value == 0) {
-        return -1;
+        //return -1;
+	rwnx_txst.tx_done = 1;
     }
 
 #ifdef AICWF_USB_SUPPORT

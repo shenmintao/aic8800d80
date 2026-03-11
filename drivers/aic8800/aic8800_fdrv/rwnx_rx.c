@@ -812,6 +812,7 @@ static void rwnx_rx_mgmt(struct rwnx_hw *rwnx_hw, struct rwnx_vif *rwnx_vif,
 			aicwf_nl_send_frame_rpt_msg(rwnx_vif, WIFI_AUTH, mgmt->sa, rxvect->rssi1);
 		}
 
+#if 0
 		if (ieee80211_is_probe_req(mgmt->frame_control)) {
 			if (!rwnx_vif->ap.start)
 				return;
@@ -830,6 +831,7 @@ static void rwnx_rx_mgmt(struct rwnx_hw *rwnx_hw, struct rwnx_vif *rwnx_vif,
 				AICWFDBG(LOGERROR, "usb probe_rsp pool full, drop %pM\n", mgmt->sa);
 			return;
 		}
+#endif
 
 	}
 #endif
@@ -1364,8 +1366,10 @@ static void rwnx_rx_add_rtap_hdr(struct rwnx_hw* rwnx_hw,
         while ((pos - (u8 *)rtap) & 1)
             pos++;
         rtap->it_present |= cpu_to_le32(1 << IEEE80211_RADIOTAP_HE);
-        memcpy(pos, &he, sizeof(he));
-        pos += sizeof(he);
+        //memcpy(pos, &he, sizeof(he));
+		//pos += sizeof(he);
+		*(struct ieee80211_radiotap_he *)pos = he;
+		pos += sizeof(struct ieee80211_radiotap_he);
     }
 
     // Rx Chains
@@ -1833,8 +1837,7 @@ bool reord_rxframes_process(struct aicwf_rx_priv *rx_priv, struct reord_ctrl *pr
     return bPktInBuf;
 }
 
-void reord_rxframes_ind(struct aicwf_rx_priv *rx_priv,
-    struct reord_ctrl *preorder_ctrl)
+void reord_rxframes_ind(struct aicwf_rx_priv *rx_priv, struct reord_ctrl *preorder_ctrl)
 {
     struct list_head *phead, *plist;
     struct recv_msdu *prframe;
@@ -1927,8 +1930,6 @@ int reord_process_unit(struct recv_msdu *pframe, struct aicwf_rx_priv *rx_priv, 
     struct reord_ctrl_info *reord_info;
     struct rwnx_vif *rwnx_vif = (struct rwnx_vif *)rx_priv->rwnx_vif;
     struct ethhdr *eh = (struct ethhdr *)(skb->data);
-    u8 *da = eh->h_dest;
-    u8 is_mcast = ((*da) & 0x01)? 1 : 0;
 
     #if 0
     struct recv_msdu *pframe;
@@ -1949,7 +1950,7 @@ int reord_process_unit(struct recv_msdu *pframe, struct aicwf_rx_priv *rx_priv, 
     preorder_ctrl = pframe->preorder_ctrl;
     pframe->is_amsdu = is_amsdu;
 
-    if ((ntohs(eh->h_proto) == ETH_P_PAE) || is_mcast)
+    if (ntohs(eh->h_proto) == ETH_P_PAE)
         return reord_single_frame_ind(rx_priv, pframe);
 
     if((rwnx_vif->wdev.iftype == NL80211_IFTYPE_STATION) || (rwnx_vif->wdev.iftype == NL80211_IFTYPE_P2P_CLIENT))
@@ -2039,9 +2040,9 @@ int reord_process_unit(struct recv_msdu *pframe, struct aicwf_rx_priv *rx_priv, 
     } else {
 		if(timer_pending(&preorder_ctrl->reord_timer)) {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0))
-	        	ret = timer_delete(&preorder_ctrl->reord_timer);
+            ret = timer_delete(&preorder_ctrl->reord_timer);
 #else
-	        	ret = del_timer(&preorder_ctrl->reord_timer);
+            ret = del_timer(&preorder_ctrl->reord_timer);
 #endif
 		}
     }
@@ -2127,7 +2128,10 @@ void remove_sec_hdr_mgmt_frame(struct hw_rxhdr *hw_rxhdr,struct sk_buff *skb)
     if(!hw_rxhdr->hwvect.ga_frame){
         if(((skb->data[0] & 0x0C) == 0) && (skb->data[1] & 0x40) == 0x40){ //protect management frame
             printk("frame type %x\n",skb->data[0]);
-            if(hw_rxhdr->hwvect.decr_status == RWNX_RX_HD_DECR_CCMP128){
+            if((hw_rxhdr->hwvect.decr_status == RWNX_RX_HD_DECR_CCMP128) ||
+			(hw_rxhdr->hwvect.decr_status == RWNX_RX_HD_DECR_CCMP256) ||
+			(hw_rxhdr->hwvect.decr_status == RWNX_RX_HD_DECR_GCMP128) ||
+			(hw_rxhdr->hwvect.decr_status == RWNX_RX_HD_DECR_GCMP256)) {
                 memcpy(mgmt_header,skb->data,hdr_len);
                 skb_pull(skb,8);
                 memcpy(skb->data,mgmt_header,hdr_len);
@@ -2250,7 +2254,14 @@ u8 rwnx_rxdataind_aicwf(struct rwnx_hw *rwnx_hw, void *hostid, void *rx_priv)
     u8 is_amsdu = 0;
     bool resend = false, forward = true;
     const struct ethhdr *eth;
-
+#ifdef CONFIG_SUPPORT_4ADDR
+	u8_l b_4addr = 0;
+#endif
+#ifdef CONFIG_BR_SUPPORT
+	int vif_idx;
+	struct rwnx_vif *vif_itr = NULL;
+	struct rwnx_sta *cur_sta;
+#endif
     REG_SW_SET_PROFILING(rwnx_hw, SW_PROF_RWNXDATAIND);
     hw_rxhdr = (struct hw_rxhdr *)skb->data;
 
@@ -2333,8 +2344,8 @@ u8 rwnx_rxdataind_aicwf(struct rwnx_hw *rwnx_hw, void *hostid, void *rx_priv)
         #endif
         }
 
-        skb_reset_tail_pointer(skb);
-        skb->len = 0;
+        //skb_reset_tail_pointer(skb);
+        //skb->len = 0;
         skb_reset_tail_pointer(skb_monitor);
         skb_monitor->len = 0;
         skb_put(skb_monitor, frm_len);
@@ -2389,8 +2400,26 @@ check_len_update:
         rwnx_rx_vector_convert(rwnx_hw,
                                &hw_rxhdr->hwvect.rx_vect1,
                                &hw_rxhdr->hwvect.rx_vect2);
+
+#ifndef CONFIG_SUPPORT_4ADDR
+		if (hw_rxhdr->flags_is_4addr) {
+					dev_err(rwnx_hw->dev, "4addr Frame received (%d), skb->len:%u\n", hw_rxhdr->flags_vif_idx, skb->len);
+					print_hex_dump(KERN_ERR,"4addr ",DUMP_PREFIX_NONE, 16, 1, skb->data, skb->len, false);
+					dev_kfree_skb(skb);
+					goto end;
+		}
+#endif
+
         skb_pull(skb, msdu_offset + 2); //+2 since sdio allign 58->60
 #define MAC_FCTRL_MOREFRAG 0x0400
+
+#ifdef CONFIG_SUPPORT_4ADDR
+		if (hw_rxhdr->flags_is_4addr) {
+			hdr_len += 6;
+			b_4addr = 1;
+		}
+#endif
+
 		frame_ctrl = (skb->data[1] << 8) | skb->data[0];
 		seq_num = ((skb->data[22] & 0xf0) >> 4) | (skb->data[23] << 4);
 		frag_num = (skb->data[22] & 0x0f);
@@ -2398,28 +2427,86 @@ check_len_update:
 
 		if ((skb->data[0] & 0x0f) == 0x08) {
 			if ((skb->data[0] & 0x80) == 0x80) {//qos data
-				hdr_len = 26;
+				hdr_len += 2;
+#ifdef CONFIG_SUPPORT_4ADDR
+				tid = b_4addr ? (skb->data[30] & 0x0F) : (skb->data[24] & 0x0F);
+#else
 				tid = skb->data[24] & 0x0F;
+#endif
 				is_qos = 1;
+#ifdef CONFIG_SUPPORT_4ADDR
+				if (b_4addr) {
+					if (skb->data[30] & 0x80)
+						is_amsdu = 1;
+				} else {
+					if (skb->data[24] & 0x80)
+						is_amsdu = 1;
+				}
+#else
 				if (skb->data[24] & 0x80)
 					is_amsdu = 1;
+#endif
 			}
 
 			if(skb->data[1] & 0x80)// htc
 				hdr_len += 4;
 
-            if((skb->data[1] & 0x3) == 0x1)  {// to ds
-                memcpy(ra, &skb->data[16], MAC_ADDR_LEN);//destination addr
-                memcpy(ta, &skb->data[10], MAC_ADDR_LEN);//source addr
-            } else if((skb->data[1] & 0x3) == 0x2) { //from ds
-                memcpy(ta, &skb->data[16], MAC_ADDR_LEN);//destination addr
-                memcpy(ra, &skb->data[4], MAC_ADDR_LEN);//BSSID
-            }
+#ifdef CONFIG_SUPPORT_4ADDR
+			if (b_4addr) {
+				if ((skb->data[1] & 0x3) != 0x3) {
+					printk("aicwf: 4addr DS error, to_from ds:%d\n", skb->data[1] & 0x3);
+					print_hex_dump(KERN_ERR,"rx_4addr ",DUMP_PREFIX_NONE, 16, 1, skb->data, skb->len, false);
+				}
+				memcpy(ra, &skb->data[16], MAC_ADDR_LEN);
+				memcpy(ta, &skb->data[24], MAC_ADDR_LEN);
+				printk("aicwf 4addr: da: %pM, sa: %pM\n", ra, ta);
+			} else {
+				//printk("aicwf: to_from ds:%d\n", skb->data[1] & 0x3);
+				if((skb->data[1] & 0x3) == 0x1)  {// to ds
+					memcpy(ra, &skb->data[16], MAC_ADDR_LEN);
+					memcpy(ta, &skb->data[10], MAC_ADDR_LEN);
+				} else if((skb->data[1] & 0x3) == 0x2) { //from ds
+					memcpy(ta, &skb->data[16], MAC_ADDR_LEN);
+					memcpy(ra, &skb->data[4], MAC_ADDR_LEN);
+				}
+			}
+#else
+			if((skb->data[1] & 0x3) == 0x1)  {// to ds
+				memcpy(ra, &skb->data[16], MAC_ADDR_LEN);
+				memcpy(ta, &skb->data[10], MAC_ADDR_LEN);
+			} else if((skb->data[1] & 0x3) == 0x2) { //from ds
+				memcpy(ta, &skb->data[16], MAC_ADDR_LEN);
+				memcpy(ra, &skb->data[4], MAC_ADDR_LEN);
+			}
+#endif
+
+#ifdef CONFIG_BR_SUPPORT
+			if((skb->data[1] & 0x3) == 0x2) {
+				for (vif_idx = 0; vif_idx < NX_VIRT_DEV_MAX; vif_idx++) {
+					vif_itr = rwnx_hw->vif_table[vif_idx];
+					if (vif_itr && vif_itr->up && RWNX_VIF_TYPE(vif_itr) == NL80211_IFTYPE_AP) {
+						spin_lock_bh(&vif_itr->rwnx_hw->cb_lock);
+						list_for_each_entry(cur_sta, &vif_itr->ap.sta_list, list) {
+							if (!memcmp(cur_sta->mac_addr, ta, MAC_ADDR_LEN)) {
+								//printk("aicwf filter out, %pM\n", ta);
+								dev_kfree_skb(skb);
+								spin_unlock_bh(&vif_itr->rwnx_hw->cb_lock);
+								goto end;
+							}
+						}
+						spin_unlock_bh(&vif_itr->rwnx_hw->cb_lock);
+					}
+				}
+			}
+#endif
 
             pull_len += (hdr_len + 8);
 
 			switch (hw_rxhdr->hwvect.decr_status) {
 			case RWNX_RX_HD_DECR_CCMP128:
+			case RWNX_RX_HD_DECR_CCMP256:
+			case RWNX_RX_HD_DECR_GCMP128:
+			case RWNX_RX_HD_DECR_GCMP256:
 				pull_len += 8;//ccmp_header
 				//skb_pull(&skb->data[skb->len-8], 8); //ccmp_mic_len
 				memcpy(ether_type, &skb->data[hdr_len + 6 + 8], 2);
@@ -2441,17 +2528,33 @@ check_len_update:
 				memcpy(ether_type, &skb->data[hdr_len + 6], 2);
 				break;
 			}
+
+
+            if((ether_type[0] == 0x8e && ether_type[1] == 0x88) || (ether_type[0] == 0x88 && ether_type[1] == 0x8e))
+                printk("rx eapol\n");
+			
+			if (is_amsdu) {
+//Check NETGEAR R7000 router's AMSDU packet format for compliance. start
+                AICWFDBG(LOGDEBUG, "%s is amsdu pkt pull_len:%d %x %x %x\r\n", __func__,
+                    pull_len, skb->data[pull_len - 8],
+                    skb->data[pull_len - 7],
+                    skb->data[pull_len - 2]);
+                  if (skb->data[pull_len - 8] == 0xAA &&
+                        skb->data[pull_len - 7] == 0xAA && 
+                        skb->data[pull_len - 2] > 0x06){
+                        AICWFDBG(LOGERROR, "%s amsdu pkt not regular \r\n", __func__);
+                        is_amsdu = 0;
+                  }else{
+                        skb_pull(skb, pull_len-8);
+                  }
+//Check NETGEAR R7000 router's AMSDU packet format for compliance. end
+			}
+			
             if(is_amsdu)
                 hw_rxhdr->flags_is_amsdu = 1;
             else
                 hw_rxhdr->flags_is_amsdu = 0;
-
-            if((ether_type[0] == 0x8e && ether_type[1] == 0x88) || (ether_type[0] == 0x88 && ether_type[1] == 0x8e))
-                printk("rx eapol\n");
-			if (is_amsdu) {
-                skb_pull(skb, pull_len-8);
-			}
-
+			
 			if (hw_rxhdr->flags_dst_idx != RWNX_INVALID_STA)
 				sta_idx = hw_rxhdr->flags_dst_idx;
 
@@ -2629,6 +2732,7 @@ check_len_update:
                 }
 
                 if (hw_rxhdr->flags_is_4addr && !rwnx_vif->use_4addr) {
+					printk("aicwf: 4addr flag error\n");
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
                     cfg80211_rx_unexpected_4addr_frame(rwnx_vif->ndev,
                                                        sta->mac_addr, -1, GFP_ATOMIC);
@@ -2675,7 +2779,7 @@ check_len_update:
 
 #ifdef CONFIG_DYNAMIC_PERPWR
 				sta = &rwnx_hw->sta_table[hw_rxhdr->flags_sta_idx];
-				rssi_update_txpwrloss(sta, hw_rxhdr->hwvect.rx_vect1.rssi1);
+				rssi_update_txpwrloss(sta, hw_rxhdr->hwvect.rx_vect1.rssi1, rwnx_vif);
 #endif
 #ifdef CONFIG_BAND_STEERING
 				(&rwnx_hw->sta_table[hw_rxhdr->flags_sta_idx])->rssi = hw_rxhdr->hwvect.rx_vect1.rssi1;

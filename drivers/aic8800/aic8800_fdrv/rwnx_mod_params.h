@@ -71,6 +71,8 @@ struct ieee80211_regdomain *getRegdomainFromRwnxDB(struct wiphy *wiphy,
 
 struct ieee80211_regdomain *getRegdomainFromRwnxDBIndex(struct wiphy *wiphy,
 														int index);
+void rwnx_get_countrycode_channels(struct wiphy *wiphy,
+		struct ieee80211_regdomain *regdomain);
 
 
 #endif /* _RWNX_MOD_PARAM_H_ */

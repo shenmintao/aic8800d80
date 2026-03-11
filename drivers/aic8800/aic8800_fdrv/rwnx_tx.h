@@ -17,6 +17,7 @@
 #include "ipc_shared.h"
 #include "rwnx_txq.h"
 #include "hal_desc.h"
+#include "aicwf_tcp_ack.h"
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0)
 #define IEEE80211_NUM_TIDS              16
@@ -197,6 +198,8 @@ void rwnx_tx_push(struct rwnx_hw *rwnx_hw, struct rwnx_txhdr *txhdr, int flags);
 #ifdef CONFIG_BAND_STEERING
 void rwnx_probersp_work(struct work_struct *work);
 #endif
-
+#ifdef CONFIG_FILTER_TCP_ACK
+int intf_tx(struct rwnx_hw *priv,struct msg_buf *msg);
+#endif
 
 #endif /* _RWNX_TX_H_ */

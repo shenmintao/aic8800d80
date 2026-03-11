@@ -60,3 +60,6 @@ int	rwnx_plat_userconfig_load_8800dw(struct rwnx_hw *rwnx_hw);
 int rwnx_plat_powerlimit_load_8800dcdw(struct rwnx_hw *rwnx_hw, uint16_t chip_id);
 #endif
 void system_config_8800dc(struct rwnx_hw *rwnx_hw);
+int aicwf_patch_var_config_8800dc(struct rwnx_hw *rwnx_hw);
+int set_bbpll_config(struct rwnx_hw *rwnx_hw);
+

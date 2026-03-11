@@ -7,14 +7,16 @@ CONFIG_M2D_OTA_AUTO_SUPPORT = n
 CONFIG_LINK_DET_5G = y
 CONFIG_FOR_IPCAM = n
 CONFIG_USB_SUSPEND_REBOOT_TIME = n
-CONFIG_SUPPORT_USB_SUSP = n
 CONFIG_RADAR_OR_IR_DETECT =n
-
+CONFIG_LOAD_BT_CONF = n
+CONFIG_FLASH_CALRES = n
+CONFIG_WOWLAN ?= n
 # Need to set fw path in BOARD_KERNEL_CMDLINE
 CONFIG_USE_FW_REQUEST ?= n
 CONFIG_PREALLOC_RX_SKB ?= n
 CONFIG_PREALLOC_TXQ ?= y
 CONFIG_BAND_STEERING = n
+CONFIG_PRBREQ_REPORT = n
 
 # Platform support list
 CONFIG_PLATFORM_ROCKCHIP ?= n
@@ -44,7 +46,11 @@ ccflags-$(CONFIG_PREALLOC_TXQ) += -DCONFIG_PREALLOC_TXQ
 ccflags-$(CONFIG_USB_SUSPEND_REBOOT_TIME) += -DCONFIG_USB_SUSPEND_REBOOT_TIME
 ccflags-$(CONFIG_SUPPORT_USB_SUSP) += -DCONFIG_SUPPORT_USB_SUSP
 ccflags-$(CONFIG_RADAR_OR_IR_DETECT) += -DCONFIG_RADAR_OR_IR_DETECT
+ccflags-$(CONFIG_LOAD_BT_CONF) += -DCONFIG_LOAD_BT_CONF
+ccflags-$(CONFIG_FLASH_CALRES) += -DCONFIG_FLASH_CALRES
 ccflags-$(CONFIG_BAND_STEERING) += -DCONFIG_BAND_STEERING
+ccflags-$(CONFIG_PRBREQ_REPORT) += -DCONFIG_PRBREQ_REPORT
+ccflags-$(CONFIG_WOWLAN) += -DCONFIG_WOWLAN
 
 obj-$(CONFIG_AIC_LOADFW_SUPPORT) := $(MODULE_NAME).o
 $(MODULE_NAME)-y := 	aic_bluetooth_main.o \
@@ -67,7 +73,7 @@ ccflags-$(CONFIG_PLATFORM_ROCKCHIP) += -DCONFIG_PLATFORM_ROCKCHIP
 #ARCH ?= arm
 #CROSS_COMPILE ?= /home/yaya/E/Rockchip/3229/Android7/RK3229_ANDROID7.1_v1.01_20170914/rk3229_Android7.1_v1.01_xml0914/prebuilts/gcc/linux-x86/arm/arm-eabi-4.6/bin/arm-eabi-
 KDIR  := /home/yaya/E/Rockchip/3229/Android9/rk3229_android9.0_box/kernel
-ARCH ?=$(shell uname -m | sed -e s/i.86/i386/ -e s/armv.l/arm/ -e s/aarch64/arm64/)
+ARCH ?= arm
 CROSS_COMPILE ?= /home/yaya/E/Rockchip/3229/Android9/rk3229_android9.0_box/prebuilts/gcc/linux-x86/arm/gcc-linaro-6.3.1-2017.05-x86_64_arm-linux-gnueabihf/bin/arm-linux-gnueabihf-
 #KDIR  := /home/yaya/E/Rockchip/3399/rk3399-android-10/kernel
 #ARCH ?= arm64
@@ -91,12 +97,13 @@ endif
 
 ifeq ($(CONFIG_PLATFORM_UBUNTU), y)
 ccflags-$(CONFIG_PLATFORM_UBUNTU) += -DCONFIG_PLATFORM_UBUNTU
-KVER := $(or $(KVER), $(kernelver), $(KERNELRELEASE), $(shell uname -r))
-KDIR ?= /lib/modules/$(KVER)/build
-PWD  ?= $(shell pwd)
-MODDESTDIR ?= /lib/modules/$(KVER)/kernel/drivers/net/wireless/aic8800
-ARCH ?= $(shell uname -m | sed -e s/i.86/i386/ -e s/armv.l/arm/ -e s/aarch64/arm64/)
-CROSS_COMPILE ?=
+KDIR  := /lib/modules/$(shell uname -r)/build
+PWD   := $(shell pwd)
+KVER := $(shell uname -r)
+MODDESTDIR := /lib/modules/$(KVER)/kernel/drivers/net/wireless/aic8800
+SUBARCH = $(shell uname -m | sed -e s/i.86/i386/ -e s/armv.l/arm/ -e s/aarch64/arm64/)
+ARCH ?= $(SUBARCH)
+CROSS_COMPILE :=
 endif
 
 

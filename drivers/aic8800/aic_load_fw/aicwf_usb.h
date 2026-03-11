@@ -42,11 +42,12 @@ enum AICWF_IC{
     PRODUCT_ID_AIC8800D80X2,
     PRODUCT_ID_AIC8800D81X2,
     PRODUCT_ID_AIC8800D89X2,
+    PRODUCT_ID_AIC8800D40X2,
 };
 
 
 #define AICWF_USB_RX_URBS               (20)
-#define AICWF_USB_TX_URBS               (30)
+#define AICWF_USB_TX_URBS               (100)
 #define AICWF_USB_TX_LOW_WATER          (AICWF_USB_TX_URBS/4)
 #define AICWF_USB_TX_HIGH_WATER         (AICWF_USB_TX_LOW_WATER*3)
 #define AICWF_USB_MAX_PKT_SIZE          (2048)
@@ -233,6 +234,8 @@ extern void aicwf_usb_tx_flowctrl(struct aic_usb_dev *usb_dev, bool state);
 int usb_bustx_thread(void *data);
 int usb_busrx_thread(void *data);
 int aicwf_process_rxframes(struct aicwf_rx_priv *rx_priv);
+int aicfw_download_fw_8800(struct aic_usb_dev *usb_dev);
+int aicfw_download_fw(struct aic_usb_dev *usb_dev);
 
 #endif /* AICWF_USB_SUPPORT */
 #endif /* _AICWF_USB_H_       */

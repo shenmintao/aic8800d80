@@ -1,16 +1,14 @@
 CONFIG_AIC_LOADFW_SUPPORT := m
 CONFIG_AIC8800_WLAN_SUPPORT := m
-CONFIG_AIC8800_BTUSB_SUPPORT := m
 
-obj-$(CONFIG_AIC_LOADFW_SUPPORT) += aic_load_fw/
+obj-$(CONFIG_AIC_LOADFW_SUPPORT)    += aic_load_fw/
 obj-$(CONFIG_AIC8800_WLAN_SUPPORT) += aic8800_fdrv/
-obj-$(CONFIG_AIC8800_BTUSB_SUPPORT) += aic_btusb/
 
 ########## config option ##########
 export CONFIG_USE_FW_REQUEST = n
 export CONFIG_PREALLOC_RX_SKB = y
 export CONFIG_PREALLOC_TXQ = y
-export CONFIG_AIC8800_BTUSB_SUPPORT
+export CONFIG_WOWLAN = n
 ###################################
 
 ########## platform support list ##########
@@ -49,9 +47,9 @@ KDIR = /home/yaya/D/Workspace/CyberQuantum/JinHaoYue/amls905x3/SDK/20191101-0tt-
 endif
 
 ifeq ($(CONFIG_PLATFORM_UBUNTU), y)
-KVER ?= $(shell uname -r)
-KDIR  = /lib/modules/$(KVER)/build
+KDIR  = /lib/modules/$(shell uname -r)/build
 PWD   = $(shell pwd)
+KVER = $(shell uname -r)
 MODDESTDIR = /lib/modules/$(KVER)/kernel/drivers/net/wireless/aic8800
 SUBARCH = $(shell uname -m | sed -e s/i.86/i386/ -e s/armv.l/arm/ -e s/aarch64/arm64/ -e s/loongarch64/loongarch/ -e s/loong64/loongarch/)
 ARCH ?= $(SUBARCH)
@@ -70,17 +68,14 @@ install:
 	mkdir -p $(MODDESTDIR)
 	install -p -m 644 aic_load_fw/aic_load_fw.ko  $(MODDESTDIR)/
 	install -p -m 644 aic8800_fdrv/aic8800_fdrv.ko  $(MODDESTDIR)/
-	install -p -m 644 aic_btusb/aic_btusb.ko  $(MODDESTDIR)/
 	/sbin/depmod -a ${KVER}
 
 uninstall:
 	rm -rfv $(MODDESTDIR)/aic_load_fw.ko
 	rm -rfv $(MODDESTDIR)/aic8800_fdrv.ko
-	rm -rfv $(MODDESTDIR)/aic_btusb.ko
 	/sbin/depmod -a ${KVER}
 
 clean:
 	cd aic_load_fw/;make clean;cd ..
 	cd aic8800_fdrv/;make clean;cd ..
-	cd aic_btusb/;make clean;cd ..
 	rm -rf modules.order Module.symvers .modules.order.cmd .Module.symvers.cmd .tmp_versions/

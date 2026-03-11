@@ -12,7 +12,7 @@
 #include "rwnx_defs.h"
 #include "ipc_host.h"
 #include "rwnx_prof.h"
-
+#include "rwnx_irqs.h"
 /**
  * rwnx_irq_hdlr - IRQ handler
  *

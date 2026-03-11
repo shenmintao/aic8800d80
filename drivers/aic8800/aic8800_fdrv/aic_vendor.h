@@ -2,6 +2,7 @@
 #define _AIC_VENDOR_H
 
 #include <linux/types.h>
+#include "rwnx_defs.h"
 
 #define GOOGLE_OUI     0x001A11
 #define BRCM_OUI       0x001018
@@ -341,6 +342,11 @@ typedef struct wl_mkeep_alive_pkt {
 	u8  keep_alive_id; /* 0 - 3 for N = 4 */
 	u8  data[1];
 } wl_mkeep_alive_pkt_t;
+
+int aic_dev_start_mkeep_alive(struct rwnx_hw *rwnx_hw, struct rwnx_vif *rwnx_vif,
+			u8 mkeep_alive_id, u8 *ip_pkt, u16 ip_pkt_len, u8 *src_mac, u8 *dst_mac, u32 period_msec);
+int aic_dev_stop_mkeep_alive(struct rwnx_hw *rwnx_hw, struct rwnx_vif *rwnx_vif, u8 mkeep_alive_id);
+int aicwf_vendor_init(struct wiphy *wiphy);
 
 #endif /* _AIC_VENDOR_H */
 

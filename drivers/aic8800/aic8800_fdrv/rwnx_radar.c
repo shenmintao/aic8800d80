@@ -182,28 +182,27 @@ static const struct radar_types fcc_radar_types = {
 };
 
 #define JP_PATTERN FCC_PATTERN
+//JP_PATTERN(1,  2,	8, 3846, 3846, 1, 18, RADAR_WAVEFORM_SHORT),
 static const struct radar_detector_specs jp_radar_ref_types_riu[] = {
-    JP_PATTERN(0,  0,   8, 1428, 1428, 1, 18, RADAR_WAVEFORM_SHORT),
-    JP_PATTERN(1,  2,   8, 3846, 3846, 1, 18, RADAR_WAVEFORM_SHORT),
-    JP_PATTERN(2,  0,   8, 1388, 1388, 1, 18, RADAR_WAVEFORM_SHORT),
-    JP_PATTERN(3,  0,   8, 4000, 4000, 1, 18, RADAR_WAVEFORM_SHORT),
-    JP_PATTERN(4,  0,   8,  150,  230, 1, 23, RADAR_WAVEFORM_SHORT),
-    JP_PATTERN(5,  6,  20,  200,  500, 1, 16, RADAR_WAVEFORM_SHORT),
-    JP_PATTERN(6, 10,  28,  200,  500, 1, 12, RADAR_WAVEFORM_SHORT),
-    JP_PATTERN(7, 50, 110, 1000, 2000, 1,  8, RADAR_WAVEFORM_LONG),
-    JP_PATTERN(8,  0,   8,  333,  333, 1,  9, RADAR_WAVEFORM_SHORT),
+	JP_PATTERN(0,  0,   4, 1388, 1388, 1, 18, RADAR_WAVEFORM_SHORT),
+	JP_PATTERN(1,  0,   4, 1428, 1428, 1, 18, RADAR_WAVEFORM_SHORT),
+	JP_PATTERN(2,  0,   4, 4000, 4000, 1, 18, RADAR_WAVEFORM_SHORT),
+	JP_PATTERN(3,  0,   6,  150,  230, 1, 23, RADAR_WAVEFORM_SHORT),
+	JP_PATTERN(4,  6,  12,  200,  500, 1, 16, RADAR_WAVEFORM_SHORT),
+	JP_PATTERN(5, 10,  22,  200,  500, 1, 12, RADAR_WAVEFORM_SHORT),
+	JP_PATTERN(6, 48, 110, 1000, 2000, 1,  8, RADAR_WAVEFORM_LONG),
+	JP_PATTERN(7,  0,   4,  333,  333, 1,  9, RADAR_WAVEFORM_SHORT),
 };
 
 static const struct radar_detector_specs jp_radar_ref_types_fcu[] = {
-    JP_PATTERN(0,  0,   8, 1428, 1428, 1, 18, RADAR_WAVEFORM_SHORT),
-    JP_PATTERN(1,  2,   6, 3846, 3846, 1, 18, RADAR_WAVEFORM_SHORT),
-    JP_PATTERN(2,  0,   8, 1388, 1388, 1, 18, RADAR_WAVEFORM_SHORT),
-    JP_PATTERN(3,  2,   2, 4000, 4000, 1, 18, RADAR_WAVEFORM_SHORT),
-    JP_PATTERN(4,  0,   8,  150,  230, 1, 23, RADAR_WAVEFORM_SHORT),
-    JP_PATTERN(5,  6,  12,  200,  500, 1, 16, RADAR_WAVEFORM_SHORT),
-    JP_PATTERN(6, 10,  22,  200,  500, 1, 12, RADAR_WAVEFORM_SHORT),
-    JP_PATTERN(7, 50, 104, 1000, 2000, 1,  8, RADAR_WAVEFORM_LONG),
-    JP_PATTERN(8,  0,   8,  333,  333, 1,  9, RADAR_WAVEFORM_SHORT),
+	JP_PATTERN(0,  0,   4, 1388, 1388, 1, 18, RADAR_WAVEFORM_SHORT),
+	JP_PATTERN(1,  0,   4, 1428, 1428, 1, 18, RADAR_WAVEFORM_SHORT),
+	JP_PATTERN(2,  0,   4, 4000, 4000, 1, 18, RADAR_WAVEFORM_SHORT),
+	JP_PATTERN(3,  0,   6,  150,  230, 1, 23, RADAR_WAVEFORM_SHORT),
+	JP_PATTERN(4,  6,  12,  200,  500, 1, 16, RADAR_WAVEFORM_SHORT),
+	JP_PATTERN(5, 10,  22,  200,  500, 1, 12, RADAR_WAVEFORM_SHORT),
+	JP_PATTERN(6, 48, 110, 1000, 2000, 1,  8, RADAR_WAVEFORM_LONG),
+	JP_PATTERN(7,  0,   4,  333,  333, 1,  9, RADAR_WAVEFORM_SHORT),
 };
 
 static const struct radar_types jp_radar_types = {
@@ -218,33 +217,6 @@ static const struct radar_types *dfs_domains[] = {
     &fcc_radar_types,
     &jp_radar_types,
 };
-
-
-/**
- * struct pri_sequence - sequence of pulses matching one PRI
- * @head: list_head
- * @pri: pulse repetition interval (PRI) in usecs
- * @dur: duration of sequence in usecs
- * @count: number of pulses in this sequence
- * @count_falses: number of not matching pulses in this sequence
- * @first_ts: time stamp of first pulse in usecs
- * @last_ts: time stamp of last pulse in usecs
- * @deadline_ts: deadline when this sequence becomes invalid (first_ts + dur)
- * @ppb_thresh: Number of pulses to validate detection
- *              (need for weather radar whose value depends of pri)
- */
-struct pri_sequence {
-    struct list_head head;
-    u32 pri;
-    u32 dur;
-    u32 count;
-    u32 count_falses;
-    u64 first_ts;
-    u64 last_ts;
-    u64 deadline_ts;
-    u8 ppb_thresh;
-};
-
 
 /**
  * struct pulse_elem - elements in pulse queue
@@ -804,9 +776,9 @@ struct pri_sequence *pde_long_add_pulse(struct rwnx_radar *radar, struct pri_det
     struct pri_sequence *ps;
     const struct radar_detector_specs *rs = pde->rs;
 
-    if(radar->status != RWNX_RADAR_CAC_BUSY) {
-        return NULL;
-    }
+	//if(radar->status != RWNX_RADAR_CAC_BUSY) {
+	//	return NULL;
+	//}
 
     if (list_empty(&pde->sequences)) {
         /* First pulse, create a new sequence */
@@ -1407,6 +1379,29 @@ static void rwnx_radar_process_pulse(struct work_struct *ws)
                 rm->ts[rm->idx] = dpd->last_pulse_ts + pri;
             }
             rm->idx = (rm->idx + 1) % RWNX_RADARR_DUMP_NB;
+
+			if(rm->cnt == 1)
+			{
+				struct radar_detector_specs *spc;
+				int k;
+				AICWFDBG(LOGINFO, "dpd: en = %d, region = %d, ntype = %d", dpd->enabled, dpd->region, dpd->num_radar_types);
+				AICWFDBG(LOGINFO, "id  wid.{min, max}  pri.{min, max, num}, ppb, thd, tlrn, type");
+				for (k = 0; k < dpd->num_radar_types; k++)
+				{
+				spc =(struct radar_detector_specs *)&dpd->radar_spec[k];
+				AICWFDBG(LOGINFO, "%d       %3d, %3d        %4d  %4d  %d    %2d   %2d    %d     %d", 
+				spc->type_id,
+				spc->width_min,
+				spc->width_max,
+				spc->pri_min,
+				spc->pri_max,
+				spc->num_pri,
+				spc->ppb,
+				spc->ppb_thresh,
+				spc->max_pri_tolerance,
+				spc->type);
+				}
+			}
         }
     #endif
         if((radar->status != RWNX_RADAR_CAC_BUSY) && (radar->status != RWNX_RADAR_INSERVICE_BUSY)) {
@@ -1602,6 +1597,7 @@ void rwnx_radar_start_cac(struct rwnx_radar *radar, u32 cac_time_ms,
 {
     WARN(radar->cac_vif != NULL, "CAC already in progress");
     radar->cac_vif = vif;
+	AICWFDBG(LOGINFO, "%s DFS: cac time = %u ms", __func__, cac_time_ms);
     schedule_delayed_work(&radar->cac_work, msecs_to_jiffies(cac_time_ms));
 }
 
@@ -1714,8 +1710,8 @@ int rwnx_radar_dump_pattern_detector(char *buf, size_t len,
             }
             size_needed += sizeof(info);
 
-        return size_needed;
         }
+		return size_needed;
     }
 
     /* */
