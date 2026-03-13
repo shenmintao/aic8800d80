@@ -16,11 +16,17 @@
 
 /* USB Device ID */
 #define USB_VENDOR_ID_AIC                0xA69C
-#define USB_VENDOR_ID_AIC_V2             0x368B
+#define USB_VENDOR_ID_TP                 0x2357
 #define USB_VENDOR_ID_TENDA              0x2604
 #define USB_VENDOR_ID_TENDA_V2           0x3625
+#define USB_VENDOR_ID_AIC_V2             0x368B
 
+#define USB_PRODUCT_ID_TP               0x014e
+#define USB_PRODUCT_ID_MERCURY          0x014b
+#define USB_PRODUCT_ID_FAST             0x014f
 
+#define USB_PRODUCT_ID_TENDA_U11        0x001f
+#define USB_PRODUCT_ID_TENDA_U11_PRO    0x0020
 #ifndef CONFIG_USB_BT
 #define USB_PRODUCT_ID_AIC8800          0x8800
 #define USB_PRODUCT_ID_AIC8801          0x8801
@@ -39,8 +45,6 @@
 #define USB_PRODUCT_ID_AIC8800D89X2     0x8d99
 #define USB_PRODUCT_ID_TENDA            0x0013
 #define USB_PRODUCT_ID_TENDA_U2         0x0014
-#define USB_PRODUCT_ID_TENDA_U11        0x001f
-#define USB_PRODUCT_ID_TENDA_U11_PRO    0x0020
 #define USB_PRODUCT_ID_TENDA_TX1U_NANO  0x0110
 #define USB_PRODUCT_ID_AIC8800FC_CUS1   0x88df
 #define USB_PRODUCT_ID_AIC8800FC_CUS2   0x88E0
