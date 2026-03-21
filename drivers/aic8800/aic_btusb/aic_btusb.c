@@ -988,22 +988,17 @@ static int hci_recv_frame(struct sk_buff *skb)
         return -ENXIO;
     }
 
-    /* Incomming skb */
+    /* Incoming skb */
     bt_cb(skb)->incoming = 1;
 
     /* Time stamp */
     __net_timestamp(skb);
 
-    if (atomic_read(&hdev->promisc)) {
-		if(bt_cb(skb)->pkt_type == HCI_EVENT_PKT){
-			if(bypass_event(skb)){
-				kfree_skb(skb);
-				return 0;
-			}
-		}
-		/* Send copy to the sockets */
-		hci_send_to_stack(hdev, skb);
-    }
+    /* Always pass to the kernel HCI stack - this is essential for
+     * proper BR/EDR pairing, bonding, and reconnection to work.
+     * The old code only sent to stack when promisc was set, which
+     * broke bonding and reconnection in BlueZ. */
+    hci_send_to_stack(hdev, skb);
 
     kfree_skb(skb);
     return 0;
@@ -2884,6 +2879,12 @@ static struct aicbt_info_t aicbt_info[] = {
         .txpwr_lvl     = AICBT_TXPWR_LVL_DEFAULT,
     },//PRODUCT_ID_AIC8800D80N
     {
+        .btmode        = AICBT_BTMODE_DEFAULT,
+        .btport        = AICBT_BTPORT_DEFAULT,
+        .uart_baud     = AICBT_UART_BAUD_DEFAULT,
+        .uart_flowctrl = AICBT_UART_FC_DEFAULT,
+        .lpm_enable    = AICBT_LPM_ENABLE_DEFAULT,
+        .txpwr_lvl     = AICBT_TXPWR_LVL_DEFAULT,
     },//PRODUCT_ID_AIC8800D80
     {
     },//PRODUCT_ID_AIC8800D80X2
@@ -2952,7 +2953,7 @@ static int patch_table_load(firmware_info *fw_info, struct aicbt_patch_table *_h
                 memcpy(&patch_table_cmd->patch_table_addr[i], data, sizeof(uint32_t));
                 memcpy(&patch_table_cmd->patch_table_data[i], data + 1, sizeof(uint32_t));
                 //printk("[%d] data: %08x %08x\n", i, patch_table_cmd->patch_table_addr[i],patch_table_cmd->patch_table_data[i]);
-                if (g_chipid == PRODUCT_ID_AIC8800D80N) {
+                if (g_chipid == PRODUCT_ID_AIC8800D80N || g_chipid == PRODUCT_ID_AIC8800D80) {
                     ret = rwnx_send_dbg_mem_write_req(fw_info, patch_table_cmd->patch_table_addr[i],patch_table_cmd->patch_table_data[i]);
                     if (ret) {
                         printk("%s err %d\n", __func__, ret);
@@ -3068,6 +3069,8 @@ static int aic_load_firmware(u8 ** fw_buf, const char *name, struct device *devi
             len = snprintf(path, FW_PATH_MAX, "%s/%s/%s",aic_default_fw_path, "aic8800DC", name);
         } else if (g_chipid == PRODUCT_ID_AIC8800D80N) {
             len = snprintf(path, FW_PATH_MAX, "%s/%s/%s",aic_default_fw_path, "aic8800D80N", name);
+        } else if (g_chipid == PRODUCT_ID_AIC8800D80) {
+            len = snprintf(path, FW_PATH_MAX, "%s/%s/%s",aic_default_fw_path, "aic8800D80", name);
         } else {
             printk("%s unknown chipid %d\n", __func__, g_chipid);
         }
@@ -3336,7 +3339,7 @@ static int aicbt_ext_patch_data_load(firmware_info *fw_info, struct aicbt_patch_
     uint32_t id = 0;
     uint32_t addr = 0;
 
-    if (ext_patch_nb > 0){
+    if (ext_patch_nb > 0 && aicbt_fw->bt_ext_patch != NULL){
         for (index = 0; index < patch_info->ext_patch_nb; index++){
             id = *(patch_info->ext_patch_param + (index * 2));
             addr = *(patch_info->ext_patch_param + (index * 2) + 1); 
@@ -3551,6 +3554,8 @@ static int download_patch(firmware_info *fw_info, int cached)
                     } else {
                         aicbt_fw = &fw_8800d80n[sub_chip_id];
                     }
+                } else if (g_chipid == PRODUCT_ID_AIC8800D80) {
+                    aicbt_fw = &fw_8800d80[sub_chip_id];
                 } else {
                     goto free;
                 }
@@ -3586,6 +3591,17 @@ static int download_patch(firmware_info *fw_info, int cached)
             ret = rwnx_send_dbg_mem_write_req(fw_info, 0x40509000, 0x00040000);
         }
 
+        if (g_chipid == PRODUCT_ID_AIC8800D80) {
+            printk("%s [0x40506004]: 0x04318000\r\n", __func__);
+            ret = rwnx_send_dbg_mem_write_req(fw_info, 0x40506004, 0x04318000);
+            printk("%s [0x40506004]: 0x04338000\r\n", __func__);
+            ret = rwnx_send_dbg_mem_write_req(fw_info, 0x40506004, 0x04338000);
+            if(ret < 0){
+                printk("%s set d80 enable fail\r\n", __func__);
+                return ret;
+            }
+        }
+
         //step 1 get patch table data
         head = aicbt_patch_table_alloc(aicbt_fw->bt_table);
         if (head == NULL){
@@ -3605,6 +3621,7 @@ static int download_patch(firmware_info *fw_info, int cached)
             printk("aic load patch table fail\n");
             goto free;
         }
+        aicbt_patch_table_free(&head);
         printk("%s download complete\r\n", __func__);
 
     }
@@ -4399,15 +4416,17 @@ done:
 #if LINUX_VERSION_CODE > KERNEL_VERSION(4, 0, 9)
 static int btusb_shutdown(struct hci_dev *hdev)
 {
-	struct sk_buff *skb;
     printk("aic %s\n", __func__);
 
-	skb = __hci_cmd_sync(hdev, HCI_OP_RESET, 0, NULL, HCI_INIT_TIMEOUT);
-	if (IS_ERR(skb)) {
-		printk("HCI reset during shutdown failed\n");
-		return PTR_ERR(skb);
-	}
-	kfree_skb(skb);
+    /*
+     * Do NOT send HCI_OP_RESET here. The AIC8800D80 chip loses all
+     * internal state (link keys, bonding info) on reset, and btusb_open
+     * does not re-download firmware. This caused devices to never
+     * reconnect after BlueZ powered off/on the adapter.
+     *
+     * The chip will be properly re-initialized on the next open via
+     * the firmware download in btusb_probe's download_patch path.
+     */
 
     return 0;
 }
@@ -4428,7 +4447,7 @@ static int btusb_open(struct hci_dev *hdev)
     data->intf->needs_remote_wakeup = 1;
 
 #if (CONFIG_BLUEDROID == 0)
-		//err = download_patch(data->fw_info,1);
+		err = download_patch(data->fw_info,1);
 		printk(" download_patch %d", err);
 		if (err < 0) {
 			goto failed;
@@ -5121,7 +5140,7 @@ static int btusb_probe(struct usb_interface *intf, const struct usb_device_id *i
 #if CONFIG_BLUEDROID
     mutex_lock(&btchr_mutex);
 #endif
-	if(g_chipid == PRODUCT_ID_AIC8800DC || g_chipid == PRODUCT_ID_AIC8800D80N){
+	if(g_chipid == PRODUCT_ID_AIC8800DC || g_chipid == PRODUCT_ID_AIC8800D80N || g_chipid == PRODUCT_ID_AIC8800D80){
 		err = download_patch(data->fw_info,1);
 	}
 
@@ -5172,6 +5191,12 @@ static int btusb_probe(struct usb_interface *intf, const struct usb_device_id *i
         /* set_bit(HCI_QUIRK_RESET_ON_CLOSE, &hdev->quirks); */
         AICBT_DBG("%s: Set HCI_QUIRK_RESET_ON_CLOSE", __func__);
     }
+    /*
+     * Mark setup as non-persistent so BlueZ re-sends link keys
+     * and other setup commands after each HCI reset/power cycle.
+     * Without this, devices couldn't reconnect after toggling BT.
+     */
+    hci_set_quirk(hdev, HCI_QUIRK_NON_PERSISTENT_SETUP);
 #endif
 
     /* Interface numbers are hardcoded in the specification */
@@ -5389,7 +5414,7 @@ static int btusb_resume(struct usb_interface *intf)
     #endif
 
     AICBT_INFO("%s g_chipid %x\n", __func__, g_chipid);
-    if(g_chipid == PRODUCT_ID_AIC8800DC){
+    if(g_chipid == PRODUCT_ID_AIC8800DC || g_chipid == PRODUCT_ID_AIC8800D80){
         if(data->fw_info){
             err = download_patch(data->fw_info,1);
         }else{

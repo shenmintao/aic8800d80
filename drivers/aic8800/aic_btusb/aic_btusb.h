@@ -36,10 +36,8 @@
 #include <linux/suspend.h>
 
 
-#ifdef CONFIG_PLATFORM_UBUNTU
-#define CONFIG_BLUEDROID        1 /* bleuz 0, bluedroid 1, lbh 2 */
-#else
-#define CONFIG_BLUEDROID        1 /* bleuz 0, bluedroid 1, lbh 2 */
+#ifndef CONFIG_BLUEDROID
+#define CONFIG_BLUEDROID        0 /* Fixed: use kernel HCI stack for BlueZ */
 #endif
 
 #if CONFIG_BLUEDROID == 1
@@ -762,6 +760,30 @@ const struct aicbt_firmware fw_8800d80n_rf[] = {
     },
 };
 
+
+const struct aicbt_firmware fw_8800d80[] = {
+    [DC_U01] = {
+        .desc          = "aic8800d80 u01 bt patch",
+        .bt_adid       = "fw_adid_8800d80_u02.bin",
+        .bt_patch      = "fw_patch_8800d80_u02.bin",
+        .bt_table      = "fw_patch_table_8800d80_u02.bin",
+        .bt_ext_patch  = "fw_patch_8800d80_u02_ext"
+    },
+    [DC_U02] = {
+        .desc          = "aic8800d80 u02 bt patch",
+        .bt_adid       = "fw_adid_8800d80_u02.bin",
+        .bt_patch      = "fw_patch_8800d80_u04.bin",
+        .bt_table      = "fw_patch_table_8800d80_u04.bin",
+        .bt_ext_patch  = NULL
+    },
+    [DC_U02H] = {
+        .desc          = "aic8800d80 u02h bt patch",
+        .bt_adid       = "fw_adid_8800d80_u02.bin",
+        .bt_patch      = "fw_patch_8800d80_u04.bin",
+        .bt_table      = "fw_patch_table_8800d80_u04.bin",
+        .bt_ext_patch  = NULL
+    },
+};
 
 #define HCI_VSC_FW_STATUS_GET_CMD          0xFC78
 
