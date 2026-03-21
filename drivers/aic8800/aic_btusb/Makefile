@@ -66,6 +66,9 @@ ifeq ($(CONFIG_PLATFORM_MTK_LINUX), y)
         ccflags-$(CONFIG_PLATFORM_MTK_LINUX) += -DCONFIG_PLATFORM_MTK_LINUX
 endif
 
+# Use native kernel HCI stack (not Android Bluedroid)
+ccflags-y += -DCONFIG_BLUEDROID=0
+
 all: modules
 modules:
 	make -C $(KDIR) M=$(PWD) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) modules
