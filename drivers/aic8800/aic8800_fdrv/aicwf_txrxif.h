@@ -23,7 +23,7 @@
 #define DATA_BUF_MAX                2048
 #define TXPKT_BLOCKSIZE             512
 #define MAX_AGGR_TXPKT_LEN          (1536*64)
-#define CMD_TX_TIMEOUT              2000
+#define CMD_TX_TIMEOUT              5000
 #define TX_ALIGNMENT                4
 
 #ifdef CONFIG_USB_TX_AGGR
@@ -155,7 +155,7 @@ struct aicwf_tx_priv {
 #define DEFRAG_MAX_WAIT         40 //100
 #ifdef AICWF_RX_REORDER
 #define MAX_REORD_RXFRAME       250
-#define REORDER_UPDATE_TIME     500//50
+#define REORDER_UPDATE_TIME     50
 #define AICWF_REORDER_WINSIZE   64
 //SN_LESS(a, b) a-b<0 is ture
 #define SN_LESS(a, b)           (((a-b)&0x800)!=0)
@@ -307,6 +307,7 @@ void aicwf_rxframe_queue_init_2(struct rx_frame_queue *pq, int max_len);
 void rxbuff_free(struct rx_buff *rxbuff);
 struct rx_buff *rxbuff_dequeue(struct rx_frame_queue *pq);
 bool aicwf_rxbuff_enqueue(struct device *dev, struct rx_frame_queue *rxq, struct rx_buff *pkt);
+struct rx_buff *rxbuff_queue_penq(struct rx_frame_queue *pq, struct rx_buff *p);
 extern struct aicwf_rx_buff_list aic_rx_buff_list;
 #endif
 

@@ -11,8 +11,6 @@
  */
 
 #include <linux/netdevice.h>
-#include <linux/etherdevice.h>
-#include <linux/vmalloc.h>
 #include <linux/ctype.h>
 #include "rwnx_defs.h"
 #include "rwnx_msg_tx.h"
@@ -90,6 +88,7 @@ enum {
 	EXEC_FLASH_OPER,
 	RDWR_PWRADD2X,
 	RDWR_EFUSE_PWRADD2X,
+	GET_RSSI=0x52,
 	CHECK_FLASH=0x108,
 };
 
@@ -342,7 +341,7 @@ static int aic_priv_cmd_set_tx (struct rwnx_hw *rwnx_hw, int argc, char *argv[],
 	AICWFDBG(LOGINFO, "txparam:%d,%d,%d,%d,%d,%d\n", settx_param.chan, settx_param.bw,
 		settx_param.mode, settx_param.rate, settx_param.length, settx_param.tx_intv_us);
 #ifdef CONFIG_POWER_LIMIT
-	r_idx = get_ccode_region(country_code);
+	r_idx = get_ccode_region(rwnx_hw->wiphy->regd->alpha2);
 	txpwr_loss = &txpwr_loss_tmp;
 	get_userconfig_txpwr_loss(txpwr_loss);
 	if (txpwr_loss->loss_enable_2g4 == 1)
@@ -797,7 +796,10 @@ static int aic_priv_cmd_rdwr_pwrlvl (struct rwnx_hw *rwnx_hw, int argc, char *ar
 		AICWFDBG(LOGERROR, "wrong func: %x\n", func);
 		return -EINVAL;
 	}
-	if((dev->chipid == PRODUCT_ID_AIC8800D81) || (dev->chipid == PRODUCT_ID_AIC8800D81X2) || (dev->chipid == PRODUCT_ID_AIC8800D89X2)){
+	if((dev->chipid == PRODUCT_ID_AIC8800D81)||
+	    (dev->chipid == PRODUCT_ID_AIC8800D81X2) ||
+	    (dev->chipid == PRODUCT_ID_AIC8800D89X2) ||
+	    (dev->chipid == PRODUCT_ID_AIC8800D80N)) {
 		memcpy(command, &cfm.rftest_result[0], 6 * 12);
 		return (6 * 12);
 	} else {
@@ -823,16 +825,19 @@ static int aic_priv_cmd_rdwr_pwrofst (struct rwnx_hw *rwnx_hw, int argc, char *a
 	if (func == 0) { // read cur
 		rwnx_send_rftest_req(rwnx_hw, RDWR_PWROFST, 0, NULL, &cfm);
 	} else if (func <= 4) { // write 2.4g/5g pwr ofst and ant0/1
-		if ((argc > 4) && ((dev->chipid == PRODUCT_ID_AIC8800D81) || (dev->chipid == PRODUCT_ID_AIC8800D81X2) || (dev->chipid == PRODUCT_ID_AIC8800D89X2))) {
+		if ((argc > 4) && ((dev->chipid == PRODUCT_ID_AIC8800D81) ||
+						(dev->chipid == PRODUCT_ID_AIC8800D81X2) ||
+						(dev->chipid == PRODUCT_ID_AIC8800D89X2) ||
+						(dev->chipid == PRODUCT_ID_AIC8800D80N))) {
 			u8_l type = (u8_l)command_strtoul(argv[2], NULL, 16);
 			u8_l chgrp = (u8_l)command_strtoul(argv[3], NULL, 16);
-			s8_l pwrofst = (u8_l)command_strtoul(argv[4], NULL, 10);
+			s8_l pwrofst = (s8_l)command_strtoul(argv[4], NULL, 10);
 			u8_l buf[4] = {func, type, chgrp, (u8_l)pwrofst};
 			AICWFDBG(LOGINFO, "set pwrofst_%s:[%x][%x]=%d\r\n", (func == 1) ? "2.4g" : "5g", type, chgrp, pwrofst);
 			rwnx_send_rftest_req(rwnx_hw, RDWR_PWROFST, sizeof(buf), buf, &cfm);
-		} else if ((argc > 3) && ((dev->chipid == PRODUCT_ID_AIC8801) || (dev->chipid == PRODUCT_ID_AIC8800DW) || (dev->chipid == PRODUCT_ID_AIC8800DC))) {
+		} else if ((argc > 3) && ((dev->chipid == PRODUCT_ID_AIC8801) || (dev->chipid == PRODUCT_ID_AIC8800DW) || (dev->chipid == PRODUCT_ID_AIC8800DC) || (dev->chipid == PRODUCT_ID_AIC8800DLN))) {
 			u8_l chgrp = (u8_l)command_strtoul(argv[2], NULL, 16);
-			s8_l pwrofst = (u8_l)command_strtoul(argv[3], NULL, 10);
+			s8_l pwrofst = (s8_l)command_strtoul(argv[3], NULL, 10);
 			u8_l buf[3] = {func, chgrp, (u8_l)pwrofst};
 			AICWFDBG(LOGINFO, "set pwrofst_%s:[%x]=%d\r\n", (func == 1) ? "2.4g" : "5g", chgrp, pwrofst);
 			rwnx_send_rftest_req(rwnx_hw, RDWR_PWROFST, sizeof(buf), buf, &cfm);
@@ -843,9 +848,9 @@ static int aic_priv_cmd_rdwr_pwrofst (struct rwnx_hw *rwnx_hw, int argc, char *a
 		AICWFDBG(LOGERROR, "wrong func: %x\n", func);
 		return -EINVAL;
 	}
-	if ((dev->chipid == PRODUCT_ID_AIC8800DC) || (dev->chipid == PRODUCT_ID_AIC8800DW)) { // 3 = 3 (2.4g)
+	if ((dev->chipid == PRODUCT_ID_AIC8800DC) || (dev->chipid == PRODUCT_ID_AIC8800DW) || (dev->chipid == PRODUCT_ID_AIC8800DLN)) { // 3 = 3 (2.4g)
 		res_len = 3;
-	} else if (dev->chipid == PRODUCT_ID_AIC8800D81) { // 3 * 2 (2.4g) + 3 * 6 (5g)
+	} else if ((dev->chipid == PRODUCT_ID_AIC8800D81) || (dev->chipid == PRODUCT_ID_AIC8800D80N)) { // 3 * 2 (2.4g) + 3 * 6 (5g)
 		res_len = 3 * 3 + 3 * 6;
 	} else if ((dev->chipid == PRODUCT_ID_AIC8800D81X2) || (dev->chipid == PRODUCT_ID_AIC8800D89X2)) { // ant0/1
 		res_len = ( 3 * 3 + 3 * 6 ) * 2;
@@ -868,7 +873,7 @@ static int aic_priv_cmd_rdwr_pwrofstfine (struct rwnx_hw *rwnx_hw, int argc, cha
 	} else if (func <= 2) { // write 2.4g/5g pwr ofst
 		if (argc > 3) {
 			u8_l chgrp = (u8_l)command_strtoul(argv[2], NULL, 16);
-			s8_l pwrofst = (u8_l)command_strtoul(argv[3], NULL, 10);
+			s8_l pwrofst = (s8_l)command_strtoul(argv[3], NULL, 10);
 			u8_l buf[3] = {func, chgrp, (u8_l)pwrofst};
 			AICWFDBG(LOGINFO, "set pwrofstfine:[%x][%x]=%d\r\n", func, chgrp, pwrofst);
 			rwnx_send_rftest_req(rwnx_hw, RDWR_PWROFSTFINE, sizeof(buf), buf, &cfm);
@@ -930,16 +935,17 @@ static int aic_priv_cmd_rdwr_efuse_pwrofst (struct rwnx_hw *rwnx_hw, int argc, c
 	if (func == 0) { // read cur
 		rwnx_send_rftest_req(rwnx_hw, RDWR_EFUSE_PWROFST, 0, NULL, &cfm);
 	} else if (func <= 4) { // write 2.4g/5g pwr ofst and ant0/1
-		if ((argc > 4) && ((dev->chipid == PRODUCT_ID_AIC8800D81) || (dev->chipid == PRODUCT_ID_AIC8800D81X2) || (dev->chipid == PRODUCT_ID_AIC8800D89X2))) {
+		if ((argc > 4) && ((dev->chipid == PRODUCT_ID_AIC8800D81) || (dev->chipid == PRODUCT_ID_AIC8800D81X2) || (dev->chipid == PRODUCT_ID_AIC8800D89X2)
+				|| (dev->chipid == PRODUCT_ID_AIC8800D80N))) {
 			u8_l type = (u8_l)command_strtoul(argv[2], NULL, 16);
 			u8_l chgrp = (u8_l)command_strtoul(argv[3], NULL, 16);
-			s8_l pwrofst = (u8_l)command_strtoul(argv[4], NULL, 10);
+			s8_l pwrofst = (s8_l)command_strtoul(argv[4], NULL, 10);
 			u8_l buf[4] = {func, type, chgrp, (u8_l)pwrofst};
 			AICWFDBG(LOGINFO, "set efuse pwrofst_%s:[%x][%x]=%d\r\n", (func == 1) ? "2.4g" : "5g", type, chgrp, pwrofst);
 			rwnx_send_rftest_req(rwnx_hw, RDWR_EFUSE_PWROFST, sizeof(buf), buf, &cfm);
-		} else if ((argc > 3) && ((dev->chipid == PRODUCT_ID_AIC8801) || (dev->chipid == PRODUCT_ID_AIC8800DW) || (dev->chipid == PRODUCT_ID_AIC8800DC))) {
+		} else if ((argc > 3) && ((dev->chipid == PRODUCT_ID_AIC8801) || (dev->chipid == PRODUCT_ID_AIC8800DW) || (dev->chipid == PRODUCT_ID_AIC8800DC) || (dev->chipid == PRODUCT_ID_AIC8800DLN))) {
 			u8_l chgrp = (u8_l)command_strtoul(argv[2], NULL, 16);
-			s8_l pwrofst = (u8_l)command_strtoul(argv[3], NULL, 10);
+			s8_l pwrofst = (s8_l)command_strtoul(argv[3], NULL, 10);
 			u8_l buf[3] = {func, chgrp, (u8_l)pwrofst};
 			AICWFDBG(LOGINFO, "set efuse pwrofst_%s:[%x]=%d\r\n", (func == 1) ? "2.4g" : "5g", chgrp, pwrofst);
 			rwnx_send_rftest_req(rwnx_hw, RDWR_EFUSE_PWROFST, sizeof(buf), buf, &cfm);
@@ -951,9 +957,9 @@ static int aic_priv_cmd_rdwr_efuse_pwrofst (struct rwnx_hw *rwnx_hw, int argc, c
 		AICWFDBG(LOGERROR, "wrong func: %x\n", func);
 		return -EINVAL;
 	}
-	if ((dev->chipid == PRODUCT_ID_AIC8800DC) || (dev->chipid == PRODUCT_ID_AIC8800DW)) { // 6 = 3 (2.4g) * 2
+	if ((dev->chipid == PRODUCT_ID_AIC8800DC) || (dev->chipid == PRODUCT_ID_AIC8800DW) || (dev->chipid == PRODUCT_ID_AIC8800DLN)) { // 6 = 3 (2.4g) * 2
 		res_len = 3 * 2;
-	} else if (dev->chipid == PRODUCT_ID_AIC8800D81) { // 3 * 2 (2.4g) + 3 * 6 (5g)
+	} else if ((dev->chipid == PRODUCT_ID_AIC8800D81) || (dev->chipid == PRODUCT_ID_AIC8800D80N)) { // 3 * 2 (2.4g) + 3 * 6 (5g)
 		res_len = (3 * 3 + 3 * 6) * 2;
 	} else if((dev->chipid == PRODUCT_ID_AIC8800D81X2) || (dev->chipid == PRODUCT_ID_AIC8800D89X2)) { // 3 * 2 (2.4g) *2 + 3 * 6 (5g) *2
 		res_len = (3 * 3 + 3 * 6) * 2 * 2;
@@ -976,7 +982,7 @@ static int aic_priv_cmd_rdwr_efuse_pwrofstfine (struct rwnx_hw *rwnx_hw, int arg
 	} else if (func <= 2) { // write 2.4g/5g pwr ofst
 		if (argc > 3) {
 			u8_l chgrp = (u8_l)command_strtoul(argv[2], NULL, 16);
-			s8_l pwrofst = (u8_l)command_strtoul(argv[3], NULL, 10);
+			s8_l pwrofst = (s8_l)command_strtoul(argv[3], NULL, 10);
 			u8_l buf[3] = {func, chgrp, (u8_l)pwrofst};
 			AICWFDBG(LOGINFO, "set pwrofstfine:[%x][%x]=%d\r\n", func, chgrp, pwrofst);
 			rwnx_send_rftest_req(rwnx_hw, RDWR_EFUSE_PWROFSTFINE, sizeof(buf), buf, &cfm);
@@ -1273,6 +1279,49 @@ static int aic_priv_cmd_set_pll_test (struct rwnx_hw *rwnx_hw, int argc, char *a
 	return 0;
 }
 
+static int aic_priv_cmd_get_txpwr(struct rwnx_hw *rwnx_hw, int argc, char *argv[], char *command)
+{
+	s8_l power=0;
+	power = get_txpwr_max(power);
+	memcpy(command, &power, 1);
+	return 1;
+}
+
+static int aic_priv_cmd_set_txpwr_loss(struct rwnx_hw *rwnx_hw, int argc, char *argv[], char *command)
+{
+	s8_l func;
+#ifdef AICWF_SDIO_SUPPORT
+        struct aic_sdio_dev *dev = g_rwnx_plat->sdiodev;
+#endif
+#ifdef AICWF_USB_SUPPORT
+        struct aic_usb_dev *dev = g_rwnx_plat->usbdev;
+#endif
+
+	if (argc > 1) {
+		func = (s8_l)command_strtoul(argv[1], NULL, 10);
+		AICWFDBG(LOGINFO, "set txpwr loss: %d\n", func);
+		if (dev->chipid == PRODUCT_ID_AIC8800D81 ||
+			dev->chipid == PRODUCT_ID_AIC8800D80N){
+			set_txpwr_loss_ofst(func);
+			rwnx_send_txpwr_lvl_v3_req(dev->rwnx_hw);
+		}else if(dev->chipid == PRODUCT_ID_AIC8800D81X2 ||
+			dev->chipid == PRODUCT_ID_AIC8800D89X2){
+			set_txpwr_loss_ofst(func);
+			rwnx_send_txpwr_lvl_v4_req(dev->rwnx_hw);
+		}else if(dev->chipid == PRODUCT_ID_AIC8800DC ||
+			dev->chipid == PRODUCT_ID_AIC8800DW){
+			set_txpwr_loss_ofst(func);
+			rwnx_send_txpwr_lvl_req(dev->rwnx_hw);
+		}else{
+			AICWFDBG(LOGINFO, "error:don't support 8800D");
+		}
+	} else {
+		AICWFDBG(LOGERROR, "wrong args\n");
+		return -EINVAL;
+	}
+	return 0;
+}
+
 static int aic_priv_cmd_set_ant_mode (struct rwnx_hw *rwnx_hw, int argc, char *argv[], char *command)
 {
 	u8_l func = 0;
@@ -1339,6 +1388,12 @@ static int aic_priv_cmd_country_set(struct rwnx_hw *rwnx_hw, int argc,
 		AICWFDBG(LOGINFO, "%s param err\n", __func__);
 		return -1;
 	}
+
+	if (!rwnx_hw->mod_params->custregd) {
+		AICWFDBG(LOGERROR, "%s: invalid custregd\n", __func__);
+		return -1;
+	}
+
 
 	AICWFDBG(LOGINFO, "cmd country_set: %s\n", argv[1]);
 
@@ -1474,6 +1529,58 @@ static int aic_priv_cmd_check_flash(struct rwnx_hw *rwnx_hw, int argc, char *arg
     return 8;
 }
 
+static int aic_priv_cmd_get_rssi(struct rwnx_hw *rwnx_hw, int argc, char *argv[], char *command)
+{
+    rwnx_send_rftest_req(rwnx_hw, GET_RSSI, 0, NULL, &cfm);
+    memcpy(command, &cfm.rftest_result[0], 1);
+
+    AICWFDBG(LOGINFO, "get_rssi: %d\n", (char)cfm.rftest_result[0]);
+
+    return 1;
+}
+
+#ifdef CONFIG_DYNAMIC_PERPWR
+static int aic_priv_cmd_set_sta_thd(struct rwnx_hw *rwnx_hw, int argc, char *argv[], char *command)
+{
+	int i;
+	s8_l val;
+
+	if (argc < 3) {
+		AICWFDBG(LOGERROR, "%s: Invalid parameters (argc=%d)\n", __func__, argc);
+		return -EINVAL;
+	}
+
+	AICWFDBG(LOGDEBUG, "cmd set_sta_thd: %s, %s\n", argv[1], argv[2]);
+
+	val = (s8_l)command_strtoul(argv[2], NULL, 10);
+
+	struct {
+		const char *name;
+		s8_l *target;
+		size_t name_len;
+	} thd_map[] = {
+		{ "rssi_thd_0",     &rwnx_hw->pwrth.rssi_thd_0,     10 },
+		{ "rssi_thd_1",     &rwnx_hw->pwrth.rssi_thd_1,     10 },
+		{ "rssi_thd_2",     &rwnx_hw->pwrth.rssi_thd_2,     10 },
+		{ "pwr_loss_lvl_0", &rwnx_hw->pwrth.pwr_loss_lvl_0, 14 },
+		{ "pwr_loss_lvl_1", &rwnx_hw->pwrth.pwr_loss_lvl_1, 14 },
+		{ "pwr_loss_lvl_2", &rwnx_hw->pwrth.pwr_loss_lvl_2, 14 },
+		{ "pwr_loss_lvl_3", &rwnx_hw->pwrth.pwr_loss_lvl_3, 14 },
+	};
+
+	for (i = 0; i < ARRAY_SIZE(thd_map); i++) {
+		if (strncmp(argv[1], thd_map[i].name, thd_map[i].name_len) == 0) {
+			*thd_map[i].target = val;
+			AICWFDBG(LOGINFO, "%s: %s = %d\n", __func__, thd_map[i].name, val);
+			return 0;
+		}
+	}
+
+	AICWFDBG(LOGERROR, "%s: Unknown parameter '%s'\n", __func__, argv[1]);
+	return -EINVAL;
+}
+#endif
+
 static int aic_priv_cmd_help (struct rwnx_hw *rwnx_hw, int argc, char *argv[], char *command)
 {
 	print_help(argc > 0 ? argv[0] : NULL);
@@ -1575,6 +1682,10 @@ static const struct aic_priv_cmd aic_priv_commands[] = {
 	  "= off usb configure before usb disconnect" },
 	{ "set_pll_test", aic_priv_cmd_set_pll_test,
 	  "<func> <freq> <tx_pwr> = use pll test to measure saturation power" },
+	{ "get_txpwr", aic_priv_cmd_get_txpwr,
+	  "= get userconfig max txpwr" },
+	{ "set_txpwr_loss",aic_priv_cmd_set_txpwr_loss,
+	  "<val> = txpwr will change ,val can be negative" },
 	{ "set_ant", aic_priv_cmd_set_ant_mode,
 	  "<val> = 0/ant0, 1/ant1, 2/both" },
 	{ "rdwr_bt_efuse_pwrofst", aic_priv_cmd_rdwr_bt_efuse_pwrofst,
@@ -1589,6 +1700,11 @@ static const struct aic_priv_cmd aic_priv_commands[] = {
 	  "a value is added for both 2.4G and 5G to achieve overall power adjustment of the band, write to efuse"},
 	{"check_flash", aic_priv_cmd_check_flash,
 	  "check bin crc in flash" },
+	{"get_rssi", aic_priv_cmd_get_rssi, "get rssi"},
+#ifdef CONFIG_DYNAMIC_PERPWR
+	{"set_sta_thd", aic_priv_cmd_set_sta_thd,
+	  "set per_sta power threshold, (set_sta_thd rssi_thd_0 value; set_sta_thd pwr_loss_lvl_0 value)"},
+#endif
 
 //Reserve for new aic_priv_cmd.
 	{ "help", aic_priv_cmd_help,
@@ -1794,7 +1910,7 @@ int get_cs_info(struct rwnx_vif *vif, u8 *mac_addr, u8 *val)
 	}
 
     memset(&cs_info, 0, sizeof(struct aicwf_cs_info));
-    memcpy(cs_info.countrycode, country_code, 4);
+    memcpy(cs_info.countrycode, vif->rwnx_hw->wiphy->regd->alpha2, 2);
 
     if((sta == NULL) && (RWNX_VIF_TYPE(vif) == NL80211_IFTYPE_AP)) {
         sta  = &vif->rwnx_hw->sta_table[vif->ap.bcmc_index];
@@ -1940,6 +2056,11 @@ int android_priv_cmd(struct net_device *net, struct ifreq *ifr, int cmd)
 		strncasecmp(command, "country_set", strlen("country_set"))) {
 		skip = strlen(CMD_SET_COUNTRY) + 1;
 		country = command + skip;
+		if (!vif->rwnx_hw->mod_params->custregd) {
+			AICWFDBG(LOGERROR, "%s: invalid custregd\n", __func__);
+			ret = -EINVAL;
+			goto exit;
+		}
 		if (!country || strlen(country) < RWNX_COUNTRY_CODE_LEN) {
 			AICWFDBG(LOGERROR, "%s: invalid country code\n", __func__);
 			ret = -EINVAL;
@@ -1991,9 +2112,11 @@ int android_priv_cmd(struct net_device *net, struct ifreq *ifr, int cmd)
 		if(g_rwnx_plat && g_rwnx_plat->usbdev->rwnx_hw){
 			if (g_rwnx_plat->usbdev->chipid == PRODUCT_ID_AIC8800DW ||
 				(g_rwnx_plat->usbdev->chipid == PRODUCT_ID_AIC8800DC) ||
+				(g_rwnx_plat->usbdev->chipid == PRODUCT_ID_AIC8800DLN) ||
 				(g_rwnx_plat->usbdev->chipid == PRODUCT_ID_AIC8800D81) ||
 				(g_rwnx_plat->usbdev->chipid == PRODUCT_ID_AIC8800D81X2) ||
-				(g_rwnx_plat->usbdev->chipid == PRODUCT_ID_AIC8800D89X2)){
+				(g_rwnx_plat->usbdev->chipid == PRODUCT_ID_AIC8800D89X2) ||
+				(g_rwnx_plat->usbdev->chipid == PRODUCT_ID_AIC8800D80N)){
 				set_testmode(!testmode);
 				rwnx_send_reboot(g_rwnx_plat->usbdev->rwnx_hw);
 			}

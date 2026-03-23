@@ -71,10 +71,12 @@ typedef struct
     txpwr_lvl_conf_v3_t txpwr_lvl_v3;
     txpwr_lvl_conf_v4_t txpwr_lvl_v4;
     txpwr_lvl_adj_conf_t txpwr_lvl_adj;
+    txpwr_lvl_adj_conf_v2_t txpwr_lvl_adj_v2;
     txpwr_loss_conf_t txpwr_loss;
     txpwr_ofst_conf_t txpwr_ofst;
     txpwr_ofst2x_conf_t txpwr_ofst2x;
     txpwr_ofst2x_conf_v2_t txpwr_ofst2x_v2;
+    txpwr_ofst2x_conf_v3_t txpwr_ofst2x_v3;
     xtal_cap_conf_t xtal_cap;
 } userconfig_info_t;
 
@@ -85,6 +87,7 @@ typedef enum {
 	REGIONS_FCC,
 	REGIONS_ETSI,
 	REGIONS_JP,
+	REGIONS_KCC,
 	REGIONS_DEFAULT,
 } Regions_code;
 
@@ -156,10 +159,13 @@ void get_userconfig_txpwr_lvl_v2_in_fdrv(txpwr_lvl_conf_v2_t *txpwr_lvl_v2);
 void get_userconfig_txpwr_lvl_v3_in_fdrv(txpwr_lvl_conf_v3_t *txpwr_lvl_v3);
 void get_userconfig_txpwr_lvl_v4_in_fdrv(txpwr_lvl_conf_v4_t *txpwr_lvl_v4);
 void get_userconfig_txpwr_lvl_adj_in_fdrv(txpwr_lvl_adj_conf_t *txpwr_lvl_adj);
+void get_userconfig_txpwr_lvl_adj_v2_in_fdrv(txpwr_lvl_adj_conf_v2_t *txpwr_lvl_adj_v2);
 void get_userconfig_txpwr_ofst_in_fdrv(txpwr_ofst_conf_t *txpwr_ofst);
 void get_userconfig_txpwr_ofst2x_in_fdrv(txpwr_ofst2x_conf_t *txpwr_ofst2x);
 void get_userconfig_txpwr_ofst2x_v2_in_fdrv(txpwr_ofst2x_conf_v2_t *txpwr_ofst2x_v2);
+void get_userconfig_txpwr_ofst2x_v3_in_fdrv(txpwr_ofst2x_conf_v3_t *txpwr_ofst2x_v3);
 void get_userconfig_txpwr_loss(txpwr_loss_conf_t *txpwr_loss);
+s8_l get_txpwr_max(s8_l power);
 void set_txpwr_loss_ofst(s8_l value);
 void rwnx_plat_userconfig_parsing(char *buffer, int size);
 
@@ -169,7 +175,7 @@ u8 get_region_index(char * name);
 
 #ifdef CONFIG_POWER_LIMIT
 int8_t rwnx_plat_powerlimit_save(u8_l band, char *channel, u8_l bw, char *limit, char *name);
-void rwnx_plat_powerlimit_parsing(char *buffer, int size, char *cc);
+void rwnx_plat_powerlimit_parsing(char *buffer, int size);
 int8_t get_powerlimit_by_freq(uint8_t band, uint16_t freq, uint8_t r_idx);
 int8_t get_powerlimit_by_chnum(uint8_t chnum, uint8_t r_idx, uint8_t bw);
 #endif
@@ -182,5 +188,17 @@ static inline unsigned int rwnx_platform_get_irq(struct rwnx_plat *rwnx_plat)
 {
     return rwnx_plat->pci_dev->irq;
 }
+int rwnx_request_firmware_common(struct rwnx_hw *rwnx_hw, u32** buffer, const char *filename);
+void rwnx_release_firmware_common(u32** buffer);
+int rwnx_plat_bin_fw_upload_2(struct rwnx_hw *rwnx_hw, u32 fw_addr,
+                               char *filename);
+int rwnx_plat_bin_fw_upload_2_with_version(struct rwnx_hw *rwnx_hw, u32 fw_addr,
+                               char *filename, char *version_str, int version_size);
+int rwnx_atoi2(char *value, int c_len);
+int rwnx_atoi(char *value);
+void get_userconfig_xtal_cap(xtal_cap_conf_t *xtal_cap);
+void rwnx_plat_nvram_set_value(char *command, char *value);
+void rwnx_plat_nvram_set_value_8800d80x2(char *command, char *value);
+void rwnx_plat_userconfig_parsing_8800d80x2(char *buffer, int size);
 
 #endif /* _RWNX_PLATFORM_H_ */

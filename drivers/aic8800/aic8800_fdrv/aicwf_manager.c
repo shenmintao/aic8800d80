@@ -49,7 +49,7 @@ static int freq_to_channel(int freq)
 	} else if (freq >= FREQ_6G_MIN && freq <= FREQ_6G_MAX) {
 		return (freq - 5950) / 5;
 	} else {
-		AICWFDBG(LOGERROR, MANAGER_STR"aic Unsupported frequency: %d MHz\n", freq);
+		AICWFDBG(LOGERROR, MANAGER_STR"Unsupported frequency: %d MHz\n", freq);
 		return -1;
 	}
 }
@@ -91,7 +91,7 @@ void aicwf_nl_recv_msg(struct sk_buff *skb)
 				rwnx_hook = nl_hook[band][ssid];
 
 				if (!rwnx_hook) {
-					AICWFDBG(LOGSTEER, MANAGER_STR"%s, !rwnx_hook, %d,%d\n", __func__, band, ssid);
+					AICWFDBG(LOGSTEER, MANAGER_STR"%s, search for the next rwnx_hook, %d,%d\n", __func__, band, ssid);
 					continue;
 				}
 				if (rwnx_vif == NULL || rwnx_vif->up == false) {
@@ -144,7 +144,7 @@ void aicwf_nl_recv_msg(struct sk_buff *skb)
 			rwnx_hook = nl_hook[band][ssid];
 
 			if (!rwnx_hook) {
-				AICWFDBG(LOGSTEER, MANAGER_STR"rwnx_hook is null p1.\n");
+				//AICWFDBG(LOGSTEER, MANAGER_STR"Not this driver's msg p1.\n");
 				break;
 			}
 			if (rwnx_vif == NULL || rwnx_vif->up == false) {
@@ -185,7 +185,7 @@ void aicwf_nl_recv_msg(struct sk_buff *skb)
 			rwnx_hook = nl_hook[band][ssid];
 
 			if (!rwnx_hook) {
-				AICWFDBG(LOGERROR, MANAGER_STR"rwnx_hook is null p2.\n");
+				//AICWFDBG(LOGERROR, MANAGER_STR"Not this driver's msg p2.\n");
 				break;
 			}
 			if (rwnx_vif == NULL || rwnx_vif->up == false) {

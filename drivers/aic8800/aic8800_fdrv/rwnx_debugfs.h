@@ -198,6 +198,7 @@ static inline void rwnx_dbgfs_register_rc_stat(struct rwnx_hw *rwnx_hw, struct r
 static inline void rwnx_dbgfs_unregister_rc_stat(struct rwnx_hw *rwnx_hw, struct rwnx_sta *sta)  {}
 #endif
 #endif /* CONFIG_RWNX_DEBUGFS */
+void _rwnx_dbgfs_rc_stat_write(struct rwnx_debugfs *rwnx_debugfs, uint8_t sta_idx);
 
 
 #endif /* _RWNX_DEBUGFS_H_ */

@@ -39,5 +39,6 @@ extern void aicwf_usb_host_txdesc_push(struct usb_host_env_tag *env, const int q
 
 extern void aicwf_usb_host_tx_cfm_handler(struct usb_host_env_tag *env, u32 *data);
 extern int aicwf_rwnx_usb_platform_init(struct aic_usb_dev *usbdev);
+volatile struct txdesc_host *aicwf_usb_host_txdesc_get(struct usb_host_env_tag *env, const int queue_idx);
 
 #endif

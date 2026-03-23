@@ -67,6 +67,7 @@ int rwnx_send_arpoffload_en_req(struct rwnx_hw *rwnx_hw, struct rwnx_vif *rwnx_v
                           u32_l ipaddr,  u8_l enable);
 #endif
 int rwnx_send_rf_config_req(struct rwnx_hw *rwnx_hw, u8_l ofst, u8_l sel, u8_l *tbl, u16_l len);
+int rwnx_send_rf_config_v2_req(struct rwnx_hw *rwnx_hw, u16_l ofst, u8_l sel, u8_l *tbl, u16_l len);
 int rwnx_send_rf_calib_req(struct rwnx_hw *rwnx_hw, struct mm_set_rf_calib_cfm *cfm);
 int rwnx_send_get_macaddr_req(struct rwnx_hw *rwnx_hw, struct mm_get_mac_addr_cfm *cfm);
 
@@ -184,11 +185,13 @@ int rwnx_send_txpwr_idx_req(struct rwnx_hw *rwnx_hw);
 int rwnx_send_txpwr_ofst_req(struct rwnx_hw *rwnx_hw);
 int rwnx_send_txpwr_ofst2x_req(struct rwnx_hw *rwnx_hw);
 int rwnx_send_txpwr_ofst2x_v2_req(struct rwnx_hw *rwnx_hw);
+int rwnx_send_txpwr_ofst2x_v3_req(struct rwnx_hw *rwnx_hw);
 int rwnx_send_set_filter(struct rwnx_hw *rwnx_hw, uint32_t filter);
 int rwnx_send_txpwr_lvl_req(struct rwnx_hw *rwnx_hw);
 int rwnx_send_txpwr_lvl_v3_req(struct rwnx_hw *rwnx_hw);
 int rwnx_send_txpwr_lvl_v4_req(struct rwnx_hw *rwnx_hw);
 int rwnx_send_txpwr_lvl_adj_req(struct rwnx_hw *rwnx_hw);
+int rwnx_send_txpwr_lvl_adj_v2_req(struct rwnx_hw *rwnx_hw);
 #ifdef CONFIG_WOWLAN
 int rwnx_send_set_pkt_filter_req(struct rwnx_hw *rwnx_hw, u8_l *param);
 int rwnx_send_dummy_reboot(struct rwnx_hw *rwnx_hw);
@@ -196,15 +199,14 @@ int rwnx_send_dummy_reboot(struct rwnx_hw *rwnx_hw);
 #ifdef CONFIG_DYNAMIC_PERPWR
 int rwnx_send_txpwr_per_sta_req(struct rwnx_hw *rwnx_hw, struct rwnx_sta *sta);
 #endif
-
+int rwnx_send_get_temp_req(struct rwnx_hw *rwnx_hw, s8_l *temp);
 
 //#ifdef CONFIG_USB_BT
 int rwnx_send_reboot(struct rwnx_hw *rwnx_hw);
 //#endif // CONFIG_USB_BT
-
-int rwnx_send_pwm_init_req(struct rwnx_hw *rwnx_hw, u8 pwm_gpidx, u8 mode, u8 run, u32 tmr_cnt,
-    u32 dty_cnt, u32 step_val, u8 gpio_en, u8 gpio_dir, u8 gpio_val);
-int rwnx_send_pwm_deinit_req(struct rwnx_hw *rwnx_hw, u8 pwm_gpidx, u8 gpio_en, u8 gpio_dir, u8 gpio_val);
-void rwnx_set_pwm_tbl(struct rwnx_hw *rwnx_hw);
+struct rwnx_cmd *rwnx_cmd_malloc(void);
+void rwnx_cmd_free(struct rwnx_cmd *cmd);
+int rwnx_init_cmd_array(void);
+void rwnx_free_cmd_array(void);
 
 #endif /* _RWNX_MSG_TX_H_ */

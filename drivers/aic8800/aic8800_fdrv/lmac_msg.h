@@ -413,6 +413,13 @@ enum mm_msg_tag
 	MM_SET_TXPWR_PER_STA_REQ,
 	MM_SET_TXPWR_PER_STA_CFM,
 
+    MM_GET_STATISTIC_REQ,
+    MM_GET_STATISTIC_CFM,
+
+    MM_VENDOR_SWCONFIG_IND,
+    MM_FW_PANIC_IND,
+    MM_FW_ASSERT_IND,
+
     /// MAX number of messages
     MM_MAX,
 };
@@ -892,6 +899,7 @@ struct mm_ba_add_cfm
     u8_l tid;
     /// Status of ba establishment
     u8_l status;
+	u8_l alligned;
 };
 
 /// Structure containing the parameters of the @ref MM_BA_DEL_REQ message.
@@ -1345,6 +1353,12 @@ struct mm_get_sta_info_req
     u8_l sta_idx;
 };
 
+struct mm_get_sta_info_compat_req
+{
+    u8_l sta_idx;
+    char pattern[3];
+};
+
 struct mm_get_sta_info_cfm
 {
     u32_l rate_info;
@@ -1412,6 +1426,12 @@ typedef struct
     s8_l pwrlvl_adj_tbl_5g[6];
 } txpwr_lvl_adj_conf_t;
 
+typedef struct
+{
+    u8_l enable;
+    s8_l pwrlvl_adj_tbl_2g4[3];
+} txpwr_lvl_adj_conf_v2_t;
+
 struct mm_set_txpwr_lvl_req
 {
   union {
@@ -1424,7 +1444,10 @@ struct mm_set_txpwr_lvl_req
 
 struct mm_set_txpwr_lvl_adj_req
 {
+  union {
     txpwr_lvl_adj_conf_t txpwr_lvl_adj;
+    txpwr_lvl_adj_conf_v2_t txpwr_lvl_adj_v2;
+  };
 };
 
 typedef struct
@@ -1538,12 +1561,33 @@ typedef struct
     s8_l pwrofst2x_tbl_6g_ant1[15];
 } txpwr_ofst2x_conf_v2_t;
 
+/*
+ * pwrofst2x_tbl_2g4[3][3]:
+ * +---------------+----------+----------+----------+
+ * | RateTyp\ChGrp |  CH_1_4  |  CH_5_9  | CH_10_13 |
+ * +---------------+----------+----------+----------+
+ * | DSSS          |  [0][0]  |  [0][1]  |  [0][2]  |
+ * +---------------+----------+----------+----------+
+ * | OFDM_HIGHRATE |  [1][0]  |  [1][1]  |  [1][2]  |
+ * +---------------+----------+----------+----------+
+ * | OFDM_LOWRATE  |  [2][0]  |  [2][1]  |  [2][2]  |
+ * +---------------+----------+----------+----------+
+ */
+
+typedef struct
+{
+    u8_l enable;
+    s8_l pwrofst2x_tbl_2g4[3][3];
+    u8_l RESERVED[2];
+} txpwr_ofst2x_conf_v3_t;
+
 struct mm_set_txpwr_ofst_req
 {
   union {
     txpwr_ofst_conf_t txpwr_ofst;
     txpwr_ofst2x_conf_t txpwr_ofst2x;
     txpwr_ofst2x_conf_v2_t txpwr_ofst2x_v2;
+    txpwr_ofst2x_conf_v3_t txpwr_ofst2x_v3;
   };
 };
 
@@ -1662,6 +1706,18 @@ struct mm_csa_traffic_ind
     u8_l vif_index;
     /// Is tx traffic enable or disable
     bool_l enable;
+};
+
+struct fw_panic_info_ind
+{
+    uint32_t len;
+    uint8_t info[384];
+};
+
+struct fw_assert_info_ind
+{
+    uint32_t len;
+    uint8_t info[384];
 };
 
 /// Structure containing the parameters of the @ref MM_MU_GROUP_UPDATE_REQ message.
@@ -2038,6 +2094,7 @@ struct me_sta_add_cfm
     u8_l status;
     /// PM state of the station
     u8_l pm_state;
+	u8_l alligned;
 };
 
 /// Structure containing the parameters of the @ref ME_STA_DEL_REQ message.
@@ -3463,37 +3520,4 @@ struct mm_set_wakeup_info_req {
 	u16_l length;
 	u8_l mask_and_pattern[];
     };
-
-struct dbg_pwm_init_req
-{
-    /// PWM_CHANNEL_GPIO
-    u8 pwm_gpidx;
-    /// 0 normal 1 breath
-    u8 mode;
-    /// 0 config only 1 run after config
-    u8 run;
-    u32 tmr_cnt;
-    u32 dty_cnt;
-    u32 step_val;
-    /// 0 disable 1 enable
-    u8 gpio_en;
-    /// 0 input 1 output
-    u8 gpio_dir;
-    /// 0 low 1 high
-    u8 gpio_val;
-};
-
-struct dbg_pwm_deinit_req
-{
-    /// PWM_CHANNEL_GPIO
-    u8 pwm_gpidx;
-    /// 0 disable 1 enable
-    u8 gpio_en;
-    /// 0 input 1 output
-    u8 gpio_dir;
-    /// 0 low 1 high
-    u8 gpio_val;
-};
-
-
 #endif // LMAC_MSG_H_

@@ -59,6 +59,14 @@ typedef struct _compat_android_wifi_priv_cmd {
 int android_priv_cmd(struct net_device *net, struct ifreq *ifr, int cmd);
 int get_cs_info(struct rwnx_vif *vif, u8 *mac_addr, u8 *val);
 
+unsigned int command_strtoul(const char *cp, char **endp, unsigned int base);
+int str_starts(const char *str, const char *start);
+int handle_private_cmd(struct net_device *net, char *command, u32 cmd_len);
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0))
+void set_mon_chan(struct rwnx_vif *vif, struct net_device *dev, char *parameter);
+#else
+void set_mon_chan(struct rwnx_vif *vif, char *parameter);
+#endif
 
 #endif /* _AIC_PRIV_CMD_H_ */
 

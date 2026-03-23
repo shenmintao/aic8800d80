@@ -1,5 +1,6 @@
 #include <linux/slab.h>
 #include "aicwf_debug.h"
+#include "aicwf_txq_prealloc.h"
 
 struct prealloc_txq{
     int prealloced;

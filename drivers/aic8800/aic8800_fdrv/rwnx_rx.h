@@ -353,10 +353,15 @@ struct DHCPInfo {
     u8 options[308]; /* 312 - cookie */
 };
 
+int reord_flush_tid(struct aicwf_rx_priv *rx_priv, struct sk_buff *skb, u8 tid);
+bool reord_rxframes_process(struct aicwf_rx_priv *rx_priv, struct reord_ctrl *preorder_ctrl, int bforced);
+
 u8 rwnx_unsup_rx_vec_ind(void *pthis, void *hostid);
 u8 rwnx_rxdataind(void *pthis, void *hostid);
 u8 rwnx_rxdataind_aicwf(struct rwnx_hw *rwnx_hw, void *hostid, void *rx_priv);
 int aicwf_process_rxframes(struct aicwf_rx_priv *rx_priv);
+void rwnx_rx_data_skb_resend(struct rwnx_hw *rwnx_hw, struct rwnx_vif *rwnx_vif, struct sk_buff *skb);
+
 #ifdef CONFIG_USB_MSG_IN_EP
 int aicwf_process_msg_rxframes(struct aicwf_rx_priv *rx_priv);
 #endif
@@ -373,10 +378,19 @@ int reord_need_check(struct reord_ctrl *preorder_ctrl, u16 seq_num);
 int reord_rxframe_enqueue(struct reord_ctrl *preorder_ctrl, struct recv_msdu *prframe);
 void reord_timeout_worker(struct work_struct *work);
 int reord_single_frame_ind(struct aicwf_rx_priv *rx_priv, struct recv_msdu *prframe);
+void reord_rxframes_ind(struct aicwf_rx_priv *rx_priv, struct reord_ctrl *preorder_ctrl);
+void remove_sec_hdr_mgmt_frame(struct hw_rxhdr *hw_rxhdr,struct sk_buff *skb);
+int reord_process_unit(struct recv_msdu *pframe, struct aicwf_rx_priv *rx_priv, struct sk_buff *skb, u16 seq_num, u8 tid, u8 forward, u8 is_amsdu);
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,14,0)
 void reord_timeout_handler (ulong data);
 #else
 void reord_timeout_handler (struct timer_list *t);
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 0)
+void defrag_timeout_cb(ulong data);
+#else
+void defrag_timeout_cb(struct timer_list *t);
 #endif
 
 #endif

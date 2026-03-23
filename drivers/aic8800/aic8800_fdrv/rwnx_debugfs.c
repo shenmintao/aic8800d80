@@ -1777,7 +1777,7 @@ static ssize_t rwnx_dbgfs_dbg_level_read(struct file *file,
 			char __user *user_buf,
 			size_t count, loff_t *ppos)
 {
-	struct rwnx_hw *priv = file->private_data;
+    //struct rwnx_hw *priv = file->private_data;
     char buf[32];
     int ret;
     ssize_t read;
@@ -1796,7 +1796,7 @@ static ssize_t rwnx_dbgfs_dbg_level_write(struct file *file,
 			const char __user *user_buf,
 			size_t count, loff_t *ppos)
 {
-	struct rwnx_hw *priv = file->private_data;
+    //struct rwnx_hw *priv = file->private_data;
     char buf[32];
     int val;
     size_t len = min_t(size_t, count, sizeof(buf) - 1);
@@ -2019,7 +2019,7 @@ static void idx_to_rate_cfg1(unsigned int formatmod,
 		case FORMATMOD_NON_HT:
 		{
 			r_cfg->formatModTx = formatmod;
-			r_cfg->giAndPreTypeTx = 1;
+			r_cfg->giAndPreTypeTx = 2;
 			r_cfg->mcsIndexTx = mcs;
             break;
 		}
@@ -2236,8 +2236,7 @@ static ssize_t rwnx_dbgfs_rc_fixed_rate_idx_write(struct file *file,
     /* Get the station index from MAC address */
     sscanf(file->f_path.dentry->d_parent->d_iname, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
             &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]);
-    if (&mac[0] == NULL)
-        return 0;
+
     sta = rwnx_get_sta(priv, mac);
     if (sta == NULL)
         return 0;

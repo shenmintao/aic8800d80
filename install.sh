@@ -241,27 +241,38 @@ install_dependencies() {
 
 install_firmware() {
     print_step "Installing firmware..."
-    
-    local fw_source="${SCRIPT_DIR}/fw/aic8800D80"
-    local fw_dest="/lib/firmware/aic8800D80"
-    
-    if [ ! -d "$fw_source" ]; then
-        print_error "Firmware directory not found: $fw_source"
+
+    local fw_base="${SCRIPT_DIR}/fw"
+
+    if [ ! -d "$fw_base" ]; then
+        print_error "Firmware directory not found: $fw_base"
         echo "Please ensure you're running the script from the repository root."
         exit 1
     fi
-    
+
     # Remove old firmware versions
-    if [ -d "$fw_dest" ]; then
+    if [ -d "/lib/firmware" ] && [ -n "$(find /lib/firmware -maxdepth 1 -name 'aic8800*' -type d 2>/dev/null)" ]; then
         print_info "Removing existing firmware..."
-        if [ -d "/lib/firmware" ] && [ -n "$(find /lib/firmware -maxdepth 1 -name 'aic8800*' -type d 2>/dev/null)" ]; then
-            rm -rf /lib/firmware/aic8800* >> "$LOG_FILE" 2>&1
-        fi
+        rm -rf /lib/firmware/aic8800* >> "$LOG_FILE" 2>&1
     fi
-    
-    # Copy new firmware
-    print_info "Copying firmware to $fw_dest..."
-    cp -r "$fw_source" "$fw_dest" >> "$LOG_FILE" 2>&1
+
+    # Copy all firmware variants
+    print_info "Installing firmware for all chip variants..."
+    for fw_dir in "$fw_base"/aic8800*; do
+        if [ -d "$fw_dir" ]; then
+            local fw_name=$(basename "$fw_dir")
+            local fw_dest="/lib/firmware/$fw_name"
+            print_info "Copying $fw_name firmware to $fw_dest..."
+            cp -r "$fw_dir" "$fw_dest" >> "$LOG_FILE" 2>&1
+        fi
+    done
+
+    print_success "Firmware installed for all chip variants:"
+    print_info "  - aic8800D80 (standard)"
+    print_info "  - aic8800D80N (N variant)"
+    print_info "  - aic8800D80X2 (X2 variant)"
+    print_info "  - aic8800DC/DW (DC/DW series)"
+    print_info "  - aic8800DLN (DLN variant)"
     
     # Install udev rules
     local rules_source="${SCRIPT_DIR}/aic.rules"
@@ -440,8 +451,15 @@ load_module() {
         print_info "Try rebooting or check: sudo dmesg | grep aic8800"
     fi
     
-    # Bluetooth is handled by the standard btusb driver after firmware upload
-    print_info "Bluetooth will be available via the standard btusb driver once hardware is connected."
+    # Load the standard Bluetooth driver (btusb)
+    # The aic_load_fw module uploads the Bluetooth firmware, then btusb handles the BT interface
+    print_info "Loading standard Bluetooth driver (btusb)..."
+    if modprobe btusb >> "$LOG_FILE" 2>&1; then
+        print_success "Bluetooth driver (btusb) loaded successfully."
+    else
+        print_warning "Could not load btusb driver automatically."
+        print_info "You can manually load it with: sudo modprobe btusb"
+    fi
 }
 
 #############################################################################
@@ -481,8 +499,16 @@ verify_installation() {
     lsmod | grep aic || echo "  (none)"
     
     # Check firmware
-    if [ -d "/lib/firmware/aic8800D80" ]; then
-        print_success "Firmware installed in /lib/firmware/aic8800D80"
+    local fw_count=0
+    for fw_dir in /lib/firmware/aic8800*; do
+        if [ -d "$fw_dir" ]; then
+            ((fw_count++))
+        fi
+    done
+    if [ $fw_count -gt 0 ]; then
+        print_success "Firmware installed for $fw_count chip variant(s) in /lib/firmware/"
+    else
+        print_warning "No firmware found in /lib/firmware/"
     fi
     
     # Check for wireless interfaces
@@ -562,7 +588,7 @@ show_final_instructions() {
     echo ""
     echo -e "${CYAN}Uninstallation:${NC}"
     echo "  ${BLUE}sudo dkms remove ${DRV_NAME}/${DRV_VERSION} --all${NC}"
-    echo "  ${BLUE}sudo rm -rf /lib/firmware/aic8800D80${NC}"
+    echo "  ${BLUE}sudo rm -rf /lib/firmware/aic8800*${NC}"
     echo ""
 }
 

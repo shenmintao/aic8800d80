@@ -37,52 +37,17 @@
 
 
 #ifdef CONFIG_PLATFORM_UBUNTU
-#define CONFIG_BLUEDROID        0 /* bleuz 0, bluedroid 1 */
+#define CONFIG_BLUEDROID        1 /* bleuz 0, bluedroid 1, lbh 2 */
 #else
-#define CONFIG_BLUEDROID        0 /* bleuz 0, bluedroid 1 */
+#define CONFIG_BLUEDROID        1 /* bleuz 0, bluedroid 1, lbh 2 */
 #endif
 
+#if CONFIG_BLUEDROID == 1
+/*
+If you need to use the feature of waking up with BLE during STR Suspend sleep, please enable this macro.
+*/
 
-//#define CONFIG_SCO_OVER_HCI
-#define CONFIG_USB_AIC_UART_SCO_DRIVER
 //#define CONFIG_BT_WAKEUP_IN_PM
-
-#ifdef CONFIG_SCO_OVER_HCI
-#include <linux/usb/audio.h>
-#include <sound/core.h>
-#include <sound/initval.h>
-#include <sound/pcm.h>
-#include <sound/pcm_params.h>
-
-#define AIC_SCO_ID "snd_sco_aic"
-enum {
-	USB_CAPTURE_RUNNING,
-	USB_PLAYBACK_RUNNING,
-	ALSA_CAPTURE_OPEN,
-	ALSA_PLAYBACK_OPEN,
-	ALSA_CAPTURE_RUNNING,
-	ALSA_PLAYBACK_RUNNING,
-	CAPTURE_URB_COMPLETED,
-	PLAYBACK_URB_COMPLETED,
-	DISCONNECTED,
-};
-
-// AIC sound card
-typedef struct AIC_sco_card {
-    struct snd_card *card;
-    struct snd_pcm *pcm;
-    struct usb_device *dev;
-    struct btusb_data *usb_data;
-    unsigned long states;
-    struct aic_sco_stream {
-		    struct snd_pcm_substream *substream;
-		    unsigned int sco_packet_bytes;
-		    snd_pcm_uframes_t buffer_pos;
-	  } capture, playback;
-    spinlock_t capture_lock;
-    spinlock_t playback_lock;
-    struct work_struct send_sco_work;
-} AIC_sco_card_t;
 #endif
 /* Some Android system may use standard Linux kernel, while
  * standard Linux may also implement early suspend feature.
@@ -221,6 +186,7 @@ int mp_drv_mode = 0; /* 1 Mptool Fw; 0 Normal Fw */
 #define HCI_OP_Write_Class_of_Device 0x0c24
 #define HCI_OP_LE_Rand 0x2018
 #define HCI_OP_LE_Set_Random_Address 0x2005
+#define HCI_OP_LE_Set_Extended_Adv_Enable 0x2039
 #define HCI_OP_LE_Set_Extended_Scan_Enable 0x2042
 #define HCI_OP_LE_Set_Extended_Scan_Parameters 0x2041
 #define HCI_OP_Set_Event_Filter 0x0c05
@@ -249,7 +215,7 @@ int mp_drv_mode = 0; /* 1 Mptool Fw; 0 Normal Fw */
 #define HCI_OP_LE_Get_Vendor_Capabilities_Command   0xfd53
 #define HCI_OP_LE_Set_Le_Scan_Enable 0x200C
 #define HCI_OP_LE_Create_Connection 0x200d
-
+#define HCI_OP_LE_Create_Connection_Cancel 0x200e
 
 #if CONFIG_BLUEDROID
 /* -----  HCI events---- */
@@ -329,10 +295,10 @@ int mp_drv_mode = 0; /* 1 Mptool Fw; 0 Normal Fw */
 /* Reserv for core and drivers use */
 #define BT_SKB_RESERVE    8
 
-/* BD Address */
+
 typedef struct {
-    __u8 b[6];
-} __packed bdaddr_t;
+	uint8_t addr[6];
+}bdaddr_t;
 
 /* Skb helpers */
 struct bt_skb_cb {
@@ -608,11 +574,7 @@ typedef struct {
 
 //Define ioctl cmd the same as HCIDEVUP in the kernel
 #define DOWN_FW_CFG             _IOW('E', 176, int)
-//#ifdef CONFIG_SCO_OVER_HCI
-//#define SET_ISO_CFG             _IOW('H', 202, int)
-//#else
 #define SET_ISO_CFG             _IOW('E', 177, int)
-//#endif
 #define RESET_CONTROLLER        _IOW('E', 178, int)
 #define DWFW_CMPLT              _IOW('E', 179, int)
 
@@ -689,8 +651,10 @@ typedef struct {
 #define DATA_END        0x80
 #define DOWNLOAD_OPCODE    0xfc02
 #define HCI_VSC_UPDATE_PT_CMD                   0xFC75
+#define HCI_VSC_SET_ADFILTER_EN_CMD             0xFDAA
 #define HCI_VSC_SET_ADFILTER_PT_CMD             0xFDAB
 #define HCI_VSC_RESET_ADFILTER_PROCESS_PT_CMD   0xFDAC
+#define HCI_VSC_WF_START_APP_CMD                0xFDAD
 #define TRUE            1
 #define FALSE            0
 #define CMD_HDR_LEN        sizeof(struct hci_command_hdr)
@@ -721,12 +685,19 @@ enum AIC_DC_SUBID{
     DC_U02H,
 };
 
+enum AIC_D80N_SUBID{
+    D80N_U01 = 0,
+    D80N_U02,
+};
+
 struct aicbt_firmware {
 	const char *desc;
 	const char *bt_adid;
 	const char *bt_patch;
 	const char *bt_table;
     const char *bt_ext_patch;
+    const char *wf_cinit;
+    const char *wf_btusb;
 };
 
 const struct aicbt_firmware fw_8800dc[] = {
@@ -753,6 +724,44 @@ const struct aicbt_firmware fw_8800dc[] = {
     },
 };
 
+const struct aicbt_firmware fw_8800d80n[] = {
+    [D80N_U01] = {
+        .desc          = "aic8800d80n u01 bt patch",
+        .bt_adid       = "fw_adid_8800d80n.bin",
+        .bt_patch      = "fw_patch_8800d80n.bin",
+        .bt_table      = "fw_patch_table_8800d80n.bin",
+        .bt_ext_patch  = "fw_patch_8800d80n_ext"
+    },
+    [D80N_U02] = {
+        .desc          = "aic8800d80n u02 bt patch",
+        .bt_adid       = "fw_adid_8800d80n_u02.bin",
+        .bt_patch      = "fw_patch_8800d80n_u02.bin",
+        .bt_table      = "fw_patch_table_8800d80n_u02.bin",
+        .bt_ext_patch  = "fw_patch_8800d80n_u02_ext",
+        .wf_cinit      = "fmacfw_cinit_8800d80n_u02.bin",
+        .wf_btusb      = "fmacfw_btusb_8800d80n_u02.bin",
+    },
+};
+
+const struct aicbt_firmware fw_8800d80n_rf[] = {
+    [D80N_U01] = {
+        .desc          = "aic8800d80n u01 bt test patch",
+        .bt_adid       = "fw_adid_8800d80n.bin",
+        .bt_patch      = "fw_patch_8800d80n.bin",
+        .bt_table      = "fw_patch_table_8800d80n.bin",
+        .bt_ext_patch  = "fw_patch_8800d80n_ext"
+    },
+    [D80N_U02] = {
+        .desc          = "aic8800d80n u02 bt patch",
+        .bt_adid       = "fw_adid_8800d80n_rf_u02.bin",
+        .bt_patch      = "fw_patch_8800d80n_rf_u02.bin",
+        .bt_table      = "fw_patch_table_8800d80n_rf_u02.bin",
+        .bt_ext_patch  = "fw_patch_8800d80n_rf_u02_ext",
+        .wf_cinit      = "fmacfw_cinit_8800d80n_u02.bin",
+        .wf_btusb      = "fmacfw_btusb_8800d80n_u02.bin",
+    },
+};
+
 
 #define HCI_VSC_FW_STATUS_GET_CMD          0xFC78
 
@@ -765,6 +774,9 @@ struct fw_status {
 #define HCI_VSC_MEM_RD_SIZE                 128
 #define HCI_VSC_UPDATE_PT_SIZE              249
 #define HCI_PT_MAX_LEN                      31
+
+#define HCI_VSC_MEM_WR_V2_SIZE               128
+#define HCI_VSC_UPDATE_PT_V2_SIZE            128
 
 #define HCI_VSC_DBG_RD_MEM_CMD              0xFC01
 
@@ -807,6 +819,13 @@ struct ble_wakeup_param_t {
     uint32_t gpio_num[MAX_GPIO_TRIGGER_NUM];
     uint32_t gpio_dft_lvl[MAX_GPIO_TRIGGER_NUM];
     struct wakeup_ad_data_filter ad_filter[MAX_AD_FILTER_NUM];
+};
+
+/// Structure containing the parameters of the @ref DBG_START_APP_REQ message.
+struct wf_start_app_param
+{
+    uint32_t bootaddr;
+    uint32_t boottype;
 };
 
 struct hci_dbg_rd_mem_cmd {
@@ -877,9 +896,6 @@ enum aic_endpoit {
 /* #define HCI_VERSION_CODE KERNEL_VERSION(3, 14, 41) */
 #define HCI_VERSION_CODE LINUX_VERSION_CODE
 
-int aic_load_firmware(u8 ** fw_buf, const char *name, struct device *device);
-int aicbt_patch_table_free(struct aicbt_patch_table **head);
-int download_patch(firmware_info *fw_info, int cached);
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 38)
 #define NUM_REASSEMBLY 3

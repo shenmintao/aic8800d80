@@ -13,6 +13,7 @@
 #include "rwnx_defs.h"
 #include "rwnx_dini.h"
 #include "rwnx_v7.h"
+#include "rwnx_pci.h"
 
 #define PCI_VENDOR_ID_DINIGROUP              0x17DF
 #define PCI_DEVICE_ID_DINIGROUP_DNV6_F2PCIE  0x1907

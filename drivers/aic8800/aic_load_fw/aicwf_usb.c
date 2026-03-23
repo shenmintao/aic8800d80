@@ -985,7 +985,7 @@ u32 patch_tbl[][2] ={
 #ifdef CONFIG_USB_SUSPEND_REBOOT_TIME
 {0x0110, 0x03e80001}//reboot time when usb suspend,0001 enables reboot on suspend, default 0x3e8 = 1000ms reboot
 #else
-#ifdef CONFIG_SUPPORT_USB_SUSP
+#ifdef CONFIG_WOWLAN
 //USB SUSP keep working 0x0100:enable 0x0000:disable
 {0x0110, 0x00000100}
 #endif
@@ -1364,13 +1364,17 @@ static int aicloadfw_chipmatch(struct aic_usb_dev *usb_dev, u16 vid, u16 pid){
 		AICWFDBG(LOGINFO, "%s USE AIC8800D81X2\r\n", __func__);
 		return 0;
     }else if(pid == USB_DEVICE_ID_AIC_8800D89X2 && vid == USB_VENDOR_ID_AIC_V2){
-  usb_dev->chipid = PRODUCT_ID_AIC8800D89X2;
-  AICWFDBG(LOGINFO, "%s USE AIC8800D89X2\r\n", __func__);
-  return 0;
+		usb_dev->chipid = PRODUCT_ID_AIC8800D89X2;
+		AICWFDBG(LOGINFO, "%s USE AIC8800D89X2\r\n", __func__);
+		return 0;
+    }else if(pid == USB_DEVICE_ID_AIC_8800D40X2 && vid == USB_VENDOR_ID_AIC_V2){
+                usb_dev->chipid = PRODUCT_ID_AIC8800D80X2;
+                AICWFDBG(LOGINFO, "%s USE AIC8800D40X2\r\n", __func__);
+                return 0;
     }else if(pid == USB_DEVICE_ID_AIC_8800D81 && vid == USB_VENDOR_ID_AIC_V2){
-  usb_dev->chipid = PRODUCT_ID_AIC8800D81;
-  AICWFDBG(LOGINFO, "%s USE AIC8800D81 (368b:8d81)\r\n", __func__);
-  return 0;
+	usb_dev->chipid = PRODUCT_ID_AIC8800D81;
+	AICWFDBG(LOGINFO, "%s USE AIC8800D81 (368b:8d81)\r\n", __func__);
+	return 0;
     }else{
         return -1;
     }
@@ -1850,6 +1854,7 @@ static struct usb_device_id aicwf_usb_id_table[] = {
     {USB_DEVICE(USB_VENDOR_ID_AIC_V2, USB_DEVICE_ID_AIC_8800D80X2)},
     {USB_DEVICE(USB_VENDOR_ID_AIC_V2, USB_DEVICE_ID_AIC_8800D81X2)},
     {USB_DEVICE(USB_VENDOR_ID_AIC_V2, USB_DEVICE_ID_AIC_8800D89X2)},
+    {USB_DEVICE(USB_VENDOR_ID_AIC_V2, USB_DEVICE_ID_AIC_8800D40X2)},
     {USB_DEVICE(USB_VENDOR_ID_AIC_V2, USB_DEVICE_ID_AIC_8800D81)},   /* 368b:8d81 */
     {}
 };

@@ -400,7 +400,7 @@ static char *aicwf_get_iwe_stream_mac_addr(struct rwnx_hw* rwnx_hw,
 	iwe->cmd = SIOCGIWAP;
 	iwe->u.ap_addr.sa_family = ARPHRD_ETHER;
 
-	if(scan_re->bss && &scan_re->bss->bssid[0]){
+	if(scan_re->bss){
 	memcpy(iwe->u.ap_addr.sa_data, scan_re->bss->bssid, ETH_ALEN);
 	}
 
@@ -616,8 +616,10 @@ static inline char *aicwf_get_iwe_stream_rate(struct rwnx_hw* rwnx_hw,
 	u16 vht_data_rate = 0;
 
 	u16 he_cap = false;
-	u8 he_ch_width_set = 0;
 	u8 he_bw = 0;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 0)|| defined(CONFIG_HE_FOR_OLD_KERNEL)
+	u8 he_ch_width_set = 0;
+#endif
 
 	/* parsing HT_CAP_IE	 */
 	ie_content = NULL;

@@ -34,6 +34,8 @@
 #include "aicwf_compat_8800dc.h"
 #include "aicwf_compat_8800d80.h"
 #include "aicwf_compat_8800d80x2.h"
+#include "aicwf_compat_8800d80n.h"
+#include "aicwf_compat_8800dln.h"
 #ifdef CONFIG_USE_FW_REQUEST
 #include <linux/firmware.h>
 #endif
@@ -190,6 +192,15 @@ userconfig_info_t userconfig_info = {
         .pwrofst2x_tbl_6g_ant0 = {   0,   }, // ofdm_highrate: 6e_ch7 ~ 6e_ch229
         .pwrofst2x_tbl_6g_ant1 = {   0,   }, // ofdm_highrate: 6e_ch7 ~ 6e_ch229
     },
+    .txpwr_ofst2x_v3 = {
+        .enable       = 0,
+        .pwrofst2x_tbl_2g4 =
+        { // ch1-4, ch5-9, ch10-13
+            {   0,    0,    0   }, // 11b
+            {   0,    0,    0   }, // ofdm_highrate
+            {   0,    0,    0   }, // ofdm_lowrate
+        },
+    },
     .xtal_cap = {
         .enable        = 0,
         .xtal_cap      = 24,
@@ -248,6 +259,7 @@ reg_table reg_tables[] = {
 	{.ccode = "CL", .region = REGIONS_ETSI},
 	{.ccode = "CO", .region = REGIONS_FCC},
 	{.ccode = "CR", .region = REGIONS_FCC},
+	{.ccode = "CU", .region = REGIONS_FCC},
 	{.ccode = "CX", .region = REGIONS_FCC},
 	{.ccode = "CY", .region = REGIONS_ETSI},
 	{.ccode = "CZ", .region = REGIONS_ETSI},
@@ -272,7 +284,7 @@ reg_table reg_tables[] = {
 	{.ccode = "GL", .region = REGIONS_ETSI},
 	{.ccode = "GP", .region = REGIONS_ETSI},
 	{.ccode = "GR", .region = REGIONS_ETSI},
-	{.ccode = "GT", .region = REGIONS_FCC},
+	{.ccode = "GT", .region = REGIONS_DEFAULT},
 	{.ccode = "GU", .region = REGIONS_FCC},
 	{.ccode = "GY", .region = REGIONS_DEFAULT},
 	{.ccode = "HK", .region = REGIONS_ETSI},
@@ -285,7 +297,7 @@ reg_table reg_tables[] = {
 	{.ccode = "IL", .region = REGIONS_ETSI},
 	{.ccode = "IN", .region = REGIONS_ETSI},
 	{.ccode = "IQ", .region = REGIONS_ETSI},
-	{.ccode = "IR", .region = REGIONS_JP},
+	{.ccode = "IR", .region = REGIONS_ETSI},
 	{.ccode = "IS", .region = REGIONS_ETSI},
 	{.ccode = "IT", .region = REGIONS_ETSI},
 	{.ccode = "JM", .region = REGIONS_FCC},
@@ -295,7 +307,7 @@ reg_table reg_tables[] = {
 	{.ccode = "KH", .region = REGIONS_ETSI},
 	{.ccode = "KN", .region = REGIONS_ETSI},
 	{.ccode = "KP", .region = REGIONS_JP},
-	{.ccode = "KR", .region = REGIONS_ETSI},
+	{.ccode = "KR", .region = REGIONS_KCC},
 	{.ccode = "KW", .region = REGIONS_ETSI},
 	{.ccode = "KY", .region = REGIONS_FCC},
 	{.ccode = "KZ", .region = REGIONS_DEFAULT},
@@ -339,7 +351,7 @@ reg_table reg_tables[] = {
 	{.ccode = "PF", .region = REGIONS_ETSI},
 	{.ccode = "PG", .region = REGIONS_FCC},
 	{.ccode = "PH", .region = REGIONS_FCC},
-	{.ccode = "PK", .region = REGIONS_ETSI},
+	{.ccode = "PK", .region = REGIONS_DEFAULT},
 	{.ccode = "PL", .region = REGIONS_ETSI},
 	{.ccode = "PM", .region = REGIONS_ETSI},
 	{.ccode = "PR", .region = REGIONS_FCC},
@@ -361,7 +373,7 @@ reg_table reg_tables[] = {
 	{.ccode = "SN", .region = REGIONS_FCC},
 	{.ccode = "SR", .region = REGIONS_ETSI},
 	{.ccode = "SV", .region = REGIONS_FCC},
-	{.ccode = "SY", .region = REGIONS_DEFAULT},
+	{.ccode = "SY", .region = REGIONS_ETSI},
 	{.ccode = "TC", .region = REGIONS_FCC},
 	{.ccode = "TD", .region = REGIONS_ETSI},
 	{.ccode = "TG", .region = REGIONS_ETSI},
@@ -372,6 +384,7 @@ reg_table reg_tables[] = {
 	{.ccode = "TR", .region = REGIONS_ETSI},
 	{.ccode = "TT", .region = REGIONS_FCC},
 	{.ccode = "TW", .region = REGIONS_FCC},
+	{.ccode = "TZ", .region = REGIONS_ETSI},
 	{.ccode = "UA", .region = REGIONS_ETSI},
 	{.ccode = "UG", .region = REGIONS_FCC},
 	{.ccode = "UY", .region = REGIONS_FCC},
@@ -382,10 +395,13 @@ reg_table reg_tables[] = {
 	{.ccode = "VN", .region = REGIONS_JP},
 	{.ccode = "VU", .region = REGIONS_FCC},
 	{.ccode = "WF", .region = REGIONS_ETSI},
+	{.ccode = "WS", .region = REGIONS_ETSI},
 	{.ccode = "YE", .region = REGIONS_DEFAULT},
 	{.ccode = "YT", .region = REGIONS_ETSI},
 	{.ccode = "ZA", .region = REGIONS_ETSI},
 	{.ccode = "ZM", .region = REGIONS_ETSI},
+	{.ccode = "FO", .region = REGIONS_ETSI},
+	{.ccode = "FK", .region = REGIONS_ETSI},
 	{.ccode = "ZW", .region = REGIONS_ETSI},
 };
 
@@ -417,11 +433,14 @@ u8 get_region_index(char * name)
 		return REGIONS_ETSI;
 	else if (strncmp(name, "JP", 2) == 0)
 		return REGIONS_JP;
+	else if (strncmp(name, "KCC", 3) == 0)
+		return REGIONS_KCC;
 	else if (strncmp(name, "UNSET", 5) == 0)
 		return REGIONS_DEFAULT;
 
 	return REGIONS_DEFAULT;
 }
+
 
 
 #ifdef CONFIG_POWER_LIMIT
@@ -431,7 +450,7 @@ u8 get_region_index(char * name)
 
 #define MAX_2_4G_BW_NUM    2
 #define MAX_5G_BW_NUM      3
-#define MAX_REGION_NUM            5
+#define MAX_REGION_NUM     6
 
 
 typedef struct
@@ -685,7 +704,7 @@ static int rwnx_load_firmware(u32 **fw_buf, const char *name, struct device *dev
     }
 
     /* start to read from firmware file */
-    buffer = vmalloc(size);
+    buffer = vmalloc(size + 1);
     if (!buffer) {
         *fw_buf = NULL;
         __putname(path);
@@ -700,6 +719,7 @@ static int rwnx_load_firmware(u32 **fw_buf, const char *name, struct device *dev
     rdlen = kernel_read(fp, fp->f_pos, buffer, size);
     #endif
 
+    *((char*)buffer + size) = 0;
     if (size != rdlen) {
         AICWFDBG(LOGERROR, "%s: %s file rdlen invalid %d\n", __func__, name, (int)rdlen);
         *fw_buf = NULL;
@@ -811,6 +831,69 @@ int rwnx_plat_bin_fw_upload_2(struct rwnx_hw *rwnx_hw, u32 fw_addr,
     }
 
 	AICWFDBG(LOGINFO, "size=%d, dst[0]=%x\n", size, dst[0]);
+    if (size > 512) {
+        for (; i < (size - 512); i += 512) {
+            //printk("wr blk 0: %p -> %x\r\n", dst + i / 4, fw_addr + i);
+            err = rwnx_send_dbg_mem_block_write_req(rwnx_hw, fw_addr + i, 512, dst + i / 4);
+            if (err) {
+                AICWFDBG(LOGERROR, "bin upload fail: %x, err:%d\r\n", fw_addr + i, err);
+                break;
+            }
+        }
+    }
+    if (!err && (i < size)) {
+        //printk("wr blk 1: %p -> %x\r\n", dst + i / 4, fw_addr + i);
+        err = rwnx_send_dbg_mem_block_write_req(rwnx_hw, fw_addr + i, size - i, dst + i / 4);
+        if (err) {
+            AICWFDBG(LOGERROR, "bin upload fail: %x, err:%d\r\n", fw_addr + i, err);
+        }
+    }
+
+    if (dst) {
+        rwnx_release_firmware_common(&dst);
+    }
+
+    return err;
+}
+
+int rwnx_plat_bin_fw_upload_2_with_version(struct rwnx_hw *rwnx_hw, u32 fw_addr,
+                               char *filename, char *version_str, int version_size)
+{
+    int err = 0;
+    unsigned int i = 0, size;
+    u32 *dst = NULL;
+
+    /* Copy the file on the Embedded side */
+    AICWFDBG(LOGINFO, "### Upload %s firmware, @ = %x\n", filename, fw_addr);
+
+    size = rwnx_request_firmware_common(rwnx_hw, &dst, filename);
+    if (!dst) {
+        AICWFDBG(LOGERROR, "No such file or directory\n");
+        return -1;
+    }
+    if (size <= 0) {
+        AICWFDBG(LOGERROR, "wrong size of firmware file\n");
+        dst = NULL;
+        err = -1;
+        return -1;
+    }
+    AICWFDBG(LOGINFO, "size=%d, dst[0]=%x\n", size, dst[0]);
+    // get version if exist
+    if (version_str) {
+        char *bin_str = (char *)&dst[4];
+        int char_idx = 0;
+        for (char_idx = 0; char_idx < version_size; char_idx++) {
+            version_str[char_idx] = bin_str[char_idx];
+            if (bin_str[char_idx] == '\0') {
+                //break;
+            }
+        }
+        if (char_idx == version_size) {
+            version_str[version_size - 1] = '\0';
+        }
+        AICWFDBG(LOGINFO, "version_str=%s\n", version_str);
+    }
+    // upload
     if (size > 512) {
         for (; i < (size - 512); i += 512) {
             //printk("wr blk 0: %p -> %x\r\n", dst + i / 4, fw_addr + i);
@@ -1723,8 +1806,52 @@ static int rwnx_plat_patch_load(struct rwnx_hw *rwnx_hw)
                 return 1; // exit calib mode
             }
         }
+    } else if(rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800D80N) {
+#ifndef ANDROID_PLATFORM
+        sprintf(aic_fw_path, "%s/%s", aic_fw_path, "aic8800D80N");
+#endif
+        if (testmode == FW_NORMAL_MODE) {
+            ret = aicwf_plat_patch_load_8800d80n(rwnx_hw);
+            if (ret) {
+                AICWFDBG(LOGERROR, "patch upload fail: %d\n", ret);
+                return ret;
+            }
+            ret = aicwf_plat_patch_table_load_8800d80n(rwnx_hw);
+            if (ret) {
+                AICWFDBG(LOGERROR, "patch_tbl upload fail: %d\r\n", ret);
+                return ret;
+            }
+            aicwf_patch_config_8800d80n(rwnx_hw);
+            #if DEF_PATCH_METHOD_VER_2
+            aicwf_plat_cinit_exec_8800d80n(rwnx_hw);
+            aicwf_plat_calib_exec_8800d80n(rwnx_hw);
+            #endif
+        }
+        else if (testmode == FW_RFTEST_MODE) {
+            AICWFDBG(LOGINFO, "%s load rftest bin\n", __func__);
+            ret = aicwf_plat_rftest_load_8800d80n(rwnx_hw);
+            if (ret) {
+                AICWFDBG(LOGERROR, "load rftest bin fail: %d\n", ret);
+                return ret;
+            }
+        }
     }
-
+    else if(rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800DLN) {
+#ifndef ANDROID_PLATFORM
+        sprintf(aic_fw_path, "%s/%s", aic_fw_path, "aic8800DLN");
+#endif
+        if (testmode == FW_NORMAL_MODE) {
+            aicwf_patch_config_8800dln(rwnx_hw);
+        }
+        else if (testmode == FW_RFTEST_MODE) {
+            AICWFDBG(LOGINFO, "%s load rftest bin\n", __func__);
+            ret = aicwf_plat_rftest_load_8800dln(rwnx_hw);
+            if (ret) {
+                AICWFDBG(LOGINFO, "load rftest bin fail: %d\n", ret);
+                return ret;
+            }
+        }
+    }
     return ret;
 }
 #endif
@@ -2242,6 +2369,16 @@ void get_userconfig_txpwr_lvl_adj_in_fdrv(txpwr_lvl_adj_conf_t *txpwr_lvl_adj)
     AICWFDBG(LOGINFO, "%s:lvl_adj_5g_chan_155:%d\r\n",      __func__, txpwr_lvl_adj->pwrlvl_adj_tbl_5g[5]);
 }
 
+void get_userconfig_txpwr_lvl_adj_v2_in_fdrv(txpwr_lvl_adj_conf_v2_t *txpwr_lvl_adj_v2)
+{
+    *txpwr_lvl_adj_v2 = userconfig_info.txpwr_lvl_adj_v2;
+
+    AICWFDBG(LOGINFO, "%s:enable:%d\r\n",                   __func__, txpwr_lvl_adj_v2->enable);
+    AICWFDBG(LOGINFO, "%s:lvl_adj_2g4_chan_1_4:%d\r\n",     __func__, txpwr_lvl_adj_v2->pwrlvl_adj_tbl_2g4[0]);
+    AICWFDBG(LOGINFO, "%s:lvl_adj_2g4_chan_5_9:%d\r\n",     __func__, txpwr_lvl_adj_v2->pwrlvl_adj_tbl_2g4[1]);
+    AICWFDBG(LOGINFO, "%s:lvl_adj_2g4_chan_10_13:%d\r\n",   __func__, txpwr_lvl_adj_v2->pwrlvl_adj_tbl_2g4[2]);
+}
+
 
 void get_userconfig_txpwr_ofst_in_fdrv(txpwr_ofst_conf_t *txpwr_ofst)
 {
@@ -2311,6 +2448,23 @@ void get_userconfig_txpwr_ofst2x_v2_in_fdrv(txpwr_ofst2x_conf_v2_t *txpwr_ofst2x
     }
     AICWFDBG(LOGINFO, "\n");
 }
+
+void get_userconfig_txpwr_ofst2x_v3_in_fdrv(txpwr_ofst2x_conf_v3_t *txpwr_ofst2x_v3)
+{
+    int type, ch_grp;
+    *txpwr_ofst2x_v3 = userconfig_info.txpwr_ofst2x_v3;
+    AICWFDBG(LOGINFO, "%s:enable      :%d\r\n", __func__, txpwr_ofst2x_v3->enable);
+    AICWFDBG(LOGINFO, "pwrofst2x 2.4g: [0]:11b, [1]:ofdm_highrate, [2]:ofdm_lowrate\n"
+        "  chan=" "\t1-4" "\t5-9" "\t10-13");
+    for (type = 0; type < 3; type++) {
+        AICWFDBG(LOGINFO, "\n  [%d] =", type);
+        for (ch_grp = 0; ch_grp < 3; ch_grp++) {
+            AICWFDBG(LOGINFO, "\t%d", txpwr_ofst2x_v3->pwrofst2x_tbl_2g4[type][ch_grp]);
+        }
+    }
+    AICWFDBG(LOGINFO, "\n");
+}
+
 void get_userconfig_txpwr_loss(txpwr_loss_conf_t *txpwr_loss)
 {
 	txpwr_loss->loss_enable_2g4  = userconfig_info.txpwr_loss.loss_enable_2g4;
@@ -2322,6 +2476,101 @@ void get_userconfig_txpwr_loss(txpwr_loss_conf_t *txpwr_loss)
 				txpwr_loss->loss_enable_2g4, txpwr_loss->loss_value_2g4,
 				txpwr_loss->loss_enable_5g, txpwr_loss->loss_value_5g);
 }
+s8_l get_txpwr_max(s8_l power)
+{
+	int i=0;
+
+	if(g_rwnx_plat->usbdev->chipid == PRODUCT_ID_AIC8800D81X2 ||
+		g_rwnx_plat->usbdev->chipid == PRODUCT_ID_AIC8800D89X2 ){
+		for (i = 0; i <= 11; i++){
+			if(power < userconfig_info.txpwr_lvl_v4.pwrlvl_11b_11ag_2g4[i])
+				power = userconfig_info.txpwr_lvl_v4.pwrlvl_11b_11ag_2g4[i];
+		}
+	    for (i = 0; i <= 9; i++){
+			if(power < userconfig_info.txpwr_lvl_v4.pwrlvl_11n_11ac_2g4[i])
+				power = userconfig_info.txpwr_lvl_v4.pwrlvl_11n_11ac_2g4[i];
+	    }
+	    for (i = 0; i <= 11; i++){
+			if(power < userconfig_info.txpwr_lvl_v4.pwrlvl_11ax_2g4[i])
+				power = userconfig_info.txpwr_lvl_v4.pwrlvl_11ax_2g4[i];
+	    }
+		for (i = 0; i <= 7; i++){
+			if(power < userconfig_info.txpwr_lvl_v4.pwrlvl_11a_5g[i])
+				power = userconfig_info.txpwr_lvl_v4.pwrlvl_11a_5g[i];
+		}
+	    for (i = 0; i <= 9; i++){
+			if(power < userconfig_info.txpwr_lvl_v4.pwrlvl_11n_11ac_5g[i])
+				power = userconfig_info.txpwr_lvl_v4.pwrlvl_11n_11ac_5g[i];
+	    }
+		for (i = 0; i <= 11; i++){
+			if(power < userconfig_info.txpwr_lvl_v4.pwrlvl_11ax_5g[i])
+				power = userconfig_info.txpwr_lvl_v4.pwrlvl_11ax_5g[i];
+		}
+
+		if ((userconfig_info.txpwr_loss.loss_enable_2g4 == 1) ||
+			(userconfig_info.txpwr_loss.loss_enable_5g == 1)) {
+		if (userconfig_info.txpwr_loss.loss_value_2g4 <
+			userconfig_info.txpwr_loss.loss_value_5g)
+			power += userconfig_info.txpwr_loss.loss_value_5g;
+		else
+			power += userconfig_info.txpwr_loss.loss_value_2g4;
+		}
+	}
+	else if (g_rwnx_plat->usbdev->chipid == PRODUCT_ID_AIC8800D81 ||
+		g_rwnx_plat->usbdev->chipid == PRODUCT_ID_AIC8800D80N){
+		for (i = 0; i <= 11; i++){
+			if(power < userconfig_info.txpwr_lvl_v3.pwrlvl_11b_11ag_2g4[i])
+				power = userconfig_info.txpwr_lvl_v3.pwrlvl_11b_11ag_2g4[i];
+		}
+	    for (i = 0; i <= 9; i++){
+			if(power < userconfig_info.txpwr_lvl_v3.pwrlvl_11n_11ac_2g4[i])
+				power = userconfig_info.txpwr_lvl_v3.pwrlvl_11n_11ac_2g4[i];
+	    }
+	    for (i = 0; i <= 11; i++){
+			if(power < userconfig_info.txpwr_lvl_v3.pwrlvl_11ax_2g4[i])
+				power = userconfig_info.txpwr_lvl_v3.pwrlvl_11ax_2g4[i];
+	    }
+		for (i = 4; i <= 11; i++){
+			if(power < userconfig_info.txpwr_lvl_v3.pwrlvl_11a_5g[i])
+				power = userconfig_info.txpwr_lvl_v3.pwrlvl_11a_5g[i];
+		}
+	    for (i = 0; i <= 9; i++){
+			if(power < userconfig_info.txpwr_lvl_v3.pwrlvl_11n_11ac_5g[i])
+				power = userconfig_info.txpwr_lvl_v3.pwrlvl_11n_11ac_5g[i];
+	    }
+		for (i = 0; i <= 11; i++){
+			if(power < userconfig_info.txpwr_lvl_v3.pwrlvl_11ax_5g[i])
+				power = userconfig_info.txpwr_lvl_v3.pwrlvl_11ax_5g[i];
+		}
+
+		if ((userconfig_info.txpwr_loss.loss_enable_2g4 == 1) ||
+			(userconfig_info.txpwr_loss.loss_enable_5g == 1)) {
+			if (userconfig_info.txpwr_loss.loss_value_2g4 <
+				userconfig_info.txpwr_loss.loss_value_5g)
+				power += userconfig_info.txpwr_loss.loss_value_5g;
+			else
+				power += userconfig_info.txpwr_loss.loss_value_2g4;
+		}
+
+	}else if(g_rwnx_plat->usbdev->chipid == PRODUCT_ID_AIC8800DC || g_rwnx_plat->usbdev->chipid == PRODUCT_ID_AIC8800DW){
+		for (i = 0; i <= 11; i++){
+			if(power < userconfig_info.txpwr_lvl_v2.pwrlvl_11b_11ag_2g4[i])
+				power = userconfig_info.txpwr_lvl_v2.pwrlvl_11b_11ag_2g4[i];
+		}
+	    for (i = 0; i <= 9; i++){
+			if(power < userconfig_info.txpwr_lvl_v2.pwrlvl_11n_11ac_2g4[i])
+				power = userconfig_info.txpwr_lvl_v2.pwrlvl_11n_11ac_2g4[i];
+	    }
+	    for (i = 0; i <= 11; i++){
+			if(power < userconfig_info.txpwr_lvl_v2.pwrlvl_11ax_2g4[i])
+				power = userconfig_info.txpwr_lvl_v2.pwrlvl_11ax_2g4[i];
+	    }
+	}
+
+	AICWFDBG(LOGINFO, "%s:txpwr_max:%d \r\n",__func__,power);
+	return power;
+}
+
 void set_txpwr_loss_ofst(s8_l value)
 {
     userconfig_info.txpwr_loss.loss_enable_2g4 = 1;
@@ -3115,7 +3364,7 @@ int8_t rwnx_plat_powerlimit_save(u8_l band, char *channel, u8_l bw, char *limit,
 }
 
 
-void rwnx_plat_powerlimit_parsing(char *buffer, int size, char *cc)
+void rwnx_plat_powerlimit_parsing(char *buffer, int size)
 {
 #define LD_STAGE_EXC_MAPPING    0
 #define LD_STAGE_TAB_DEFINE     1
@@ -3465,11 +3714,21 @@ static int rwnx_plat_userconfig_load(struct rwnx_hw *rwnx_hw) {
         #ifdef CONFIG_POWER_LIMIT
         rwnx_plat_powerlimit_load_8800dcdw(rwnx_hw, PRODUCT_ID_AIC8800DW);
         #endif
+    }else if(rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800DLN){
+        rwnx_plat_userconfig_load_8800dln(rwnx_hw);
+        #ifdef CONFIG_POWER_LIMIT
+        rwnx_plat_powerlimit_load_8800dln(rwnx_hw);
+        #endif
     }else if(rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800D81){
         rwnx_plat_userconfig_load_8800d80(rwnx_hw);
     }else if(rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800D81X2 ||
         rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800D89X2){
         rwnx_plat_userconfig_load_8800d80x2(rwnx_hw);
+    }else if(rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800D80N){
+        rwnx_plat_userconfig_load_8800d80n(rwnx_hw);
+#ifdef CONFIG_POWER_LIMIT
+        rwnx_plat_powerlimit_load_8800d80n(rwnx_hw);
+#endif
     }
 
 	return 0;

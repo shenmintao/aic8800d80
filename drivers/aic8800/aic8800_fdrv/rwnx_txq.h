@@ -393,5 +393,6 @@ void rwnx_txq_confirm_any(struct rwnx_hw *rwnx_hw, struct rwnx_txq *txq,
 void rwnx_hwq_init(struct rwnx_hw *rwnx_hw);
 void rwnx_hwq_process(struct rwnx_hw *rwnx_hw, struct rwnx_hwq *hwq);
 void rwnx_hwq_process_all(struct rwnx_hw *rwnx_hw);
+void rwnx_txq_flush(struct rwnx_hw *rwnx_hw, struct rwnx_txq *txq);
 
 #endif /* _RWNX_TXQ_H_ */

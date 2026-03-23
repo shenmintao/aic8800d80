@@ -20,20 +20,6 @@ extern int flash_erase_len;
 int flash_write_size = 0;
 u32 flash_write_bin_crc = 0;
 
-typedef struct
-{
-    int8_t enable;
-    int8_t dsss;
-    int8_t ofdmlowrate_2g4;
-    int8_t ofdm64qam_2g4;
-    int8_t ofdm256qam_2g4;
-    int8_t ofdm1024qam_2g4;
-    int8_t ofdmlowrate_5g;
-    int8_t ofdm64qam_5g;
-    int8_t ofdm256qam_5g;
-    int8_t ofdm1024qam_5g;
-} txpwr_idx_conf_t;
-
 
 txpwr_idx_conf_t userconfig_txpwr_idx = {
 	.enable 		  = 1,
@@ -49,17 +35,6 @@ txpwr_idx_conf_t userconfig_txpwr_idx = {
 
 };
 
-typedef struct
-{
-    int8_t enable;
-    int8_t chan_1_4;
-    int8_t chan_5_9;
-    int8_t chan_10_13;
-    int8_t chan_36_64;
-    int8_t chan_100_120;
-    int8_t chan_122_140;
-    int8_t chan_142_165;
-} txpwr_ofst_conf_t;
 
 txpwr_ofst_conf_t userconfig_txpwr_ofst = {
 	.enable = 1,
@@ -71,13 +46,6 @@ txpwr_ofst_conf_t userconfig_txpwr_ofst = {
 	.chan_122_140 = 0,
 	.chan_142_165 = 0
 };
-
-typedef struct
-{
-    int8_t enable;
-    int8_t xtal_cap;
-    int8_t xtal_cap_fine;
-} xtal_cap_conf_t;
 
 
 xtal_cap_conf_t userconfig_xtal_cap = {
@@ -757,7 +725,7 @@ int rwnx_plat_flash_bin_upload_android(struct aic_usb_dev *usbdev, u32 fw_addr,
     int err=0;
     const u32 mem_addr = fw_addr;
     struct dbg_mem_read_cfm rd_mem_addr_cfm;
-    u32 crc = ~0UL;
+    u32 crc = (u32)~0UL;
 
     /* load aic firmware */
     size = aic_load_firmware(&dst, filename, dev);
@@ -1285,6 +1253,149 @@ static struct aicbt_info_t aicbt_info[] = {
     },//PRODUCT_ID_AIC8800D80X2
 };
 
+#ifdef CONFIG_LOAD_BT_CONF
+static const char *aicbt_find_tag(const u8 *file_data, unsigned int file_size,
+                                 const char *tag_name, unsigned int tag_len)
+{
+    unsigned int line_start = 0, tag_name_len = strlen(tag_name);
+    const char *comment_symbols = "#;";
+
+    RWNX_DBG(RWNX_FN_ENTRY_STR);
+
+    while (line_start < file_size) {
+        unsigned int line_end = line_start;
+
+        while (line_end < file_size && file_data[line_end] != '\n' && file_data[line_end] != '\r') {
+            line_end++;
+        }
+
+        if (line_end - line_start >= tag_name_len &&
+            !strncmp((const char*)&file_data[line_start], tag_name, tag_name_len))
+        {
+            const char *value_start = (const char*)&file_data[line_start + tag_name_len];
+            const char *value_end = (const char*)&file_data[line_end];
+
+            while (value_start < value_end && (*value_start == ' ' || *value_start == '=')) {
+                value_start++;
+            }
+            const char *comment_pos = value_start;
+            while (comment_pos < value_end && !strchr(comment_symbols, *comment_pos)) {
+                comment_pos++;
+            }
+            while (comment_pos > value_start && (*(comment_pos-1) == ' ' || *(comment_pos-1) == '\t')) {
+                comment_pos--;
+            }
+            if (comment_pos > value_start) {
+                return value_start;
+            }
+        }
+
+        line_start = line_end;
+        while (line_start < file_size && (file_data[line_start] == '\n' || file_data[line_start] == '\r')) {
+            line_start++;
+        }
+    }
+    return NULL;
+}
+
+void aicbt_parse_config(struct aic_usb_dev *usbdev, const char *filename)
+{
+    struct device *dev = usbdev->dev;
+    u32 *dst = NULL;
+    int size;
+    const u8 *tag_ptr;
+    u32 tmp_val;
+    //char *filename = "aicbt.conf";
+
+    RWNX_DBG(RWNX_FN_ENTRY_STR);
+
+    size = aic_load_firmware((u32 **)&dst, filename, dev);
+    if (size <= 0) {
+        AICWFDBG(LOGERROR, "%s: load %s fail (%d)\n", __func__, filename, size);
+        return;
+    }
+
+    tag_ptr = aicbt_find_tag((char*)dst, size, "BTMODE=", strlen("0"));
+    if (tag_ptr) {
+        if (sscanf(tag_ptr, "%x", &aicbt_info[usbdev->chipid].btmode) != 1 ||
+            aicbt_info[usbdev->chipid].btmode > AICBT_BTMODE_BT_ONLY_COANT) {
+            aicbt_info[usbdev->chipid].btmode = AICBT_BTMODE_DEFAULT;
+            AICWFDBG(LOGERROR, "BTMODE invalid, use default %02X\n", AICBT_BTMODE_DEFAULT);
+        }
+    } else {
+        aicbt_info[usbdev->chipid].btmode = AICBT_BTMODE_DEFAULT;
+    }
+
+    tag_ptr = aicbt_find_tag((char*)dst, size, "BTPORT=", strlen("0"));
+    if (tag_ptr) {
+        if (sscanf(tag_ptr, "%x", &aicbt_info[usbdev->chipid].btport) != 1 ||
+            aicbt_info[usbdev->chipid].btport > AICBT_BTPORT_UART) {
+            aicbt_info[usbdev->chipid].btport = AICBT_BTPORT_DEFAULT;
+        }
+    } else {
+        aicbt_info[usbdev->chipid].btport = AICBT_BTPORT_DEFAULT;
+    }
+
+    tag_ptr = aicbt_find_tag((char*)dst, size, "UART_BAUD=", 0);
+    if (tag_ptr) {
+        if (sscanf(tag_ptr, "%u", &tmp_val) == 1) {
+            if(tmp_val >= AICBT_UART_BAUD_115200 && tmp_val <= AICBT_UART_BAUD_3_25M) {
+                aicbt_info[usbdev->chipid].uart_baud = tmp_val;
+            } else {
+                aicbt_info[usbdev->chipid].uart_baud = AICBT_UART_BAUD_DEFAULT;
+                AICWFDBG(LOGERROR, "UART_BAUD %u invalid, use default %d\n", tmp_val, AICBT_UART_BAUD_DEFAULT);
+            }
+        } else {
+            aicbt_info[usbdev->chipid].uart_baud = AICBT_UART_BAUD_DEFAULT;
+        }
+    } else {
+        aicbt_info[usbdev->chipid].uart_baud = AICBT_UART_BAUD_DEFAULT;
+    }
+    tag_ptr = aicbt_find_tag((char*)dst, size, "UART_FC=", strlen("0"));
+    if (tag_ptr) {
+        if (sscanf(tag_ptr, "%x", &aicbt_info[usbdev->chipid].uart_flowctrl) != 1 ||
+            aicbt_info[usbdev->chipid].uart_flowctrl > AICBT_UART_FLOWCTRL_ENABLE) {
+            aicbt_info[usbdev->chipid].uart_flowctrl = AICBT_UART_FC_DEFAULT;
+        }
+    } else {
+        aicbt_info[usbdev->chipid].uart_flowctrl = AICBT_UART_FC_DEFAULT;
+    }
+
+    tag_ptr = aicbt_find_tag((char*)dst, size, "LPM_ENABLE=", strlen("0"));
+    if (tag_ptr) {
+        if (sscanf(tag_ptr, "%x", &aicbt_info[usbdev->chipid].lpm_enable) != 1 ||
+            aicbt_info[usbdev->chipid].lpm_enable > 1) {
+            aicbt_info[usbdev->chipid].lpm_enable = AICBT_LPM_ENABLE_DEFAULT;
+        }
+    } else {
+        aicbt_info[usbdev->chipid].lpm_enable = AICBT_LPM_ENABLE_DEFAULT;
+    }
+    tag_ptr = aicbt_find_tag((char*)dst, size, "TXPWR_LVL=", strlen("0x6F2F"));
+    if (tag_ptr) {
+        if (sscanf(tag_ptr, "%08x", &tmp_val) == 1) {
+            if (tmp_val >= 0 || tmp_val <= 0X7F7F) {
+                aicbt_info[usbdev->chipid].txpwr_lvl = tmp_val;
+            } else {
+                aicbt_info[usbdev->chipid].txpwr_lvl = AICBT_TXPWR_LVL_DEFAULT;
+            }
+        } else {
+            aicbt_info[usbdev->chipid].txpwr_lvl = AICBT_TXPWR_LVL_DEFAULT;
+        }
+    } else {
+        aicbt_info[usbdev->chipid].txpwr_lvl = AICBT_TXPWR_LVL_DEFAULT;
+    }
+    vfree(dst);
+    AICWFDBG(LOGINFO, "%s: btmode %d btport %d uart baud %d uart fc %d lpm %d txpwrlvl %4X\n",
+        __func__,
+        aicbt_info[usbdev->chipid].btmode,
+        aicbt_info[usbdev->chipid].btport,
+        aicbt_info[usbdev->chipid].uart_baud,
+        aicbt_info[usbdev->chipid].uart_flowctrl,
+        aicbt_info[usbdev->chipid].lpm_enable,
+        aicbt_info[usbdev->chipid].txpwr_lvl);
+}
+#endif
+
 int aicbt_patch_table_load(struct aic_usb_dev *usbdev, struct aicbt_patch_table *_head)
 {
 	struct aicbt_patch_table *head, *p;
@@ -1306,12 +1417,13 @@ int aicbt_patch_table_load(struct aic_usb_dev *usbdev, struct aicbt_patch_table 
 			*(data + 13) = aicbt_info[usbdev->chipid].uart_flowctrl;
 			*(data + 15) = aicbt_info[usbdev->chipid].lpm_enable;
 			*(data + 17) = aicbt_info[usbdev->chipid].txpwr_lvl;
-            
-            printk("%s bt btmode[%d]:%d \r\n", __func__, usbdev->chipid, aicbt_info[usbdev->chipid].btmode);
-    		printk("%s bt uart_baud[%d]:%d \r\n", __func__, usbdev->chipid, aicbt_info[usbdev->chipid].uart_baud);
-    		printk("%s bt uart_flowctrl[%d]:%d \r\n", __func__, usbdev->chipid, aicbt_info[usbdev->chipid].uart_flowctrl);
-    		printk("%s bt lpm_enable[%d]:%d \r\n", __func__, usbdev->chipid, aicbt_info[usbdev->chipid].lpm_enable);
-    		printk("%s bt tx_pwr[%d]:%d \r\n", __func__, usbdev->chipid, aicbt_info[usbdev->chipid].txpwr_lvl);
+
+			printk("%s bt btmode[%d]:%d\r\n", __func__, usbdev->chipid, aicbt_info[usbdev->chipid].btmode);
+			printk("%s bt btport[%d]:%d\r\n", __func__, usbdev->chipid, aicbt_info[usbdev->chipid].btport);
+			printk("%s bt uart_baud[%d]:%d\r\n", __func__, usbdev->chipid, aicbt_info[usbdev->chipid].uart_baud);
+			printk("%s bt uart_flowctrl[%d]:%d\r\n", __func__, usbdev->chipid, aicbt_info[usbdev->chipid].uart_flowctrl);
+			printk("%s bt lpm_enable[%d]:%d\r\n", __func__, usbdev->chipid, aicbt_info[usbdev->chipid].lpm_enable);
+			printk("%s bt tx_pwr[%d]:%4X\r\n", __func__, usbdev->chipid, aicbt_info[usbdev->chipid].txpwr_lvl);
 
 		}
 		if (p->type == 0x06) {
@@ -1326,7 +1438,8 @@ int aicbt_patch_table_load(struct aic_usb_dev *usbdev, struct aicbt_patch_table 
 			data += 2;
 		}
 		if (p->type == AICBT_PT_PWRON)
-			udelay(500);
+			mdelay(100);
+		//	udelay(500);
 	}
 	aicbt_patch_table_free(head);
 	return 0;
@@ -1349,6 +1462,7 @@ int aicbt_patch_info_unpack(struct aicbt_patch_info_t *patch_info, struct aicbt_
             patch_info->info_len = head_t->len;
             memcpy_len = patch_info->info_len;
         }
+	head_t->len = patch_info->info_len;
         AICWFDBG(LOGDEBUG, "%s memcpy_len:%d \r\n", __func__, memcpy_len);   
 
         if (patch_info->info_len == 0)

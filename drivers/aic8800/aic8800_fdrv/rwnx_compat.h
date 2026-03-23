@@ -41,7 +41,7 @@
 #define IEEE80211_HE_MAC_CAP3_MAX_AMPDU_LEN_EXP_MASK IEEE80211_HE_MAC_CAP3_MAX_A_AMPDU_LEN_EXP_MASK
 #endif
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(5, 18, 0)
+#if LINUX_VERSION_CODE > KERNEL_VERSION(5, 15, 60)
 #define IEEE80211_MAX_AMPDU_BUF IEEE80211_MAX_AMPDU_BUF_HE
 #endif
 
@@ -380,6 +380,7 @@ enum {
     rwnx_ops_hw_scan(hw, vif, struct cfg80211_scan_request *req)
 #endif
 
+u16 rwnx_select_txq(struct rwnx_vif *rwnx_vif, struct sk_buff *skb);
 /* NET */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 13, 0)
 #define rwnx_select_queue(dev, skb, sb_dev) \

@@ -38,6 +38,7 @@
 #include <linux/fs.h>
 #include <linux/uaccess.h>
 #include <linux/reboot.h>
+#include <linux/compat.h>
 
 #include "aic_btusb.h"
 
@@ -48,7 +49,6 @@
 #define AICBT_RELEASE_NAME "202012_ANDROID"
 #define VERSION "2.1.0"
 
-#define SUSPNED_DW_FW 0
 
 
 static spinlock_t queue_lock;
@@ -62,14 +62,22 @@ static volatile uint16_t    dlfw_dis_state = 0;
 #define USB_PRODUCT_ID_AIC8800DC			0x88dc
 #define USB_PRODUCT_ID_AIC8800D80			0x8d81
 #define USB_PRODUCT_ID_AIC8800D80X2			0x8d91
-#define USB_PRODUCT_ID_AIC8800M80			0x8d83
+#define USB_PRODUCT_ID_AIC8800D80X2P		0x8da1
+#define USB_PRODUCT_ID_AIC8800D80N			0x8d45
+#define USB_PRODUCT_ID_AIC8800D80LN			0x8d46
+#define USB_PRODUCT_ID_AIC8800D40N			0x8d48
+#define USB_PRODUCT_ID_AIC8800D40LN			0x8d49
+#define USB_PRODUCT_ID_AIC8800DLN			0x8871
 
 enum AICWF_IC{
 	PRODUCT_ID_AIC8801	=	0,
 	PRODUCT_ID_AIC8800DC,
 	PRODUCT_ID_AIC8800DW,
+	PRODUCT_ID_AIC8800DLN,
+	PRODUCT_ID_AIC8800D80N,
 	PRODUCT_ID_AIC8800D80,
-	PRODUCT_ID_AIC8800D80X2
+	PRODUCT_ID_AIC8800D80X2,
+	PRODUCT_ID_MAX,
 };
 
 u16 g_chipid = PRODUCT_ID_AIC8801;
@@ -78,7 +86,9 @@ u8 sub_chip_id = 0;
 
 int btdual = 0;
 int bt_support = 0;
+int testmode = 0;
 
+module_param(testmode, int, 0660);
 module_param(btdual, int, 0660);
 module_param(bt_support, int, 0660);
 
@@ -139,30 +149,23 @@ struct btusb_data {
     struct notifier_block reboot_notifier;
 #endif
     firmware_info *fw_info;
-
-#ifdef CONFIG_SCO_OVER_HCI
-    AIC_sco_card_t  *pSCOSnd;
-#endif
 };
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 7, 1)
 static bool reset_on_close = 0;
 #endif
 
-#ifdef CONFIG_SCO_OVER_HCI
-struct snd_sco_cap_timer {
-	struct timer_list cap_timer;
-	struct timer_list play_timer;
-	struct btusb_data snd_usb_data;
-	int snd_sco_length;
-};
-static struct snd_sco_cap_timer snd_cap_timer;
-#endif
 
 #ifdef CONFIG_SUPPORT_VENDOR_APCF
 int vendor_apcf_sent_done = 0;
 #endif
 
 const struct aicbt_firmware *aicbt_fw;
+
+static int aic_load_firmware(u8 ** fw_buf, const char *name, struct device *device);
+static int aicbt_patch_table_free(struct aicbt_patch_table **head);
+static int download_patch(firmware_info *fw_info, int cached);
+static int rwnx_send_dbg_mem_write_req(firmware_info *fw_info, u32 mem_addr, u32 mem_data);
+
 
 static inline int check_set_dlfw_state_value(uint16_t change_value)
 {
@@ -411,6 +414,7 @@ enum CODEC_TYPE{
 static enum CODEC_TYPE codec_type = CODEC_CVSD;
 static void set_select_msbc(enum CODEC_TYPE type);
 static enum CODEC_TYPE check_select_msbc(void);
+int send_hci_cmd(firmware_info *fw_info);
 
 
 #if CONFIG_BLUEDROID
@@ -427,11 +431,25 @@ static struct cdev bt_char_dev; /* bt character device structure */
 static struct class *bt_char_class; /* device class for usb char driver */
 static int bt_reset = 0;
 static int aic_queue_cnt(void);
+static void aic_enqueue(struct sk_buff *skb);
 
 /* HCI device & lock */
 DEFINE_RWLOCK(hci_dev_lock);
 struct hci_dev *ghdev = NULL;
+#ifdef CONFIG_BT_WAKEUP_IN_PM
+static bool aic_store_acl_handle(uint16_t handle);
+static bool aic_check_store_handle(uint16_t handle);
+static void aic_clean_store_acl_handle(uint16_t handle);
+static void aic_clean_all_store_acl_handle(void);
+static int aic_handle_cmd(struct sk_buff *skb);
+static uint8_t ble_scan_en[10]={0x00,0x42,0x20,0x06,0x01,0x00,0x00,0x00,0x00,0x00};
+static uint8_t bt_scan_en[5]={0x00,0x1a,0x0c,0x01,0x03};
+static uint8_t ble_create_con[62]={0x00,0x43,0x20,0x3a,0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x07,\
+                                   0x60,0x00,0x30,0x00,0x09,0x00,0x09,0x00,0x00,0x00,0xf4,0x01,0x00,0x00,0x00,0x00,\
+                                   0x60,0x00,0x30,0x00,0x09,0x00,0x09,0x00,0x00,0x00,0xf4,0x01,0x00,0x00,0x00,0x00,\
+                                   0x60,0x00,0x30,0x00,0x09,0x00,0x09,0x00,0x00,0x00,0xf4,0x01,0x00,0x00,0x00,0x00};
 
+#endif
 static int bypass_event(struct sk_buff *skb)
 {
 	int ret = 0;
@@ -481,9 +499,65 @@ static int bypass_event(struct sk_buff *skb)
                         }
                     }
                     break;
+#ifdef CONFIG_BT_WAKEUP_IN_PM
+                    case HCI_BLE_CONN_COMPLETE_EVT:
+                    {
+                        uint8_t status = opcode[3];
+                        uint16_t handle;
+                        uint8_t *ptr = &opcode[4];
+                        printk("%s: HCI_BLE_CONN_COMPLETE_EVT(0x%02x)", __func__, *opcode);
+                        handle = ((uint16_t)(*(ptr)) | (((uint16_t)(*((ptr) + 1))) << 8));
+                        if(status == 0){
+                            aic_store_acl_handle(handle);
+                        }
+                        ble_create_con[0]=0;
+                    }
+                    break;
+                    case HCI_BLE_ENHANCED_CONN_COMPLETE_EVT:
+                    {
+                        uint8_t status = opcode[3];
+                        uint16_t handle;
+                        uint8_t *ptr = &opcode[4];
+                        printk("%s: HCI_BLE_ENHANCED_CONN_COMPLETE_EVT(0x%02x)", __func__, *opcode);
+                        handle = ((uint16_t)(*(ptr)) | (((uint16_t)(*((ptr) + 1))) << 8));
+                        if(status == 0){
+                            aic_store_acl_handle(handle);
+                        }
+                        ble_create_con[0]=0;
+                    }
+                    break;
+#endif//CONFIG_BT_WAKEUP_IN_PM
+                    default:
+                    break;
                 }
             }
             break;
+#ifdef CONFIG_BT_WAKEUP_IN_PM
+            case HCI_EV_CONN_COMPLETE:
+            {
+                uint8_t status;
+                uint16_t handle;
+                printk("%s: HCI_EV_SYNC_CONN_COMPLETE(0x%02x)", __func__, *opcode);
+                status = *(opcode + 2);
+                handle = *(opcode + 3) | *(opcode + 4) << 8;
+                if(status == 0){
+                    aic_store_acl_handle(handle);
+                }
+            }
+            break;
+            case HCI_EV_DISCONN_COMPLETE:
+            {
+                uint8_t status;
+                uint16_t handle;
+                printk("%s: HCI_EV_DISCONN_COMPLETE(0x%02x)", __func__, *opcode);
+                status = *(opcode + 2);
+                handle = *(opcode + 3) | *(opcode + 4) << 8;
+                if(aic_check_store_handle(handle)){
+                    aic_clean_store_acl_handle(handle);
+                }
+            }
+            break;
+#endif//CONFIG_BT_WAKEUP_IN_PM
 		default:
 			break;
 	}
@@ -688,9 +762,9 @@ static inline int is_queue_empty(void)
 static void aic_clear_queue(void)
 {
     struct sk_buff *skb;
-	unsigned long flags = 0;
-	
-	spin_lock_irqsave(&queue_lock, flags);
+    unsigned long flags = 0;
+    AICBT_INFO("aic_clear_queue: %s\n", __func__);
+    spin_lock_irqsave(&queue_lock, flags);
     while(!is_queue_empty()) {
         skb = aic_skb_queue[aic_skb_queue_front];
         aic_skb_queue[aic_skb_queue_front] = NULL;
@@ -790,71 +864,6 @@ static int hci_dev_close(__u16 dev)
     return err;
 }
 
-#ifdef CONFIG_SCO_OVER_HCI
-/* copy data from the URB buffer into the ALSA ring buffer */
-static bool aic_copy_capture_data_to_alsa(struct btusb_data *data, uint8_t* p_data, unsigned int frames)
-{
-  	struct snd_pcm_runtime *runtime;
-  	unsigned int frame_bytes, frames1;
-  	u8 *dest;
-    AIC_sco_card_t  *pSCOSnd = data->pSCOSnd;
-
-  	runtime = pSCOSnd->capture.substream->runtime;
-  	frame_bytes = 2;
-
-  	dest = runtime->dma_area + pSCOSnd->capture.buffer_pos * frame_bytes;
-  	if (pSCOSnd->capture.buffer_pos + frames <= runtime->buffer_size) {
-  		memcpy(dest, p_data, frames * frame_bytes);
-  	} else {
-  		/* wrap around at end of ring buffer */
-  		frames1 = runtime->buffer_size - pSCOSnd->capture.buffer_pos;
-  		memcpy(dest, p_data, frames1 * frame_bytes);
-  		memcpy(runtime->dma_area,
-  		       p_data + frames1 * frame_bytes,
-  		       (frames - frames1) * frame_bytes);
-  	}
-
-  	pSCOSnd->capture.buffer_pos += frames;
-  	if (pSCOSnd->capture.buffer_pos >= runtime->buffer_size) {
-  		pSCOSnd->capture.buffer_pos -= runtime->buffer_size;
-  	}
-
-    if((pSCOSnd->capture.buffer_pos%runtime->period_size) == 0) {
-        snd_pcm_period_elapsed(pSCOSnd->capture.substream);
-    }
-
-  	return false;
-}
-
-
-static void hci_send_to_alsa_ringbuffer(struct hci_dev *hdev, struct sk_buff *skb)
-{
-    struct btusb_data *data = GET_DRV_DATA(hdev);
-    AIC_sco_card_t  *pSCOSnd = data->pSCOSnd;
-    uint8_t* p_data;
-    int sco_length = skb->len - HCI_SCO_HDR_SIZE;
-    u16 *handle = (u16 *) (skb->data);
-    //u8 errflg = (u8)((*handle & 0x3000) >> 12);
-
-    pSCOSnd->usb_data->sco_handle = (*handle & 0x0fff);
-
-    AICBT_DBG("%s, %x, %x %x\n", __func__,pSCOSnd->usb_data->sco_handle, *handle, errflg);
-
-    if (!hdev) {
-        AICBT_INFO("%s: Frame for unknown HCI device", __func__);
-        return;
-    }
-
-    if (!test_bit(ALSA_CAPTURE_RUNNING, &pSCOSnd->states)) {
-        AICBT_INFO("%s: ALSA is not running", __func__);
-        return;
-    }
-	snd_cap_timer.snd_sco_length = sco_length;
-    p_data = (uint8_t *)skb->data + HCI_SCO_HDR_SIZE;
-    aic_copy_capture_data_to_alsa(data, p_data, sco_length/2);
-}
-
-#endif
 
 #if CONFIG_BLUEDROID
 static struct hci_dev *hci_alloc_dev(void)
@@ -986,19 +995,6 @@ static int hci_recv_frame(struct sk_buff *skb)
     __net_timestamp(skb);
 
     if (atomic_read(&hdev->promisc)) {
-#ifdef CONFIG_SCO_OVER_HCI
-        if(bt_cb(skb)->pkt_type == HCI_SCODATA_PKT){
-            hci_send_to_alsa_ringbuffer(hdev, skb);
-        }else{
-            if(bt_cb(skb)->pkt_type == HCI_EVENT_PKT){
-				if(bypass_event(skb)){
-					kfree_skb(skb);
-					return 0;
-				}
-			}
-			hci_send_to_stack(hdev, skb);
-		}
-#else
 		if(bt_cb(skb)->pkt_type == HCI_EVENT_PKT){
 			if(bypass_event(skb)){
 				kfree_skb(skb);
@@ -1007,8 +1003,6 @@ static int hci_recv_frame(struct sk_buff *skb)
 		}
 		/* Send copy to the sockets */
 		hci_send_to_stack(hdev, skb);
-#endif
-
     }
 
     kfree_skb(skb);
@@ -1154,7 +1148,7 @@ static int hci_recv_fragment(struct hci_dev *hdev, int type, void *data, int cou
 }
 #endif //CONFIG_BLUEDROID
 
-void hci_hardware_error(void)
+static void hci_hardware_error(void)
 {
     struct sk_buff *aic_skb_copy = NULL;
     int len = 4;
@@ -1172,7 +1166,8 @@ void hci_hardware_error(void)
     wake_up_interruptible(&btchr_read_wait);
 }
 
-void hci_resume_hardware_error(void)
+#if 0
+static void hci_resume_hardware_error(void)
 {
     struct sk_buff *aic_skb_copy = NULL;
     int len = 4;
@@ -1189,6 +1184,7 @@ void hci_resume_hardware_error(void)
 
     wake_up_interruptible(&btchr_read_wait);
 }
+#endif
 static int btchr_open(struct inode *inode_p, struct file  *file_p)
 {
     struct btusb_data *data;
@@ -1216,7 +1212,9 @@ static int btchr_open(struct inode *inode_p, struct file  *file_p)
     mutex_lock(&btchr_mutex);
     hci_dev_open(0);
     mutex_unlock(&btchr_mutex);
-
+#ifdef CONFIG_BT_WAKEUP_IN_PM
+    aic_clean_all_store_acl_handle();
+#endif//CONFIG_BT_WAKEUP_IN_PM
     aic_clear_queue();
     return nonseekable_open(inode_p, file_p);
 }
@@ -1381,6 +1379,9 @@ static ssize_t btchr_write(struct file *file_p,
     skb->dev = (void *)hdev;
     bt_cb(skb)->pkt_type = *((__u8 *)skb->data);
     skb_pull(skb, 1);
+#ifdef CONFIG_BT_WAKEUP_IN_PM
+    aic_handle_cmd(skb);
+#endif//CONFIG_BT_WAKEUP_IN_PM
     data->hdev->send(skb);
 
     return count;
@@ -1477,16 +1478,16 @@ static long btchr_ioctl(struct file *file_p,unsigned int cmd, unsigned long arg)
             return 1;
         case DWFW_CMPLT:
             AICBT_INFO(" btchr_ioctl DWFW_CMPLT");
-#if 1
-	case SET_ISO_CFG:
+            break;
+        case SET_ISO_CFG:
             AICBT_INFO("btchr_ioctl SET_ISO_CFG");
-		if(copy_from_user(&(hdev->voice_setting), (__u16*)arg, sizeof(__u16))){
-			AICBT_INFO(" voice settings err");
-		}
-		//hdev->voice_setting = *(uint16_t*)arg;
-		AICBT_INFO(" voice settings = %d", hdev->voice_setting);
-		//return 1;
-#endif
+            if(copy_from_user(&(hdev->voice_setting), (__u16*)arg, sizeof(__u16))){
+            AICBT_INFO(" voice settings err");
+            }
+            //hdev->voice_setting = *(uint16_t*)arg;
+            AICBT_INFO(" voice settings = %d", hdev->voice_setting);
+            //return 1;
+            break;
         case GET_USB_INFO:
 			//ret = download_patch(fw_info,1);
             AICBT_INFO(" btchr_ioctl GET_USB_INFO");
@@ -1515,11 +1516,13 @@ static long btchr_ioctl(struct file *file_p,unsigned int cmd, unsigned long arg)
 }
 
 #ifdef CONFIG_PLATFORM_UBUNTU//AIDEN
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 6, 0)
 typedef u32		compat_uptr_t;
 static inline void __user *compat_ptr(compat_uptr_t uptr)
 {
 	return (void __user *)(unsigned long)uptr;
 }
+#endif
 #endif
 
 #ifdef CONFIG_COMPAT
@@ -1641,7 +1644,7 @@ int send_hci_cmd(firmware_info *fw_info)
 
 }
 
-int rcv_hci_evt(firmware_info *fw_info)
+static int rcv_hci_evt(firmware_info *fw_info)
 {
     int ret_len = 0, ret_val = 0;
     int i;
@@ -1667,17 +1670,17 @@ int rcv_hci_evt(firmware_info *fw_info)
 }
 
 #ifdef CONFIG_BT_WAKEUP_IN_PM
-int rcv_hci_evt_in_pm(firmware_info *fw_info)
+static int rcv_hci_evt_in_pm(firmware_info *fw_info, bool is_cmp)
 {
     int ret_len = 0, ret_val = 0;
     int i;
 
     while (1) {
-        for(i = 0; i < 5; i++) {
+        for(i = 0; i < 2; i++) {
         ret_val = usb_interrupt_msg(
             fw_info->udev, fw_info->pipe_in,
             (void *)(fw_info->rcv_pkt), RCV_PKT_LEN,
-            &ret_len, 200);
+            &ret_len, 10);
             if (ret_val >= 0)
                 break;
         }
@@ -1685,17 +1688,65 @@ int rcv_hci_evt_in_pm(firmware_info *fw_info)
         if (ret_val < 0)
             return ret_val;
 
-        if (CMD_CMP_EVT == fw_info->evt_hdr->evt) {
-            if (fw_info->cmd_hdr->opcode == fw_info->cmd_cmp->opcode)
-                return ret_len;
+        if (is_cmp){
+            if (CMD_CMP_EVT == fw_info->evt_hdr->evt) {
+                if (fw_info->cmd_hdr->opcode == fw_info->cmd_cmp->opcode)
+                    return ret_len;
+            }
+        }else{
+            return ret_len;
         }
     }
 }
 
-int set_bt_wakeup_param(firmware_info *fw_info)
+static void rcv_ble_wakeup_event(firmware_info *fw_info)
+{
+    int ret_val = 0;
+    u8 reportdata[128];
+	int i;
+
+    ret_val = rcv_hci_evt_in_pm(fw_info,0);
+    if (ret_val < 0) {
+        AICBT_ERR("%s: Failed to receive ble wakeup event, errno %d",
+                __func__, ret_val);
+        return;
+    }else{
+        for(i = 0;i<RCV_PKT_LEN ;i++){
+            reportdata[i] = fw_info->rcv_pkt[i];
+            printk("%x ",fw_info->rcv_pkt[i]);
+        }
+    }
+}
+static int set_bt_ad_filetr_en_param(firmware_info *fw_info)
 {
     int ret_val;
 
+    AICBT_INFO("%s", __func__);
+
+    fw_info->cmd_hdr->opcode = cpu_to_le16(HCI_VSC_SET_ADFILTER_EN_CMD);
+    fw_info->cmd_hdr->plen = 0;
+    fw_info->pkt_len = CMD_HDR_LEN ;
+    ret_val = send_hci_cmd(fw_info);
+    if (ret_val < 0) {
+        AICBT_ERR("%s: Failed to send bt wakeup param, errno %d",
+                __func__, ret_val);
+        return ret_val;
+    }
+
+    ret_val = rcv_hci_evt_in_pm(fw_info,0);
+    if (ret_val < 0) {
+        AICBT_ERR("%s: Failed to receive bt event, errno %d",
+                __func__, ret_val);
+        return ret_val;
+    }
+
+    return ret_val;
+}
+
+static int set_bt_wakeup_param(firmware_info *fw_info)
+{
+    int ret_val;
+    struct ble_wakeup_param_t* wakeup_param = NULL;
     AICBT_INFO("%s", __func__);
 
 /*
@@ -1710,14 +1761,14 @@ int set_bt_wakeup_param(firmware_info *fw_info)
     data & mask = "0x46 0x00" 0x00 0x00 0x00 0x00 0x00 0x00 0x00 "0x30 0xff 0xff 0x43 0x52 0x45 0x4c 0x42"
     using data & mask value condition to wakeup host_wake_bt gpio
 */
-    struct ble_wakeup_param_t* wakeup_param = (struct ble_wakeup_param_t*)kmalloc(sizeof(struct ble_wakeup_param_t), GFP_KERNEL);
+    wakeup_param = (struct ble_wakeup_param_t*)kmalloc(sizeof(struct ble_wakeup_param_t), GFP_KERNEL);
 
     printk("%s ble scan wakeup \r\n", __func__);
 
     memset(wakeup_param, 0, sizeof(struct ble_wakeup_param_t));
     wakeup_param->magic_num = 0x53454C42;//magic_num
     wakeup_param->delay_scan_to = 1000;//delay start scan time(ms)
-    wakeup_param->reboot_to = 1000;//reboot time(ms):   bit31: 1, ic will reboot when timer is handle; 0 , do not reboot 
+    wakeup_param->reboot_to = 0x800003e8;//reboot time(ms):   bit31: 1, ic will reboot when timer is handle; 0 , do not reboot 
                                    // bit0~30 : time(ms)
     /******************************************************************/
     ///gpio_trigger_idx : 0    if wakeup_param->gpio_dft_lvl[0]=0xfe,this idx will be invalid.
@@ -1845,7 +1896,7 @@ int set_bt_wakeup_param(firmware_info *fw_info)
         return ret_val;
     }
 
-    ret_val = rcv_hci_evt_in_pm(fw_info);
+    ret_val = rcv_hci_evt_in_pm(fw_info,0);
     if (ret_val < 0) {
         AICBT_ERR("%s: Failed to receive bt event, errno %d",
                 __func__, ret_val);
@@ -1855,11 +1906,12 @@ int set_bt_wakeup_param(firmware_info *fw_info)
     return ret_val;
 }
 
-int reset_bt_from_wakeup_process(firmware_info *fw_info)
+static int reset_bt_from_wakeup_process(firmware_info *fw_info)
 {
     int ret_val;
 
     AICBT_INFO("%s", __func__);
+    rcv_ble_wakeup_event(fw_info);
 
     fw_info->cmd_hdr->opcode = cpu_to_le16(HCI_VSC_RESET_ADFILTER_PROCESS_PT_CMD);
     fw_info->cmd_hdr->plen = 0;
@@ -1871,8 +1923,9 @@ int reset_bt_from_wakeup_process(firmware_info *fw_info)
                 __func__, ret_val);
         return ret_val;
     }
+    fw_info->cmd_hdr->opcode = cpu_to_le16(HCI_OP_RESET);
 
-    ret_val = rcv_hci_evt_in_pm(fw_info);
+    ret_val = rcv_hci_evt_in_pm(fw_info,1);
     if (ret_val < 0) {
         AICBT_ERR("%s: Failed to receive bt event, errno %d",
                 __func__, ret_val);
@@ -1881,6 +1934,369 @@ int reset_bt_from_wakeup_process(firmware_info *fw_info)
 
     return ret_val;
 }
+
+uint16_t aic_acl_handle_list[10];
+static void hci_disconnect_complete_event(uint16_t handle,uint8_t reason)
+{
+    struct sk_buff *aic_skb_copy = NULL;
+
+    int len = 7;
+    unsigned char p_buf[7] = {HCI_EVENT_PKT, 0x05, 0x04, 0x00, 0x00, 0x00, 0x00};
+    p_buf[4] = (unsigned char)(handle & 0x00ff);
+    p_buf[5] = (unsigned char)((handle & 0xff00)>>8);
+    p_buf[6] = reason;
+    printk("%s\n",__func__);
+
+    aic_skb_copy = alloc_skb(len, GFP_ATOMIC);
+    if (!aic_skb_copy) {
+        AICBT_ERR("%s: Failed to allocate mem", __func__);
+        return;
+    }
+
+    memcpy(skb_put(aic_skb_copy, len), p_buf, len);
+    aic_enqueue(aic_skb_copy);
+
+    wake_up_interruptible(&btchr_read_wait);
+}
+
+static int hci_disconnect_complete_cmd(firmware_info *fw_info,uint16_t handle,uint8_t reason)
+{
+    int ret_val = 0;
+    int len = 3;
+    unsigned char p_buf[3] = {0x00, 0x00, 0x00};
+
+
+    p_buf[0] = (unsigned char)(handle & 0x00ff);
+    p_buf[1] = (unsigned char)((handle & 0xff00)>>8);
+    p_buf[2] = reason;
+    printk("%s\n",__func__);
+
+    fw_info->cmd_hdr->opcode = cpu_to_le16(HCI_OP_DISCONNECT);
+    fw_info->cmd_hdr->plen = len;
+    fw_info->pkt_len = CMD_HDR_LEN + len;
+    memcpy(fw_info->req_para,p_buf,len);
+    ret_val = send_hci_cmd(fw_info);
+    if (ret_val < 0) {
+        AICBT_ERR("%s: Failed to send , errno %d",
+                __func__, ret_val);
+        return ret_val;
+    }
+
+    ret_val = rcv_hci_evt_in_pm(fw_info,1);
+    if (ret_val < 0) {
+        AICBT_ERR("%s: Failed to receive bt event, errno %d",
+                __func__, ret_val);
+        return ret_val;
+    }
+    return ret_val;
+}
+
+static bool aic_check_store_handle(uint16_t handle)
+{
+    bool ret = false;
+    int i = 0;
+    for(i = 0 ;i < 10; i++){
+        if(aic_acl_handle_list[i] == handle && aic_acl_handle_list[i] != 0){
+            ret = true;
+            break;
+        }
+    }
+    printk("%s,handle = 0x%x,ret = %d\n", __func__,handle,ret);
+    return ret;
+}
+
+static bool aic_store_acl_handle(uint16_t handle)
+{
+    bool ret = false;
+    int i = 0;
+    for(i = 0 ;i < 10; i++){
+        if(aic_acl_handle_list[i] != handle && aic_acl_handle_list[i] == 0){
+            aic_acl_handle_list[i] = handle;
+            ret = true;
+            break;
+        }
+    }
+    printk("%s,handle = 0x%x,ret = %d\n", __func__,handle,ret);
+    return ret;
+}
+
+static void aic_clean_store_acl_handle(uint16_t handle)
+{
+    int i = 0;
+    printk("%s,handle = 0x%x\n", __func__,handle);
+    for(i = 0 ;i < 10; i++){
+        if(aic_acl_handle_list[i] == handle && aic_acl_handle_list[i] != 0){
+            aic_acl_handle_list[i] = 0;
+            break;
+        }
+    }
+}
+
+static void aic_clean_all_store_acl_handle(void)
+{
+    int i = 0;
+    for(i = 0 ;i < 10; i++){
+        aic_acl_handle_list[i] = 0;
+    }
+    printk("%s\n", __func__);
+}
+
+static int aic_event_disconnect_all_store_acl_handle(void)
+{
+    int i = 0;
+    int ret = 0;
+    printk("%s\n", __func__);
+    for(i = 0 ;i < 10; i++){
+        if(aic_acl_handle_list[i] != 0){
+            printk("%s,handle = 0x%x\n", __func__,aic_acl_handle_list[i]);
+			if(aic_acl_handle_list[i]>=0x10){
+            	hci_disconnect_complete_event(aic_acl_handle_list[i],0x13);
+			}
+            aic_clean_store_acl_handle(aic_acl_handle_list[i]);
+            ret = 1;
+        }
+    }
+    printk("%s ret = %d\n", __func__,ret);
+    return ret;
+}
+
+static int aic_cmd_disconnect_all_store_acl_handle(firmware_info *fw_info)
+{
+    int i = 0;
+    int ret = 0;
+    printk("%s\n", __func__);
+    for(i = 0 ;i < 10; i++){
+        if(aic_acl_handle_list[i] != 0){
+            printk("%s,handle = 0x%x\n", __func__,aic_acl_handle_list[i]);
+			if(aic_acl_handle_list[i]>=0x10){
+            	hci_disconnect_complete_cmd(fw_info,aic_acl_handle_list[i],0x13);
+			}
+            ret = 1;
+        }
+    }
+    printk("%s ret = %d\n", __func__,ret);
+    return ret;
+}
+
+
+static int aic_cmd_cancel_le_conn(firmware_info *fw_info)
+{
+    int ret_val = 0;
+    int len = 0;
+    printk("%s,ble_create_con %d\n",__func__,ble_create_con[0]);
+
+    if(ble_create_con[0] == 1 ){
+        fw_info->cmd_hdr->opcode = cpu_to_le16(HCI_OP_LE_Create_Connection_Cancel);
+        fw_info->cmd_hdr->plen = len;
+        fw_info->pkt_len = CMD_HDR_LEN + len;
+        ret_val = send_hci_cmd(fw_info);
+        if (ret_val < 0) {
+            AICBT_ERR("%s: Failed to send , errno %d",
+                    __func__, ret_val);
+        }
+        
+        ret_val = rcv_hci_evt_in_pm(fw_info,0);
+        if (ret_val < 0) {
+            AICBT_ERR("%s: Failed to receive bt event, errno %d",
+                    __func__, ret_val);
+        }
+    }
+
+    return ret_val;
+}
+
+static int aic_cmd_reconn_le_conn(firmware_info *fw_info)
+{
+    int ret_val = 0;
+    int len = 0;
+    u16 opcode = 0;
+    printk("%s,ble_create_con %d\n",__func__,ble_create_con[0]);
+
+    if(ble_create_con[0] == 1 ){
+        opcode = (u16)ble_create_con[1]|((u16)ble_create_con[2]<<8);
+        len = ble_create_con[3];
+        AICBT_INFO("%s: opcode 0x%x,len %d",__func__, opcode,len);
+        fw_info->cmd_hdr->opcode = cpu_to_le16(opcode);
+        fw_info->cmd_hdr->plen = len;
+        fw_info->pkt_len = CMD_HDR_LEN + len;
+        memcpy(fw_info->req_para,&ble_create_con[4],len);
+        ret_val = send_hci_cmd(fw_info);
+        if (ret_val < 0) {
+            AICBT_ERR("%s: Failed to send , errno %d",
+                    __func__, ret_val);
+        }
+        
+        ret_val = rcv_hci_evt_in_pm(fw_info,0);
+        if (ret_val < 0) {
+            AICBT_ERR("%s: Failed to receive bt event, errno %d",
+                    __func__, ret_val);
+        }
+    }
+
+    return ret_val;
+}
+
+static int aic_cmd_disable_scan(firmware_info *fw_info)
+{
+    int ret_val = 0;
+    int len = 6;
+    unsigned char p_buf[6] = {0x01,0x00,0x00,0x00,0x00,0x00};
+
+    printk("%s,ble_scan_en %d,%d\n",__func__,ble_scan_en[0],ble_scan_en[4]);
+
+    if(ble_scan_en[0] == 1 && ble_scan_en[4] == 1){
+        p_buf[0] = 0;
+        memcpy(&p_buf[1],&ble_scan_en[5],5);
+        fw_info->cmd_hdr->opcode = cpu_to_le16(HCI_OP_LE_Set_Extended_Scan_Enable);
+        fw_info->cmd_hdr->plen = len;
+        fw_info->pkt_len = CMD_HDR_LEN + len;
+        memcpy(fw_info->req_para,p_buf,len);
+        ret_val = send_hci_cmd(fw_info);
+        if (ret_val < 0) {
+            AICBT_ERR("%s: Failed to send , errno %d",
+                    __func__, ret_val);
+        }
+        
+        ret_val = rcv_hci_evt_in_pm(fw_info,0);
+        if (ret_val < 0) {
+            AICBT_ERR("%s: Failed to receive bt event, errno %d",
+                    __func__, ret_val);
+        }
+    }
+
+
+    printk("%s,bt_scan_en %d ,%d\n",__func__,bt_scan_en[0],bt_scan_en[4]);
+
+    if(bt_scan_en[0] == 1 && bt_scan_en[4] > 0){
+        p_buf[0] = 0;
+        fw_info->cmd_hdr->opcode = cpu_to_le16(HCI_OP_Write_Scan_Enable);
+        fw_info->cmd_hdr->plen = 1;
+        fw_info->pkt_len = CMD_HDR_LEN + 1;
+        memcpy(fw_info->req_para,p_buf,len);
+        ret_val = send_hci_cmd(fw_info);
+        if (ret_val < 0) {
+            AICBT_ERR("%s: Failed to send , errno %d",
+                    __func__, ret_val);
+        }
+        
+        ret_val = rcv_hci_evt_in_pm(fw_info,0);
+        if (ret_val < 0) {
+            AICBT_ERR("%s: Failed to receive bt event, errno %d",
+                    __func__, ret_val);
+        }
+    }
+    ret_val = aic_cmd_cancel_le_conn(fw_info);
+
+    return ret_val;
+}
+
+static int aic_cmd_enable_scan(firmware_info *fw_info)
+{
+    int ret_val = 0;
+    int len = 6;
+    unsigned char p_buf[6] = {0x01,0x00,0x00,0x00,0x00,0x00};
+
+    printk("%s,ble_scan_en %d,%d\n",__func__,ble_scan_en[0],ble_scan_en[4]);
+
+    if(ble_scan_en[0] == 1 && ble_scan_en[4] == 1){
+        p_buf[0] = 1;
+        memcpy(&p_buf[1],&ble_scan_en[5],5);
+        fw_info->cmd_hdr->opcode = cpu_to_le16(HCI_OP_LE_Set_Extended_Scan_Enable);
+        fw_info->cmd_hdr->plen = len;
+        fw_info->pkt_len = CMD_HDR_LEN + len;
+        memcpy(fw_info->req_para,p_buf,len);
+        ret_val = send_hci_cmd(fw_info);
+        if (ret_val < 0) {
+            AICBT_ERR("%s: Failed to send , errno %d",
+                    __func__, ret_val);
+        }
+        
+        ret_val = rcv_hci_evt_in_pm(fw_info,0);
+        if (ret_val < 0) {
+            AICBT_ERR("%s: Failed to receive bt event, errno %d",
+                    __func__, ret_val);
+        }
+    }
+
+    printk("%s,bt_scan_en %d,%d\n",__func__,bt_scan_en[0],bt_scan_en[4]);
+
+    if(bt_scan_en[0] == 1 && bt_scan_en[4] > 0){
+        p_buf[0] = bt_scan_en[4];
+        fw_info->cmd_hdr->opcode = cpu_to_le16(HCI_OP_Write_Scan_Enable);
+        fw_info->cmd_hdr->plen = 1;
+        fw_info->pkt_len = CMD_HDR_LEN + 1;
+        memcpy(fw_info->req_para,p_buf,len);
+        ret_val = send_hci_cmd(fw_info);
+        if (ret_val < 0) {
+            AICBT_ERR("%s: Failed to send , errno %d",
+                    __func__, ret_val);
+        }
+        
+        ret_val = rcv_hci_evt_in_pm(fw_info,0);
+        if (ret_val < 0) {
+            AICBT_ERR("%s: Failed to receive bt event, errno %d",
+                    __func__, ret_val);
+        }
+    }
+    ret_val = aic_cmd_reconn_le_conn(fw_info);
+
+    return ret_val;
+}
+
+
+static int aic_handle_cmd(struct sk_buff *skb)
+{
+	int ret = 0;
+	u8 *opcode = (u8*)(skb->data);
+    u16 command;
+    command = ((u16)opcode[0]|(u16)(opcode[1])<<8);
+    switch(command){
+        case HCI_OP_LE_Set_Extended_Scan_Enable:
+            {
+                u8 scan_en = opcode[3];
+                if(scan_en){
+                    ble_scan_en[0]=1;
+                    memcpy(&ble_scan_en[1],opcode,9);
+                }else{
+                    ble_scan_en[0]=0;
+                }
+            }
+            break;
+        case HCI_OP_LE_Set_Extended_Adv_Enable:
+            break;
+        case HCI_OP_Write_Scan_Enable:
+            {
+                u8 scan_en = opcode[3];
+                if(scan_en){
+                    bt_scan_en[0]=1;
+                    bt_scan_en[4] = scan_en;
+                }else{
+                    bt_scan_en[0]=0;
+                }
+            }
+            break;
+        case HCI_OP_LE_Extended_Create_Connection:
+        case HCI_OP_LE_Create_Connection:
+            {
+                u8 len = opcode[2]; 
+                printk("%s,0x%x,len %d\n",__func__,command,len);
+                ble_create_con[0]=1;
+                memcpy(&ble_create_con[1],opcode,len+2);
+            }
+            break;
+        case HCI_OP_LE_Create_Connection_Cancel:
+            {
+                printk("%s,0x%x\n",__func__,command);
+                ble_create_con[0]=0;
+            }
+            break;
+        default:
+            break;
+    }
+    return ret;
+}
+
+
 #endif
 //for 8800DC start
 u32 fwcfg_tbl[][2] = {
@@ -1889,7 +2305,7 @@ u32 fwcfg_tbl[][2] = {
 };
 
 //Crystal provided by CPU (start)
-int hci_send_dbg_rd_mem_cmd(firmware_info* fw_info, u32 addr){
+static int hci_send_dbg_rd_mem_cmd(firmware_info* fw_info, u32 addr){
 	struct hci_dbg_rd_mem_cmd *rd_cmd;
 	struct hci_dbg_rd_mem_cmd_evt *evt_para;
 
@@ -1932,7 +2348,7 @@ int hci_send_dbg_rd_mem_cmd(firmware_info* fw_info, u32 addr){
 	return 0;
 }
 
-int set_bbpll_config(firmware_info* fw_info){
+static int set_bbpll_config(firmware_info* fw_info){
 	int ret_val = -1;
 	struct fw_status *evt_status;
     struct hci_dbg_rd_mem_cmd_evt *evt_para;
@@ -1980,6 +2396,9 @@ int set_bbpll_config(firmware_info* fw_info){
 		
 		fw_info->cmd_hdr->opcode = cpu_to_le16(HCI_VSC_UPDATE_PT_CMD);
 		fw_info->cmd_hdr->plen = HCI_VSC_UPDATE_PT_SIZE;
+		if (g_chipid == PRODUCT_ID_AIC8800D80N) {
+			fw_info->cmd_hdr->plen = HCI_VSC_UPDATE_PT_V2_SIZE;
+		}
 		fw_info->pkt_len = fw_info->cmd_hdr->plen + 3;
 		ret_val = send_hci_cmd(fw_info);
 		if (ret_val < 0) {
@@ -2006,7 +2425,7 @@ int set_bbpll_config(firmware_info* fw_info){
 //Crystal provided by CPU (end)
 
 
-int fw_config(firmware_info* fw_info)
+static int fw_config(firmware_info* fw_info)
 {
     int ret_val = -1;
     struct hci_dbg_rd_mem_cmd *rd_cmd;
@@ -2093,7 +2512,7 @@ int fw_config(firmware_info* fw_info)
     return ret_val;
 }
 
-int system_config(firmware_info *fw_info)
+static int system_config(firmware_info *fw_info)
 {
     int ret_val = -1;
     struct hci_dbg_rd_mem_cmd *rd_cmd;
@@ -2190,7 +2609,7 @@ int system_config(firmware_info *fw_info)
     return ret_val;
 }
 
-int check_fw_status(firmware_info* fw_info)
+static int check_fw_status(firmware_info* fw_info)
 {
     struct fw_status *read_ver_rsp;
     int ret_val = -1;
@@ -2221,7 +2640,7 @@ int check_fw_status(firmware_info* fw_info)
 }
 
 
-int download_data(firmware_info *fw_info, u32 fw_addr, const char *filename)
+static int download_data(firmware_info *fw_info, u32 fw_addr, const char *filename)
 {
     unsigned int i=0;
     int size;
@@ -2230,11 +2649,15 @@ int download_data(firmware_info *fw_info, u32 fw_addr, const char *filename)
     struct hci_dbg_wr_mem_cmd *dl_cmd;
     int hdr_len = sizeof(__le32) + sizeof(__u8) + sizeof(__u8);
     int data_len = HCI_VSC_MEM_WR_SIZE;
+    int mem_wr_size = HCI_VSC_MEM_WR_SIZE;
     int frag_len = data_len + hdr_len;
     int ret_val;
     int ncmd = 1;
     struct fw_status *evt_para;
 
+    if (g_chipid == PRODUCT_ID_AIC8800D80N) {
+        mem_wr_size = HCI_VSC_MEM_WR_V2_SIZE;
+    }
     /* load aic firmware */
     size = aic_load_firmware(&dst, filename, NULL);
     if(size <= 0){
@@ -2252,9 +2675,9 @@ int download_data(firmware_info *fw_info, u32 fw_addr, const char *filename)
     /* Copy the file on the Embedded side */
     printk("### Upload %s firmware, @ = %x  size=%d\n", filename, fw_addr, size);
 
-    if (size > HCI_VSC_MEM_WR_SIZE) {// > 1KB data
-        for (i = 0; i < (size - HCI_VSC_MEM_WR_SIZE); i += HCI_VSC_MEM_WR_SIZE) {//each time write 240 bytes
-            data_len = HCI_VSC_MEM_WR_SIZE;
+    if (size > mem_wr_size) {// > 1KB data
+        for (i = 0; i < (size - mem_wr_size); i += mem_wr_size) {//each time write 240 bytes
+            data_len = mem_wr_size;
             frag_len = data_len + hdr_len;
             memcpy(dl_cmd->data, dst + i, data_len);
             dl_cmd->length = data_len;
@@ -2375,6 +2798,7 @@ enum aicbt_btmode_type {
     AICBT_BTMODE_BT_ONLY,             // bt only mode without switch
     AICBT_BTMODE_BT_ONLY_TEST,        // bt only test mode
     AICBT_BTMODE_BT_WIFI_COMBO_TEST,  // wifi/bt combo test mode
+    AICBT_BTMODE_BT_ONLY_COANT,
     AICBT_MODE_NULL = 0xFF,           // invalid value
 };
 
@@ -2399,9 +2823,11 @@ enum aicbt_uart_flowctrl_type {
 #define AICBSP_HWINFO_DEFAULT       (-1)
 #define AICBSP_CPMODE_DEFAULT       AICBSP_CPMODE_WORK
 #define AICBT_TXPWR_DFT                0x6F2F
+#define AICBT_TXPWR_RF_DFT             0x7F0F
 
 
 #define AICBT_BTMODE_DEFAULT        AICBT_BTMODE_BT_WIFI_COMBO
+#define AICBT_BTMODE_DEFAULT_D80N   AICBT_BTMODE_BT_ONLY
 #define AICBT_BTPORT_DEFAULT        AICBT_BTPORT_MB
 #define AICBT_UART_BAUD_DEFAULT     AICBT_UART_BAUD_1_5M
 #define AICBT_UART_FC_DEFAULT       AICBT_UART_FLOWCTRL_ENABLE
@@ -2417,13 +2843,14 @@ struct aicbsp_info_t aicbsp_info = {
 #define FW_PATH_MAX 200
 
 char aic_fw_path[FW_PATH_MAX];
-#if (CONFIG_BLUEDROID == 0)
-static const char* aic_default_fw_path = "/lib/firmware/aic8800DC";
+#if (CONFIG_BLUEDROID == 0) || defined (CONFIG_PLATFORM_UBUNTU)
+static const char* aic_default_fw_path = "/lib/firmware";
 #else
 static const char* aic_default_fw_path = "/vendor/etc/firmware";
 #endif
 #endif //CONFIG_USE_FW_REQUEST
 
+#if 0
 static struct aicbt_info_t aicbt_info = {
     .btmode        = AICBT_BTMODE_DEFAULT,
     .btport        = AICBT_BTPORT_DEFAULT,
@@ -2432,11 +2859,42 @@ static struct aicbt_info_t aicbt_info = {
     .lpm_enable    = AICBT_LPM_ENABLE_DEFAULT,
     .txpwr_lvl     = AICBT_TXPWR_LVL_DEFAULT,
 };
+#endif
+static struct aicbt_info_t aicbt_info[] = {
+    {
+    },//PRODUCT_ID_AIC8801
+    {
+        .btmode        = AICBT_BTMODE_DEFAULT,
+        .btport        = AICBT_BTPORT_DEFAULT,
+        .uart_baud     = AICBT_UART_BAUD_DEFAULT,
+        .uart_flowctrl = AICBT_UART_FC_DEFAULT,
+        .lpm_enable    = AICBT_LPM_ENABLE_DEFAULT,
+        .txpwr_lvl     = AICBT_TXPWR_LVL_DEFAULT,
+    },//PRODUCT_ID_AIC8800DC
+    {
+    },//PRODUCT_ID_AIC8800DW
+    {
+    },//PRODUCT_ID_AIC8800DLN
+    {
+        .btmode        = AICBT_BTMODE_DEFAULT_D80N,
+        .btport        = AICBT_BTPORT_DEFAULT,
+        .uart_baud     = AICBT_UART_BAUD_DEFAULT,
+        .uart_flowctrl = AICBT_UART_FC_DEFAULT,
+        .lpm_enable    = AICBT_LPM_ENABLE_DEFAULT,
+        .txpwr_lvl     = AICBT_TXPWR_LVL_DEFAULT,
+    },//PRODUCT_ID_AIC8800D80N
+    {
+    },//PRODUCT_ID_AIC8800D80
+    {
+    },//PRODUCT_ID_AIC8800D80X2
+};
 
-int patch_table_load(firmware_info *fw_info, struct aicbt_patch_table *_head)
+
+static int patch_table_load(firmware_info *fw_info, struct aicbt_patch_table *_head)
 {
     struct aicbt_patch_table *head, *p;
     int i;
+    int ret = 0;
     uint32_t *data = NULL;
     struct aicbt_patch_table_cmd *patch_table_cmd = (struct aicbt_patch_table_cmd *)(fw_info->req_para);
     struct fw_status *evt_para;
@@ -2451,20 +2909,23 @@ int patch_table_load(firmware_info *fw_info, struct aicbt_patch_table *_head)
             *(data + 1)  = aicbsp_info.hwinfo < 0;
             *(data + 3) = aicbsp_info.hwinfo;
             *(data + 5)  = aicbsp_info.cpmode;
+            if (g_chipid < PRODUCT_ID_MAX) {
+		if(testmode == 1) {
+			aicbt_info[g_chipid].txpwr_lvl = AICBT_TXPWR_RF_DFT;
+		}
+                *(data + 7) = aicbt_info[g_chipid].btmode;
+                *(data + 9) = aicbt_info[g_chipid].btport;
+                *(data + 11) = aicbt_info[g_chipid].uart_baud;
+                *(data + 13) = aicbt_info[g_chipid].uart_flowctrl;
+                *(data + 15) = aicbt_info[g_chipid].lpm_enable;
+                *(data + 17) = aicbt_info[g_chipid].txpwr_lvl;
 
-            *(data + 7) = aicbt_info.btmode;
-            *(data + 9) = aicbt_info.btport;
-            *(data + 11) = aicbt_info.uart_baud;
-            *(data + 13) = aicbt_info.uart_flowctrl;
-            *(data + 15) = aicbt_info.lpm_enable;
-            *(data + 17) = aicbt_info.txpwr_lvl;
-            
-            printk("%s bt btmode:%d \r\n", __func__, aicbt_info.btmode);
-    		printk("%s bt uart_baud:%d \r\n", __func__, aicbt_info.uart_baud);
-    		printk("%s bt uart_flowctrl:%d \r\n", __func__, aicbt_info.uart_flowctrl);
-    		printk("%s bt lpm_enable:%d \r\n", __func__, aicbt_info.lpm_enable);
-    		printk("%s bt tx_pwr:%d \r\n", __func__, aicbt_info.txpwr_lvl);
-
+                printk("%s bt btmode:%d \r\n", __func__, aicbt_info[g_chipid].btmode);
+                printk("%s bt uart_baud:%d \r\n", __func__, aicbt_info[g_chipid].uart_baud);
+                printk("%s bt uart_flowctrl:%d \r\n", __func__, aicbt_info[g_chipid].uart_flowctrl);
+                printk("%s bt lpm_enable:%d \r\n", __func__, aicbt_info[g_chipid].lpm_enable);
+                printk("%s bt tx_pwr:%d \r\n", __func__, aicbt_info[g_chipid].txpwr_lvl);
+            }
 
         }
         if (p->type == AICBT_PT_INF || p->type == AICBT_PT_PWRON) {
@@ -2491,36 +2952,46 @@ int patch_table_load(firmware_info *fw_info, struct aicbt_patch_table *_head)
                 memcpy(&patch_table_cmd->patch_table_addr[i], data, sizeof(uint32_t));
                 memcpy(&patch_table_cmd->patch_table_data[i], data + 1, sizeof(uint32_t));
                 //printk("[%d] data: %08x %08x\n", i, patch_table_cmd->patch_table_addr[i],patch_table_cmd->patch_table_data[i]);
+                if (g_chipid == PRODUCT_ID_AIC8800D80N) {
+                    ret = rwnx_send_dbg_mem_write_req(fw_info, patch_table_cmd->patch_table_addr[i],patch_table_cmd->patch_table_data[i]);
+                    if (ret) {
+                        printk("%s err %d\n", __func__, ret);
+                        break;
+                    }
+                }
                 data += 2;
             }
             tot_len -= len;
-            evt_para = (struct fw_status *)fw_info->rsp_para;
-            //print_hex_dump(KERN_ERR,"data0:",DUMP_PREFIX_NONE,16,1,patch_table_cmd,sizeof(struct aicbt_patch_table_cmd),false);
+            if (g_chipid == PRODUCT_ID_AIC8800DC)
+            {
+                evt_para = (struct fw_status *)fw_info->rsp_para;
+                //print_hex_dump(KERN_ERR,"data0:",DUMP_PREFIX_NONE,16,1,patch_table_cmd,sizeof(struct aicbt_patch_table_cmd),false);
 
-            //printk("patch num %x %d\n", patch_table_cmd->patch_num, (int)sizeof(struct aicbt_patch_table_cmd));
-            fw_info->cmd_hdr->opcode = cpu_to_le16(HCI_VSC_UPDATE_PT_CMD);
-            fw_info->cmd_hdr->plen = HCI_VSC_UPDATE_PT_SIZE;
-            fw_info->pkt_len = fw_info->cmd_hdr->plen + 3;
-            AICBT_DBG("patch num 0x%x, plen 0x%x\n", patch_table_cmd->patch_num, fw_info->cmd_hdr->plen );
-            //print_hex_dump(KERN_ERR,"patch table:",DUMP_PREFIX_NONE,16,1,fw_info->send_pkt,32,false);
-            ret_val = send_hci_cmd(fw_info);
-            while (ncmd > 0) {
-                ret_val = rcv_hci_evt(fw_info);
-                //printk("%s ret_val:%d \r\n", __func__, ret_val);
-                if (ret_val < 0) {
-                    AICBT_ERR("%s: rcv_hci_evt err %d", __func__, ret_val);
-                    goto out;
-                } else {
-                    AICBT_DBG("%s: Receive acked frag num %d", __func__, evt_para->status);
-                    ncmd--;
-                }
-                if (0 != evt_para->status) {
-                    AICBT_ERR("%s: Receive acked frag num %d, err status %d",
-                            __func__, ret_val, evt_para->status);
-                    ret_val = -1;
-                    goto out;
-                }else{
-                    ret_val = 0;
+                //printk("patch num %x %d\n", patch_table_cmd->patch_num, (int)sizeof(struct aicbt_patch_table_cmd));
+                fw_info->cmd_hdr->opcode = cpu_to_le16(HCI_VSC_UPDATE_PT_CMD);
+                fw_info->cmd_hdr->plen = HCI_VSC_UPDATE_PT_SIZE;
+                fw_info->pkt_len = fw_info->cmd_hdr->plen + 3;
+                AICBT_DBG("patch num 0x%x, plen 0x%x\n", patch_table_cmd->patch_num, fw_info->cmd_hdr->plen );
+                //print_hex_dump(KERN_ERR,"patch table:",DUMP_PREFIX_NONE,16,1,fw_info->send_pkt,32,false);
+                ret_val = send_hci_cmd(fw_info);
+                while (ncmd > 0) {
+                    ret_val = rcv_hci_evt(fw_info);
+                    //printk("%s ret_val:%d \r\n", __func__, ret_val);
+                    if (ret_val < 0) {
+                        AICBT_ERR("%s: rcv_hci_evt err %d", __func__, ret_val);
+                        goto out;
+                    } else {
+                        AICBT_DBG("%s: Receive acked frag num %d", __func__, evt_para->status);
+                        ncmd--;
+                    }
+                    if (0 != evt_para->status) {
+                        AICBT_ERR("%s: Receive acked frag num %d, err status %d",
+                                __func__, ret_val, evt_para->status);
+                        ret_val = -1;
+                        goto out;
+                    }else{
+                        ret_val = 0;
+                    }
                 }
             }
             ncmd = 1;
@@ -2533,7 +3004,7 @@ out:
 }
 
 
-int aic_load_firmware(u8 ** fw_buf, const char *name, struct device *device)
+static int aic_load_firmware(u8 ** fw_buf, const char *name, struct device *device)
 {
 
 #ifdef CONFIG_USE_FW_REQUEST
@@ -2592,7 +3063,17 @@ int aic_load_firmware(u8 ** fw_buf, const char *name, struct device *device)
         printk("%s: use customer define fw_path\n", __func__);
         len = snprintf(path, FW_PATH_MAX, "%s/%s", aic_fw_path, name);
     } else {
+#if (CONFIG_BLUEDROID == 0) || defined (CONFIG_PLATFORM_UBUNTU)
+        if (g_chipid == PRODUCT_ID_AIC8800DC) {
+            len = snprintf(path, FW_PATH_MAX, "%s/%s/%s",aic_default_fw_path, "aic8800DC", name);
+        } else if (g_chipid == PRODUCT_ID_AIC8800D80N) {
+            len = snprintf(path, FW_PATH_MAX, "%s/%s/%s",aic_default_fw_path, "aic8800D80N", name);
+        } else {
+            printk("%s unknown chipid %d\n", __func__, g_chipid);
+        }
+#else
         len = snprintf(path, FW_PATH_MAX, "%s/%s",aic_default_fw_path, name);
+#endif
     }
 
     if (len >= FW_PATH_MAX) {
@@ -2675,7 +3156,7 @@ int aic_load_firmware(u8 ** fw_buf, const char *name, struct device *device)
 #endif
 }
 
-int aicbt_patch_table_free(struct aicbt_patch_table **head)
+static int aicbt_patch_table_free(struct aicbt_patch_table **head)
 {
     struct aicbt_patch_table *p = *head, *n = NULL;
     while (p) {
@@ -2689,7 +3170,7 @@ int aicbt_patch_table_free(struct aicbt_patch_table **head)
     return 0;
 }
 
-struct aicbt_patch_table *aicbt_patch_table_alloc(const char *filename)
+static struct aicbt_patch_table *aicbt_patch_table_alloc(const char *filename)
 {
 	uint8_t *rawdata = NULL, *p;
 	int size;
@@ -2759,7 +3240,7 @@ err:
 }
 
 
-int aicbt_patch_info_unpack(struct aicbt_patch_info_t *patch_info, struct aicbt_patch_table *head_t)
+static int aicbt_patch_info_unpack(struct aicbt_patch_info_t *patch_info, struct aicbt_patch_table *head_t)
 {
     uint8_t *patch_info_array = (uint8_t*)patch_info;
     int base_len = 0;
@@ -2803,7 +3284,7 @@ int aicbt_patch_info_unpack(struct aicbt_patch_info_t *patch_info, struct aicbt_
     return 0;
 }
 
-int rwnx_send_dbg_mem_write_req(firmware_info *fw_info, u32 mem_addr, u32 mem_data){
+static int rwnx_send_dbg_mem_write_req(firmware_info *fw_info, u32 mem_addr, u32 mem_data){
     int ret_val = -1;
     struct hci_dbg_wr_mem_cmd *dl_cmd;
     int data_len = 4;
@@ -2846,7 +3327,7 @@ int rwnx_send_dbg_mem_write_req(firmware_info *fw_info, u32 mem_addr, u32 mem_da
     return ret_val;
 }
 
-int aicbt_ext_patch_data_load(firmware_info *fw_info, struct aicbt_patch_info_t *patch_info)
+static int aicbt_ext_patch_data_load(firmware_info *fw_info, struct aicbt_patch_info_t *patch_info)
 {
     int ret = 0;
     uint32_t ext_patch_nb = patch_info->ext_patch_nb;
@@ -2855,19 +3336,7 @@ int aicbt_ext_patch_data_load(firmware_info *fw_info, struct aicbt_patch_info_t 
     uint32_t id = 0;
     uint32_t addr = 0;
 
-    
     if (ext_patch_nb > 0){
-        
-	printk("%s [0x40506004]: 0x04318000\r\n", __func__);
-	ret = rwnx_send_dbg_mem_write_req(fw_info, 0x40506004, 0x04318000);
-	printk("%s [0x40506004]: 0x04338000\r\n", __func__);
-	ret = rwnx_send_dbg_mem_write_req(fw_info, 0x40506004, 0x04338000);   
-
-        if(ret < 0){
-            printk("%s set dc enable fail\r\n", __func__);
-            return ret;
-        }
-        
         for (index = 0; index < patch_info->ext_patch_nb; index++){
             id = *(patch_info->ext_patch_param + (index * 2));
             addr = *(patch_info->ext_patch_param + (index * 2) + 1); 
@@ -2890,7 +3359,7 @@ int aicbt_ext_patch_data_load(firmware_info *fw_info, struct aicbt_patch_info_t 
 }
 
 
-int aicbt_patch_trap_data_load(firmware_info *fw_info, struct aicbt_patch_table *head)
+static int aicbt_patch_trap_data_load(firmware_info *fw_info, struct aicbt_patch_table *head)
 {
     int ret_val;
     
@@ -2927,10 +3396,117 @@ int aicbt_patch_trap_data_load(firmware_info *fw_info, struct aicbt_patch_table 
 	return 0;
 }
 
-int download_patch(firmware_info *fw_info, int cached)
+#define ROM_FMAC_BTUSB_ADDR_8800D80N_U02    0x00132c00
+#define ROM_FMAC_CINIT_ADDR_8800D80N_U02    0x00133000
+
+#define CHIP_INFO_FLAG_CINIT_BEGIN          (0x01U << 12)
+#define CHIP_INFO_FLAG_CINIT_DONE           (0x01U << 13)
+
+enum {
+    HOST_START_APP_AUTO = 1,
+    HOST_START_APP_CUSTOM,
+    HOST_START_APP_REBOOT,
+    HOST_START_APP_FNCALL = 4,
+    HOST_START_APP_DUMMY  = 5,
+};
+
+static int hci_send_wf_cinit_exec_cmd(firmware_info* fw_info)
+{
+    int ret = 0;
+    struct wf_start_app_param start_app_param;
+    start_app_param.bootaddr = ROM_FMAC_CINIT_ADDR_8800D80N_U02 + 0x0009;
+    start_app_param.boottype = HOST_START_APP_FNCALL;
+    fw_info->cmd_hdr->opcode = cpu_to_le16(HCI_VSC_WF_START_APP_CMD);
+    fw_info->cmd_hdr->plen = sizeof(struct wf_start_app_param);
+    fw_info->pkt_len = CMD_HDR_LEN + sizeof(struct wf_start_app_param);
+    memcpy(fw_info->req_para, &start_app_param,sizeof(struct wf_start_app_param));
+    printk("%s wf start_app exec cinit\r\n", __func__);
+    ret = send_hci_cmd(fw_info);
+    if (ret < 0) {
+        AICBT_ERR("%s: Failed to send wf start_app_param, errno %d\r\n", __func__, ret);
+        return ret;
+    }
+    return ret;
+}
+
+static int aicbt_wf_cinit_data_load(firmware_info *fw_info)
+{
+    int ret = 0;
+    uint32_t addr = 0;
+    addr = ROM_FMAC_CINIT_ADDR_8800D80N_U02;
+    printk("%s wf cinit:%s addr:%x\r\n", __func__, aicbt_fw->wf_cinit, addr);
+    ret = download_data(fw_info, addr, aicbt_fw->wf_cinit);
+    if (ret < 0) {
+        printk("%s download wf cinit error, ret:%d\r\n", __func__, ret);
+        return ret;
+    }
+    addr = ROM_FMAC_BTUSB_ADDR_8800D80N_U02;
+    printk("%s wf btusb:%s addr:%x\r\n", __func__, aicbt_fw->wf_btusb, addr);
+    ret = download_data(fw_info, addr, aicbt_fw->wf_btusb);
+    if (ret < 0) {
+        printk("%s download wf btusb error, ret:%d\r\n", __func__, ret);
+        return ret;
+    }
+    printk("%s patch btusb\r\n", __func__);
+    ret = rwnx_send_dbg_mem_write_req(fw_info, 0x00113564, ROM_FMAC_BTUSB_ADDR_8800D80N_U02 + 0x0009);
+    if (ret) {
+        printk("%s patch btusb error, ret:%d\r\n", __func__, ret);
+        return ret;
+    }
+    return ret;
+}
+
+static int aicbt_wf_cinit_exec(firmware_info *fw_info)
+{
+    int ret_val = 0;
+    struct hci_dbg_rd_mem_cmd_evt *evt_para;
+    uint32_t chipinfo_val;
+    //Read chipinfo
+    ret_val = hci_send_dbg_rd_mem_cmd(fw_info, 0x40500184);
+    if(ret_val < 0){
+        printk("%s error ret_val:%d\r\n", __func__, ret_val);
+        return ret_val;
+    }
+    evt_para = (struct hci_dbg_rd_mem_cmd_evt *)(fw_info->rsp_para);
+    chipinfo_val = ( (uint32_t)evt_para->data[0] |
+                    ((uint32_t)evt_para->data[1] <<  8) |
+                    ((uint32_t)evt_para->data[2] << 16) |
+                    ((uint32_t)evt_para->data[3] << 24));
+    if (chipinfo_val & CHIP_INFO_FLAG_CINIT_BEGIN) {
+        while (!(chipinfo_val & CHIP_INFO_FLAG_CINIT_DONE)) {
+            printk("%s chipinfo_val=%d\r\n", __func__, chipinfo_val);
+            ret_val = hci_send_dbg_rd_mem_cmd(fw_info, 0x40500184);
+            if(ret_val < 0){
+                printk("%s error ret_val:%d\r\n", __func__, ret_val);
+                return ret_val;
+            }
+            evt_para = (struct hci_dbg_rd_mem_cmd_evt *)(fw_info->rsp_para);
+            chipinfo_val = ( (uint32_t)evt_para->data[0] |
+                            ((uint32_t)evt_para->data[1] <<  8) |
+                            ((uint32_t)evt_para->data[2] << 16) |
+                            ((uint32_t)evt_para->data[3] << 24));
+        }
+        printk("cinit executed, chipinfo=%x\r\n", chipinfo_val);
+        return 0;
+    }
+    ret_val = aicbt_wf_cinit_data_load(fw_info);
+    if (ret_val < 0){
+        printk("%s wf cinit load fail, ret_val:%d\r\n", __func__, ret_val);
+        return ret_val;
+    }
+    ret_val = hci_send_wf_cinit_exec_cmd(fw_info);
+    if (ret_val < 0){
+        printk("%s wf cinit exec fail, ret_val:%d\r\n", __func__, ret_val);
+        return ret_val;
+    }
+    return ret_val;
+}
+
+static int download_patch(firmware_info *fw_info, int cached)
 {
     int ret_val = 0;
     struct aicbt_patch_table *head;
+    int ret = 0;
 
     printk("%s: Download fw patch start, cached %d", __func__, cached);
 
@@ -2967,13 +3543,47 @@ int download_patch(firmware_info *fw_info, int cached)
             case DC_U01:
             case DC_U02:
             case DC_U02H:
-                aicbt_fw = &fw_8800dc[sub_chip_id];
+                if (g_chipid == PRODUCT_ID_AIC8800DC) {
+                    aicbt_fw = &fw_8800dc[sub_chip_id];
+                } else if (g_chipid == PRODUCT_ID_AIC8800D80N) {
+                    if (testmode) {
+                        aicbt_fw = &fw_8800d80n_rf[sub_chip_id];
+                    } else {
+                        aicbt_fw = &fw_8800d80n[sub_chip_id];
+                    }
+                } else {
+                    goto free;
+                }
                 printk("%s aicbt_fw desc:%s \r\n", __func__, aicbt_fw->desc);
                 break;
             default:
                 printk("%s unsupported sub_chip_id %x\n", __func__, sub_chip_id);
                 goto free;
                 break;
+        }
+
+        if (g_chipid == PRODUCT_ID_AIC8800DC) {
+            printk("%s [0x40506004]: 0x04318000\r\n", __func__);
+            ret = rwnx_send_dbg_mem_write_req(fw_info, 0x40506004, 0x04318000);
+            printk("%s [0x40506004]: 0x04338000\r\n", __func__);
+            ret = rwnx_send_dbg_mem_write_req(fw_info, 0x40506004, 0x04338000);
+            if(ret < 0){
+                printk("%s set dc enable fail\r\n", __func__);
+                return ret;
+            }
+        }
+
+        if (g_chipid == PRODUCT_ID_AIC8800D80N) {
+            printk("%s try to exec wf cinit\r\n", __func__);
+            ret_val = aicbt_wf_cinit_exec(fw_info);
+            if (ret_val < 0){
+                printk("%s wf cinit exec fail, ret_val:%d\r\n", __func__, ret_val);
+                goto free;
+            }
+            printk("%s [0x40506004]: 0x04338000\r\n", __func__);
+            ret = rwnx_send_dbg_mem_write_req(fw_info, 0x40506004, 0x04338000);
+            printk("%s [0x40509000] : 0x00040000 \r\n",__func__);
+            ret = rwnx_send_dbg_mem_write_req(fw_info, 0x40509000, 0x00040000);
         }
 
         //step 1 get patch table data
@@ -3010,7 +3620,7 @@ end:
 
 //for 8800dc end
 
-firmware_info *firmware_info_init(struct usb_interface *intf)
+static firmware_info *firmware_info_init(struct usb_interface *intf)
 {
     struct usb_device *udev = interface_to_usbdev(intf);
     firmware_info *fw_info;
@@ -3061,7 +3671,7 @@ firmware_info *firmware_info_init(struct usb_interface *intf)
 }
 
 
-void firmware_info_destroy(struct usb_interface *intf)
+static void firmware_info_destroy(struct usb_interface *intf)
 {
     firmware_info *fw_info;
     struct usb_device *udev;
@@ -3104,8 +3714,12 @@ static struct usb_device_id btusb_table[] = {
     {USB_DEVICE_AND_INTERFACE_INFO(USB_VENDOR_ID_AIC, USB_PRODUCT_ID_AIC8800D80, 0xe0, 0x01,0x01)},
     {USB_DEVICE_AND_INTERFACE_INFO(USB_VENDOR_ID_AIC, USB_PRODUCT_ID_AIC8800DC, 0xe0, 0x01,0x01)},
     {USB_DEVICE_AND_INTERFACE_INFO(USB_VENDOR_ID_AIC_V2, USB_PRODUCT_ID_AIC8800D80X2, 0xe0, 0x01,0x01)},
-    {USB_DEVICE_AND_INTERFACE_INFO(USB_VENDOR_ID_AIC, USB_PRODUCT_ID_AIC8800M80, 0xe0, 0x01,0x01)},       /* a69c:8d83 */
-    {USB_DEVICE_AND_INTERFACE_INFO(USB_VENDOR_ID_AIC_V2, USB_PRODUCT_ID_AIC8800D80, 0xe0, 0x01,0x01)},    /* 368b:8d81 */
+    {USB_DEVICE_AND_INTERFACE_INFO(USB_VENDOR_ID_AIC_V2, USB_PRODUCT_ID_AIC8800D80X2P, 0xe0, 0x01,0x01)},
+    {USB_DEVICE_AND_INTERFACE_INFO(USB_VENDOR_ID_AIC_V2, USB_PRODUCT_ID_AIC8800D80N, 0xe0, 0x01,0x01)},
+    {USB_DEVICE_AND_INTERFACE_INFO(USB_VENDOR_ID_AIC_V2, USB_PRODUCT_ID_AIC8800D80LN, 0xe0, 0x01,0x01)},
+    {USB_DEVICE_AND_INTERFACE_INFO(USB_VENDOR_ID_AIC_V2, USB_PRODUCT_ID_AIC8800D40N, 0xe0, 0x01,0x01)},
+    {USB_DEVICE_AND_INTERFACE_INFO(USB_VENDOR_ID_AIC_V2, USB_PRODUCT_ID_AIC8800D40LN, 0xe0, 0x01,0x01)},
+    {USB_DEVICE_AND_INTERFACE_INFO(USB_VENDOR_ID_AIC_V2, USB_PRODUCT_ID_AIC8800DLN, 0xe0, 0x01,0x01)},
     {}
 };
 
@@ -3125,7 +3739,7 @@ static int inc_tx(struct btusb_data *data)
     return rv;
 }
 
-void check_sco_event(struct urb *urb)
+static void check_sco_event(struct urb *urb)
 {
     u8* opcode = (u8*)(urb->transfer_buffer);
     u8 status;
@@ -3133,10 +3747,6 @@ void check_sco_event(struct urb *urb)
     uint16_t handle;
     u8 air_mode = 0;
     struct hci_dev *hdev = urb->context;
-#ifdef CONFIG_SCO_OVER_HCI
-    struct btusb_data *data = GET_DRV_DATA(hdev);
-    AIC_sco_card_t  *pSCOSnd = data->pSCOSnd;
-#endif
 
     switch (*opcode) {
     case HCI_EV_SYNC_CONN_COMPLETE:
@@ -3147,11 +3757,14 @@ void check_sco_event(struct urb *urb)
 		printk("%s status:%d,air_mode:%d \r\n", __func__, status,air_mode);
         if (status == 0) {
             SCO_NUM++;
-			hdev->notify(hdev, 0);
-            //schedule_work(&data->work);
             if (air_mode == 0x03) {
                 set_select_msbc(CODEC_MSBC);
+                hdev->voice_setting = 0x43;
+            }else{
+                hdev->voice_setting = 0x60;
             }
+            hdev->notify(hdev, 0);
+            //schedule_work(&data->work);
         }
         break;
     case HCI_EV_DISCONN_COMPLETE:
@@ -3163,11 +3776,6 @@ void check_sco_event(struct urb *urb)
 			hdev->notify(hdev, 0);
             set_select_msbc(CODEC_CVSD);
             //schedule_work(&data->work);
-#ifdef CONFIG_SCO_OVER_HCI
-			if (test_bit(ALSA_CAPTURE_RUNNING, &pSCOSnd->states)) {
-				mod_timer(&snd_cap_timer.cap_timer,jiffies + msecs_to_jiffies(3));
-			}
-#endif
         }
         break;
     default:
@@ -3399,14 +4007,7 @@ static void btusb_intr_complete(struct urb *urb)
 			hdev->stat.err_rx++;
 		}
 #endif
-
-#ifdef CONFIG_SCO_OVER_HCI
 		check_sco_event(urb);
-#endif
-#ifdef CONFIG_USB_AIC_UART_SCO_DRIVER
-		check_sco_event(urb);
-#endif
-
     }
     /* Avoid suspend failed when usb_kill_urb */
     else if(urb->status == -ENOENT)    {
@@ -3885,7 +4486,10 @@ static int btusb_close(struct hci_dev *hdev)
     int i;
 #endif
 	int err;
-
+#ifdef CONFIG_BT_WAKEUP_IN_PM 
+    firmware_info *fw_info;
+    fw_info = data->fw_info;
+#endif
     AICBT_INFO("%s: hci running %lu", __func__, hdev->flags & HCI_RUNNING);
 
     if (!test_and_clear_bit(HCI_RUNNING, &hdev->flags)){
@@ -3924,6 +4528,11 @@ static int btusb_close(struct hci_dev *hdev)
 failed:
     mdelay(URB_CANCELING_DELAY_MS);
     usb_scuttle_anchored_urbs(&data->deferred);
+    #ifdef CONFIG_BT_WAKEUP_IN_PM
+    {
+    set_bt_ad_filetr_en_param(fw_info);
+    }
+    #endif
     return 0;
 }
 
@@ -3939,164 +4548,13 @@ static int btusb_flush(struct hci_dev *hdev)
     return 0;
 }
 
-#ifdef CONFIG_SCO_OVER_HCI
-static void btusb_isoc_snd_tx_complete(struct urb *urb);
-
-static int snd_send_sco_frame(struct sk_buff *skb)
-{
-    struct hci_dev *hdev = (struct hci_dev *) skb->dev;
-
-    struct btusb_data *data = GET_DRV_DATA(hdev);
-    //struct usb_ctrlrequest *dr;
-    struct urb *urb;
-    unsigned int pipe;
-    int err;
-
-    AICBT_DBG("%s:pkt type %d, packet_len : %d",
-            __func__,bt_cb(skb)->pkt_type, skb->len);
-
-    if (!hdev && !test_bit(HCI_RUNNING, &hdev->flags))
-        return -EBUSY;
-
-    if (!data->isoc_tx_ep || !SCO_NUM) {
-        kfree(skb);
-        return -ENODEV;
-    }
-
-    urb = usb_alloc_urb(BTUSB_MAX_ISOC_FRAMES, GFP_ATOMIC);
-    if (!urb) {
-        AICBT_ERR("%s: Failed to allocate mem for sco pkts", __func__);
-        kfree(skb);
-        return -ENOMEM;
-    }
-
-    pipe = usb_sndisocpipe(data->udev, data->isoc_tx_ep->bEndpointAddress);
-
-    usb_fill_int_urb(urb, data->udev, pipe,
-            skb->data, skb->len, btusb_isoc_snd_tx_complete,
-            skb, data->isoc_tx_ep->bInterval);
-
-    urb->transfer_flags  = URB_ISO_ASAP;
-
-    fill_isoc_descriptor(urb, skb->len,
-            le16_to_cpu(data->isoc_tx_ep->wMaxPacketSize));
-
-    hdev->stat.sco_tx++;
-
-    usb_anchor_urb(urb, &data->tx_anchor);
-
-    err = usb_submit_urb(urb, GFP_ATOMIC);
-    if (err < 0) {
-        AICBT_ERR("%s: Failed to submit urb %p, pkt type %d, err %d",
-                __func__, urb, bt_cb(skb)->pkt_type, err);
-        kfree(urb->setup_packet);
-        usb_unanchor_urb(urb);
-    } else
-        usb_mark_last_busy(data->udev);
-    usb_free_urb(urb);
-
-    return err;
-
-}
-
-static bool snd_copy_send_sco_data( AIC_sco_card_t *pSCOSnd)
-{
-    struct snd_pcm_runtime *runtime = pSCOSnd->playback.substream->runtime;
-  	unsigned int frame_bytes = 2, frames1;
-    const u8 *source;
-
-    snd_pcm_uframes_t period_size = runtime->period_size;
-    int i, count;
-    u8 buffer[period_size * 3];
-    int sco_packet_bytes = pSCOSnd->playback.sco_packet_bytes;
-    struct sk_buff *skb;
-
-    count = frames_to_bytes(runtime, period_size)/sco_packet_bytes;
-    skb = bt_skb_alloc(((sco_packet_bytes + HCI_SCO_HDR_SIZE) * count), GFP_ATOMIC);
-    skb->dev = (void *)hci_dev_get(0);
-    bt_cb(skb)->pkt_type = HCI_SCODATA_PKT;
-    skb_put(skb, ((sco_packet_bytes + HCI_SCO_HDR_SIZE) * count));
-    if(!skb)
-        return false;
-
-    AICBT_DBG("%s, buffer_pos:%d sco_handle:%d sco_packet_bytes:%d count:%d", __FUNCTION__, pSCOSnd->playback.buffer_pos, pSCOSnd->usb_data->sco_handle,
-    sco_packet_bytes, count);
-
-    source = runtime->dma_area + pSCOSnd->playback.buffer_pos * frame_bytes;
-
-    if (pSCOSnd->playback.buffer_pos + period_size <= runtime->buffer_size) {
-      memcpy(buffer, source, period_size * frame_bytes);
-    } else {
-      /* wrap around at end of ring buffer */
-      frames1 = runtime->buffer_size - pSCOSnd->playback.buffer_pos;
-      memcpy(buffer, source, frames1 * frame_bytes);
-      memcpy(&buffer[frames1 * frame_bytes],
-             runtime->dma_area, (period_size - frames1) * frame_bytes);
-    }
-
-    pSCOSnd->playback.buffer_pos += period_size;
-    if ( pSCOSnd->playback.buffer_pos >= runtime->buffer_size)
-       pSCOSnd->playback.buffer_pos -= runtime->buffer_size;
-
-    for(i = 0; i < count; i++) {
-        *((__u16 *)(skb->data + i * (sco_packet_bytes + HCI_SCO_HDR_SIZE))) = pSCOSnd->usb_data->sco_handle;
-        *((__u8 *)(skb->data + i*(sco_packet_bytes + HCI_SCO_HDR_SIZE) + 2)) = sco_packet_bytes;
-        memcpy((skb->data + i * (sco_packet_bytes + HCI_SCO_HDR_SIZE) + HCI_SCO_HDR_SIZE),
-          &buffer[sco_packet_bytes * i], sco_packet_bytes);
-    }
-
-    if(test_bit(ALSA_PLAYBACK_RUNNING, &pSCOSnd->states)) {
-        snd_pcm_period_elapsed(pSCOSnd->playback.substream);
-    }
-    snd_send_sco_frame(skb);
-    return true;
-}
-
-static void btusb_isoc_snd_tx_complete(struct urb *urb)
-{
-    struct sk_buff *skb = urb->context;
-    struct hci_dev *hdev = (struct hci_dev *) skb->dev;
-    struct btusb_data *data = GET_DRV_DATA(hdev);
-    AIC_sco_card_t  *pSCOSnd = data->pSCOSnd;
-
-    AICBT_DBG("%s: status %d count %d",
-            __func__,urb->status, urb->actual_length);
-
-    if (skb && hdev) {
-        if (!test_bit(HCI_RUNNING, &hdev->flags))
-            goto done;
-
-        if (!urb->status)
-            hdev->stat.byte_tx += urb->transfer_buffer_length;
-        else
-            hdev->stat.err_tx++;
-    } else
-        AICBT_ERR("%s: skb 0x%p hdev 0x%p", __func__, skb, hdev);
-
-done:
-    kfree(urb->setup_packet);
-    kfree_skb(skb);
-    if(test_bit(ALSA_PLAYBACK_RUNNING, &pSCOSnd->states)){
-        snd_copy_send_sco_data(pSCOSnd);
-        //schedule_work(&pSCOSnd->send_sco_work);
-    }
-}
-
-static void playback_work(struct work_struct *work)
-{
-    AIC_sco_card_t *pSCOSnd = container_of(work, AIC_sco_card_t, send_sco_work);
-
-    snd_copy_send_sco_data(pSCOSnd);
-}
-
-#endif
 
 #if (CONFIG_BLUEDROID) || (HCI_VERSION_CODE < KERNEL_VERSION(3, 13, 0))
-int btusb_send_frame(struct sk_buff *skb)
+static int btusb_send_frame(struct sk_buff *skb)
 {
     struct hci_dev *hdev = (struct hci_dev *) skb->dev;
 #else
-int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
+static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 {
 #endif
     //struct hci_dev *hdev = (struct hci_dev *) skb->dev;
@@ -4328,28 +4786,12 @@ static enum CODEC_TYPE check_select_msbc(void)
     return codec_type;
 }
 
-#ifdef CONFIG_SCO_OVER_HCI
-static int check_controller_support_msbc( struct usb_device *udev)
-{
-    //fix this in the future,when new card support msbc decode and encode
-    AICBT_INFO("%s:pid = 0x%02x, vid = 0x%02x",__func__,udev->descriptor.idProduct, udev->descriptor.idVendor);
-    switch (udev->descriptor.idProduct) {
-
-        default:
-          return 0;
-    }
-    return 0;
-}
-#endif
 static void btusb_work(struct work_struct *work)
 {
     struct btusb_data *data = container_of(work, struct btusb_data, work);
     struct hci_dev *hdev = data->hdev;
     int err;
     int new_alts;
-#ifdef CONFIG_SCO_OVER_HCI
-    AIC_sco_card_t  *pSCOSnd = data->pSCOSnd;
-#endif
 	printk("%s data->sco_num:%d \r\n", __func__, data->sco_num);
 	
     if (data->sco_num > 0) {
@@ -4411,28 +4853,9 @@ static void btusb_work(struct work_struct *work)
             else
                 btusb_submit_isoc_urb(hdev, GFP_KERNEL);
         }
-#ifdef CONFIG_SCO_OVER_HCI
-        if(test_bit(BTUSB_ISOC_RUNNING, &data->flags)) {
-            set_bit(USB_CAPTURE_RUNNING, &data->pSCOSnd->states);
-            set_bit(USB_PLAYBACK_RUNNING, &data->pSCOSnd->states);
-        }
-        if (test_bit(ALSA_PLAYBACK_RUNNING, &pSCOSnd->states)) {
-            schedule_work(&pSCOSnd->send_sco_work);
-            AICBT_INFO("%s: play_timer restart", __func__);
-        }
-#endif
     } else {
         AICBT_INFO("%s: data->sco_num :%d", __func__, data->sco_num);
         clear_bit(BTUSB_ISOC_RUNNING, &data->flags);
-#ifdef CONFIG_SCO_OVER_HCI
-        clear_bit(USB_CAPTURE_RUNNING, &data->pSCOSnd->states);
-        clear_bit(USB_PLAYBACK_RUNNING, &data->pSCOSnd->states);
-		//AIC_sco_card_t	*pSCOSnd = data->pSCOSnd;
-		if (test_bit(ALSA_PLAYBACK_RUNNING, &pSCOSnd->states)) {
-			mod_timer(&snd_cap_timer.play_timer,jiffies + msecs_to_jiffies(30));
-			AICBT_INFO("%s: play_timer start", __func__);
-		}
-#endif
         mdelay(URB_CANCELING_DELAY_MS);
         usb_kill_anchored_urbs(&data->isoc_anchor);
 
@@ -4456,7 +4879,7 @@ static void btusb_waker(struct work_struct *work)
     usb_autopm_put_interface(data->intf);
 }
 
-int bt_pm_notify(struct notifier_block *notifier, ulong pm_event, void *unused)
+static int bt_pm_notify(struct notifier_block *notifier, ulong pm_event, void *unused)
 {
     struct btusb_data *data;
     firmware_info *fw_info;
@@ -4480,6 +4903,9 @@ int bt_pm_notify(struct notifier_block *notifier, ulong pm_event, void *unused)
 #endif
         if (!device_may_wakeup(&udev->dev)) {
 #if (CONFIG_RESET_RESUME || CONFIG_BLUEDROID)
+#ifdef CONFIG_BT_WAKEUP_IN_PM
+            set_bt_ad_filetr_en_param(fw_info);
+#endif//CONFIG_BT_WAKEUP_IN_PM
             AICBT_INFO("%s:remote wakeup not supported, reset resume supported", __func__);
 #else
             fw_info->intf->needs_binding = 1;
@@ -4514,17 +4940,18 @@ int bt_pm_notify(struct notifier_block *notifier, ulong pm_event, void *unused)
     return NOTIFY_DONE;
 }
 
-int bt_reboot_notify(struct notifier_block *notifier, ulong pm_event, void *unused)
+static int bt_reboot_notify(struct notifier_block *notifier, ulong pm_event, void *unused)
 {
     struct btusb_data *data;
     firmware_info *fw_info;
     struct usb_device *udev;
-
+    int ret = 0;
     AICBT_INFO("%s: pm event %ld", __func__, pm_event);
 
     data = container_of(notifier, struct btusb_data, reboot_notifier);
     fw_info = data->fw_info;
     udev = fw_info->udev;
+
 
     switch (pm_event) {
     case SYS_DOWN:
@@ -4533,25 +4960,23 @@ int bt_reboot_notify(struct notifier_block *notifier, ulong pm_event, void *unus
 
     case SYS_HALT:
     case SYS_POWER_OFF:
-#if SUSPNED_DW_FW
+    {
+#ifdef CONFIG_BT_WAKEUP_IN_PM
         cancel_work_sync(&data->work);
 
         btusb_stop_traffic(data);
         mdelay(URB_CANCELING_DELAY_MS);
         usb_kill_anchored_urbs(&data->tx_anchor);
 
-
-        if(fw_info_4_suspend) {
-            download_suspend_patch(fw_info_4_suspend,1);
-        }
-	    else
-		    AICBT_ERR("%s: Failed to download suspend fw", __func__);
-#endif
-
-#ifdef SET_WAKEUP_DEVICE
-        set_wakeup_device_from_conf(fw_info_4_suspend);
+        set_bt_ad_filetr_en_param(fw_info);
+        ret = aic_cmd_disable_scan(fw_info);
+        AICBT_ERR("%s disable scan err %x\n", __func__, ret);
+        aic_cmd_disconnect_all_store_acl_handle(fw_info);
+        set_bt_wakeup_param(fw_info);
+        aic_clear_queue();
 #endif
         AICBT_DBG("%s:system halt or power off", __func__);
+    }
     break;
 
     default:
@@ -4561,430 +4986,6 @@ int bt_reboot_notify(struct notifier_block *notifier, ulong pm_event, void *unus
     return NOTIFY_DONE;
 }
 
-
-#ifdef CONFIG_SCO_OVER_HCI
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 0)
-void aic_snd_capture_timeout(ulong data)
-#else
-void aic_snd_capture_timeout(struct timer_list *t)
-#endif
-{
-	uint8_t null_data[255];
-	struct btusb_data *usb_data;
-	
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 0)
-    usb_data = (struct btusb_data *)data;
-#else
-    usb_data = &snd_cap_timer.snd_usb_data;
-#endif
-    aic_copy_capture_data_to_alsa(usb_data, null_data, snd_cap_timer.snd_sco_length/2);
-	//printk("%s enter\r\n", __func__);
-    mod_timer(&snd_cap_timer.cap_timer,jiffies + msecs_to_jiffies(3));
-}
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 0)
-void aic_snd_play_timeout(ulong data)
-#else
-void aic_snd_play_timeout(struct timer_list *t)
-#endif
-{
-	AIC_sco_card_t *pSCOSnd;
-	struct snd_pcm_runtime *runtime;
-	snd_pcm_uframes_t period_size;
-    int count;
-	struct btusb_data *usb_data;
-	int sco_packet_bytes;
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 0)
-    usb_data = (struct btusb_data *)data;
-#else
-    usb_data = &snd_cap_timer.snd_usb_data;
-#endif
-	pSCOSnd = usb_data->pSCOSnd;
-
-	if(test_bit(USB_PLAYBACK_RUNNING, &pSCOSnd->states)) {
-		return;
-	}
-
-	if(!test_bit(ALSA_PLAYBACK_RUNNING, &pSCOSnd->states)) {
-		return;
-	}
-
-	runtime = pSCOSnd->playback.substream->runtime;
-	period_size = runtime->period_size;
-    sco_packet_bytes = pSCOSnd->playback.sco_packet_bytes;
-    count = frames_to_bytes(runtime, period_size)/sco_packet_bytes;
-
-    pSCOSnd->playback.buffer_pos += period_size;
-    if ( pSCOSnd->playback.buffer_pos >= runtime->buffer_size)
-       pSCOSnd->playback.buffer_pos -= runtime->buffer_size;
-
-    if(test_bit(ALSA_PLAYBACK_RUNNING, &pSCOSnd->states)) {
-        snd_pcm_period_elapsed(pSCOSnd->playback.substream);
-    }
-    //AICBT_DBG("%s,play_timer restart buffer_pos:%d sco_handle:%d sco_packet_bytes:%d count:%d", __FUNCTION__, pSCOSnd->playback.buffer_pos, pSCOSnd->usb_data->sco_handle,
-    //sco_packet_bytes, count);
-    mod_timer(&snd_cap_timer.play_timer,jiffies + msecs_to_jiffies(3*count));
-}
-
-static const struct snd_pcm_hardware snd_card_sco_capture_default =
-{
-    .info               = (SNDRV_PCM_INFO_INTERLEAVED | SNDRV_PCM_INFO_NONINTERLEAVED |
-                            SNDRV_PCM_ACCESS_RW_INTERLEAVED | SNDRV_PCM_INFO_FIFO_IN_FRAMES),
-    .formats            = SNDRV_PCM_FMTBIT_S16_LE | SNDRV_PCM_FMTBIT_S8,
-    .rates              = (SNDRV_PCM_RATE_8000),
-    .rate_min           = 8000,
-    .rate_max           = 8000,
-    .channels_min       = 1,
-    .channels_max       = 1,
-    .buffer_bytes_max   = 8 * 768,
-    .period_bytes_min   = 48,
-    .period_bytes_max   = 768,
-    .periods_min        = 1,
-    .periods_max        = 8,
-    .fifo_size          = 8,
-
-};
-
-static int snd_sco_capture_pcm_open(struct snd_pcm_substream * substream)
-{
-    AIC_sco_card_t  *pSCOSnd = substream->private_data;
-
-    AICBT_INFO("%s", __FUNCTION__);
-    pSCOSnd->capture.substream = substream;
-
-    memcpy(&substream->runtime->hw, &snd_card_sco_capture_default, sizeof(struct snd_pcm_hardware));
-	pSCOSnd->capture.buffer_pos = 0;
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 0)
-	init_timer(&snd_cap_timer.cap_timer);
-	snd_cap_timer.cap_timer.data = (unsigned long)pSCOSnd->usb_data;
-	snd_cap_timer.cap_timer.function = aic_snd_capture_timeout;
-#else
-	timer_setup(&snd_cap_timer.cap_timer, aic_snd_capture_timeout, 0);
-	snd_cap_timer.snd_usb_data = *(pSCOSnd->usb_data);
-#endif
-
-    if(check_controller_support_msbc(pSCOSnd->dev)) {
-        substream->runtime->hw.rates |= SNDRV_PCM_RATE_16000;
-        substream->runtime->hw.rate_max = 16000;
-        substream->runtime->hw.period_bytes_min = 96;
-        substream->runtime->hw.period_bytes_max = 16 * 96;
-        substream->runtime->hw.buffer_bytes_max = 8 * 16 * 96;
-    }
-    set_bit(ALSA_CAPTURE_OPEN, &pSCOSnd->states);
-    return 0;
-}
-
-static int snd_sco_capture_pcm_close(struct snd_pcm_substream *substream)
-{
-	AIC_sco_card_t *pSCOSnd = substream->private_data;
-
-	del_timer(&snd_cap_timer.cap_timer);
-	clear_bit(ALSA_CAPTURE_OPEN, &pSCOSnd->states);
-	return 0;
-}
-
-static int snd_sco_capture_ioctl(struct snd_pcm_substream *substream,  unsigned int cmd, void *arg)
-{
-    AICBT_DBG("%s, cmd = %d", __FUNCTION__, cmd);
-    switch (cmd)
-    {
-        default:
-            return snd_pcm_lib_ioctl(substream, cmd, arg);
-    }
-    return 0;
-}
-
-static int snd_sco_capture_pcm_hw_params(struct snd_pcm_substream * substream, struct snd_pcm_hw_params * hw_params)
-{
-
-    int err;
-    struct snd_pcm_runtime *runtime = substream->runtime;
-    err = snd_pcm_lib_alloc_vmalloc_buffer(substream, params_buffer_bytes(hw_params));
-    AICBT_INFO("%s,err : %d,  runtime state : %d", __FUNCTION__, err, runtime->status->state);
-    return err;
-}
-
-static int snd_sco_capture_pcm_hw_free(struct snd_pcm_substream * substream)
-{
-    AICBT_DBG("%s", __FUNCTION__);
-    return snd_pcm_lib_free_vmalloc_buffer(substream);;
-}
-
-static int snd_sco_capture_pcm_prepare(struct snd_pcm_substream *substream)
-{
-    AIC_sco_card_t *pSCOSnd = substream->private_data;
-    struct snd_pcm_runtime *runtime = substream->runtime;
-
-    AICBT_INFO("%s %d\n", __FUNCTION__, (int)runtime->period_size);
-    if (test_bit(DISCONNECTED, &pSCOSnd->states))
-		    return -ENODEV;
-	  if (!test_bit(USB_CAPTURE_RUNNING, &pSCOSnd->states))
-		    return -EIO;
-
-    if(runtime->rate == 8000) {
-        if(pSCOSnd->usb_data->isoc_altsetting != 2)
-            return -ENOEXEC;
-        pSCOSnd->capture.sco_packet_bytes = 48;
-    }
-    else if(runtime->rate == 16000 && check_controller_support_msbc(pSCOSnd->dev)) {
-        if(pSCOSnd->usb_data->isoc_altsetting != 4)
-            return -ENOEXEC;
-        pSCOSnd->capture.sco_packet_bytes = 96;
-    }
-    else if(pSCOSnd->usb_data->isoc_altsetting == 2) {
-        pSCOSnd->capture.sco_packet_bytes = 48;
-    }
-    else if(pSCOSnd->usb_data->isoc_altsetting == 1) {
-        pSCOSnd->capture.sco_packet_bytes = 24;
-    }
-    return 0;
-}
-
-static int snd_sco_capture_pcm_trigger(struct snd_pcm_substream *substream, int cmd)
-{
-	  AIC_sco_card_t *pSCOSnd = substream->private_data;
-    AICBT_INFO("%s, cmd : %d", __FUNCTION__, cmd);
-
-	  switch (cmd) {
-	    case SNDRV_PCM_TRIGGER_START:
-		      if (!test_bit(USB_CAPTURE_RUNNING, &pSCOSnd->states))
-			      return -EIO;
-		      set_bit(ALSA_CAPTURE_RUNNING, &pSCOSnd->states);
-		      return 0;
-	    case SNDRV_PCM_TRIGGER_STOP:
-		      clear_bit(ALSA_CAPTURE_RUNNING, &pSCOSnd->states);
-		      return 0;
-	    default:
-		      return -EINVAL;
-	  }
-}
-
-static snd_pcm_uframes_t snd_sco_capture_pcm_pointer(struct snd_pcm_substream *substream)
-{
-	  AIC_sco_card_t *pSCOSnd = substream->private_data;
-
-	  return pSCOSnd->capture.buffer_pos;
-}
-
-
-static struct snd_pcm_ops snd_sco_capture_pcm_ops = {
-	.open =         snd_sco_capture_pcm_open,
-	.close =        snd_sco_capture_pcm_close,
-	.ioctl =        snd_sco_capture_ioctl,
-	.hw_params =    snd_sco_capture_pcm_hw_params,
-	.hw_free =      snd_sco_capture_pcm_hw_free,
-	.prepare =      snd_sco_capture_pcm_prepare,
-	.trigger =      snd_sco_capture_pcm_trigger,
-	.pointer =      snd_sco_capture_pcm_pointer,
-};
-
-
-static const struct snd_pcm_hardware snd_card_sco_playback_default =
-{
-    .info               = (SNDRV_PCM_INFO_INTERLEAVED | SNDRV_PCM_INFO_NONINTERLEAVED |
-                            SNDRV_PCM_ACCESS_RW_INTERLEAVED | SNDRV_PCM_INFO_FIFO_IN_FRAMES),
-    .formats            = SNDRV_PCM_FMTBIT_S16_LE,
-    .rates              = (SNDRV_PCM_RATE_8000),
-    .rate_min           = 8000,
-    .rate_max           = 8000,
-    .channels_min       = 1,
-    .channels_max       = 1,
-    .buffer_bytes_max   = 8 * 768,
-    .period_bytes_min   = 48,
-    .period_bytes_max   = 768,
-    .periods_min        = 1,
-    .periods_max        = 8,
-    .fifo_size          = 8,
-};
-
-static int snd_sco_playback_pcm_open(struct snd_pcm_substream * substream)
-{
-    AIC_sco_card_t *pSCOSnd = substream->private_data;
-    int err = 0;
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 0)
-	init_timer(&snd_cap_timer.play_timer);
-	snd_cap_timer.play_timer.data = (unsigned long)pSCOSnd->usb_data;
-	snd_cap_timer.play_timer.function = aic_snd_play_timeout;
-#else
-	timer_setup(&snd_cap_timer.play_timer, aic_snd_play_timeout, 0);
-	snd_cap_timer.snd_usb_data = *(pSCOSnd->usb_data);
-#endif
-	pSCOSnd->playback.buffer_pos = 0;
-
-    AICBT_INFO("%s, rate : %d", __FUNCTION__, substream->runtime->rate);
-    memcpy(&substream->runtime->hw, &snd_card_sco_playback_default, sizeof(struct snd_pcm_hardware));
-    if(check_controller_support_msbc(pSCOSnd->dev)) {
-        substream->runtime->hw.rates |= SNDRV_PCM_RATE_16000;
-        substream->runtime->hw.rate_max = 16000;
-        substream->runtime->hw.period_bytes_min = 96;
-        substream->runtime->hw.period_bytes_max = 16 * 96;
-        substream->runtime->hw.buffer_bytes_max = 8 * 16 * 96;
-    }
-    pSCOSnd->playback.substream = substream;
-    set_bit(ALSA_PLAYBACK_OPEN, &pSCOSnd->states);
-
-    return err;
-}
-
-static int snd_sco_playback_pcm_close(struct snd_pcm_substream *substream)
-{
-    AIC_sco_card_t *pSCOSnd = substream->private_data;
-
-	del_timer(&snd_cap_timer.play_timer);
-	AICBT_INFO("%s: play_timer delete", __func__);
-	clear_bit(ALSA_PLAYBACK_OPEN, &pSCOSnd->states);
-    cancel_work_sync(&pSCOSnd->send_sco_work);
-	  return 0;
-}
-
-static int snd_sco_playback_ioctl(struct snd_pcm_substream *substream,  unsigned int cmd, void *arg)
-{
-    AICBT_DBG("%s, cmd : %d", __FUNCTION__, cmd);
-    switch (cmd)
-    {
-        default:
-            return snd_pcm_lib_ioctl(substream, cmd, arg);
-            break;
-    }
-    return 0;
-}
-
-static int snd_sco_playback_pcm_hw_params(struct snd_pcm_substream * substream, struct snd_pcm_hw_params * hw_params)
-{
-    int err;
-    err = snd_pcm_lib_alloc_vmalloc_buffer(substream, params_buffer_bytes(hw_params));
-    return err;
-}
-
-static int snd_sco_palyback_pcm_hw_free(struct snd_pcm_substream * substream)
-{
-    AICBT_DBG("%s", __FUNCTION__);
-    return snd_pcm_lib_free_vmalloc_buffer(substream);
-}
-
-static int snd_sco_playback_pcm_prepare(struct snd_pcm_substream *substream)
-{
-	  AIC_sco_card_t *pSCOSnd = substream->private_data;
-    struct snd_pcm_runtime *runtime = substream->runtime;
-
-    AICBT_INFO("%s, bound_rate = %d", __FUNCTION__, runtime->rate);
-
-	  if (test_bit(DISCONNECTED, &pSCOSnd->states))
-		    return -ENODEV;
-	  if (!test_bit(USB_PLAYBACK_RUNNING, &pSCOSnd->states))
-		    return -EIO;
-
-    if(runtime->rate == 8000) {
-        if(pSCOSnd->usb_data->isoc_altsetting != 2)
-            return -ENOEXEC;
-        pSCOSnd->playback.sco_packet_bytes = 48;
-    }
-    else if(runtime->rate == 16000) {
-        if(pSCOSnd->usb_data->isoc_altsetting != 4)
-            return -ENOEXEC;
-        pSCOSnd->playback.sco_packet_bytes = 96;
-    }
-
-  	return 0;
-}
-
-static int snd_sco_playback_pcm_trigger(struct snd_pcm_substream *substream, int cmd)
-{
-  	AIC_sco_card_t *pSCOSnd = substream->private_data;
-
-    AICBT_INFO("%s, cmd = %d", __FUNCTION__, cmd);
-  	switch (cmd) {
-      	case SNDRV_PCM_TRIGGER_START:
-      		if (!test_bit(USB_PLAYBACK_RUNNING, &pSCOSnd->states))
-      			return -EIO;
-      		set_bit(ALSA_PLAYBACK_RUNNING, &pSCOSnd->states);
-          schedule_work(&pSCOSnd->send_sco_work);
-#ifdef CONFIG_SCO_OVER_HCI
-		  if (!test_bit(USB_PLAYBACK_RUNNING, &pSCOSnd->states)) {
-			  AICBT_INFO("%s: play_timer cmd 1 start ", __func__);
-			  mod_timer(&snd_cap_timer.play_timer,jiffies + msecs_to_jiffies(3));
-		  }
-#endif
-      		return 0;
-      	case SNDRV_PCM_TRIGGER_STOP:
-      		clear_bit(ALSA_PLAYBACK_RUNNING, &pSCOSnd->states);
-      		return 0;
-      	default:
-      		return -EINVAL;
-  	}
-}
-
-static snd_pcm_uframes_t snd_sco_playback_pcm_pointer(struct snd_pcm_substream *substream)
-{
-  	AIC_sco_card_t *pSCOSnd = substream->private_data;
-
-  	return pSCOSnd->playback.buffer_pos;
-}
-
-
-static struct snd_pcm_ops snd_sco_playback_pcm_ops = {
-	.open =         snd_sco_playback_pcm_open,
-	.close =        snd_sco_playback_pcm_close,
-	.ioctl =        snd_sco_playback_ioctl,
-	.hw_params =    snd_sco_playback_pcm_hw_params,
-	.hw_free =      snd_sco_palyback_pcm_hw_free,
-	.prepare =      snd_sco_playback_pcm_prepare,
-	.trigger =      snd_sco_playback_pcm_trigger,
-	.pointer =      snd_sco_playback_pcm_pointer,
-};
-
-
-static AIC_sco_card_t* btusb_snd_init(struct usb_interface *intf, const struct usb_device_id *id, struct btusb_data *data)
-{
-    struct snd_card *card;
-    AIC_sco_card_t  *pSCOSnd;
-    int err=0;
-    AICBT_INFO("%s", __func__);
-    err = snd_card_new(&intf->dev,
-     -1, AIC_SCO_ID, THIS_MODULE,
-     sizeof(AIC_sco_card_t), &card);
-    if (err < 0) {
-        AICBT_ERR("%s: sco snd card create fail", __func__);
-        return NULL;
-    }
-    // private data
-    pSCOSnd = (AIC_sco_card_t *)card->private_data;
-    pSCOSnd->card = card;
-    pSCOSnd->dev = interface_to_usbdev(intf);
-    pSCOSnd->usb_data = data;
-
-    strcpy(card->driver, AIC_SCO_ID);
-    strcpy(card->shortname, "Aicsemi sco snd");
-    sprintf(card->longname, "Aicsemi sco over hci: VID:0x%04x, PID:0x%04x",
-        id->idVendor, pSCOSnd->dev->descriptor.idProduct);
-
-    err = snd_pcm_new(card, AIC_SCO_ID, 0, 1, 1, &pSCOSnd->pcm);
-    if (err < 0) {
-        AICBT_ERR("%s: sco snd card new pcm fail", __func__);
-        return NULL;
-    }
-    pSCOSnd->pcm->private_data = pSCOSnd;
-    sprintf(pSCOSnd->pcm->name, "sco_pcm:VID:0x%04x, PID:0x%04x",
-      id->idVendor, pSCOSnd->dev->descriptor.idProduct);
-
-    snd_pcm_set_ops(pSCOSnd->pcm, SNDRV_PCM_STREAM_PLAYBACK, &snd_sco_playback_pcm_ops);
-    snd_pcm_set_ops(pSCOSnd->pcm, SNDRV_PCM_STREAM_CAPTURE, &snd_sco_capture_pcm_ops);
-
-    err = snd_card_register(card);
-    if (err < 0) {
-        AICBT_ERR("%s: sco snd card register card fail", __func__);
-        return NULL;
-    }
-
-    spin_lock_init(&pSCOSnd->capture_lock);
-    spin_lock_init(&pSCOSnd->playback_lock);
-    INIT_WORK(&pSCOSnd->send_sco_work, playback_work);
-    return pSCOSnd;
-}
-#endif
 
 static int aicwf_usb_chipmatch(u16 vid, u16 pid){
 
@@ -5000,9 +5001,20 @@ static int aicwf_usb_chipmatch(u16 vid, u16 pid){
 		g_chipid = PRODUCT_ID_AIC8800D80;
 		printk("%s USE AIC8800D80\r\n", __func__);
 		return 0;
-	}else if(pid == USB_PRODUCT_ID_AIC8800D80X2){
+	}else if((pid == USB_PRODUCT_ID_AIC8800D80X2) || (pid == USB_PRODUCT_ID_AIC8800D80X2P)){
 		g_chipid = PRODUCT_ID_AIC8800D80X2;
 		printk("%s USE AIC8800D80X2\r\n", __func__);
+		return 0;
+	}else if((pid == USB_PRODUCT_ID_AIC8800D80N) ||
+		(pid == USB_PRODUCT_ID_AIC8800D80LN) ||
+		(pid == USB_PRODUCT_ID_AIC8800D40N) ||
+		(pid == USB_PRODUCT_ID_AIC8800D40LN)){
+		g_chipid = PRODUCT_ID_AIC8800D80N;
+		printk("%s USE AIC8800D80N\r\n", __func__);
+		return 0;
+	}else if(pid == USB_PRODUCT_ID_AIC8800DLN){
+		g_chipid = PRODUCT_ID_AIC8800DLN;
+		printk("%s USE AIC8800DLN\r\n", __func__);
 		return 0;
 	}else{
 		return -1;
@@ -5109,7 +5121,7 @@ static int btusb_probe(struct usb_interface *intf, const struct usb_device_id *i
 #if CONFIG_BLUEDROID
     mutex_lock(&btchr_mutex);
 #endif
-	if(g_chipid == PRODUCT_ID_AIC8800DC){
+	if(g_chipid == PRODUCT_ID_AIC8800DC || g_chipid == PRODUCT_ID_AIC8800D80N){
 		err = download_patch(data->fw_info,1);
 	}
 
@@ -5174,9 +5186,6 @@ static int btusb_probe(struct usb_interface *intf, const struct usb_device_id *i
             data = NULL;
             return err;
         }
-#ifdef CONFIG_SCO_OVER_HCI
-        data->pSCOSnd = btusb_snd_init(intf, id, data);
-#endif
     }
 
     err = hci_register_dev(hdev);
@@ -5245,19 +5254,6 @@ static void btusb_disconnect(struct usb_interface *intf)
         return;
     }
 
-#ifdef CONFIG_SCO_OVER_HCI
-    if (intf->cur_altsetting->desc.bInterfaceNumber == 0) {
-        AIC_sco_card_t *pSCOSnd = data->pSCOSnd;
-        if(!pSCOSnd) {
-            AICBT_ERR("%s: sco private data is null", __func__);
-            return;
-        }
-        set_bit(DISCONNECTED, &pSCOSnd->states);
-        snd_card_disconnect(pSCOSnd->card);
-        snd_card_free_when_closed(pSCOSnd->card);
-    }
-#endif
-
 //#ifdef CONFIG_HAS_EARLYSUSPEND
 #if 0
     unregister_early_suspend(&data->early_suspend);
@@ -5303,17 +5299,15 @@ static void btusb_disconnect(struct usb_interface *intf)
 static int btusb_suspend(struct usb_interface *intf, pm_message_t message)
 {
     struct btusb_data *data = usb_get_intfdata(intf);
-    //firmware_info *fw_info = data->fw_info;
-
+#ifdef CONFIG_BT_WAKEUP_IN_PM
+    firmware_info *fw_info = data->fw_info;
+    int ret = 0;
+#endif
     AICBT_INFO("%s: event 0x%x, suspend count %d", __func__,
             message.event, data->suspend_count);
 
     if (intf->cur_altsetting->desc.bInterfaceNumber != 0)
         return 0;
-
-    #ifdef CONFIG_BT_WAKEUP_IN_PM
-    set_bt_wakeup_param(fw_info);
-    #endif
 
     if (data->suspend_count++)
         return 0;
@@ -5334,6 +5328,14 @@ static int btusb_suspend(struct usb_interface *intf, pm_message_t message)
     btusb_stop_traffic(data);
     mdelay(URB_CANCELING_DELAY_MS);
     usb_kill_anchored_urbs(&data->tx_anchor);
+    
+#ifdef CONFIG_BT_WAKEUP_IN_PM
+        ret = aic_cmd_disable_scan(fw_info);
+        AICBT_ERR("%s disable scan err %x\n", __func__, ret);
+        aic_cmd_disconnect_all_store_acl_handle(fw_info);
+        set_bt_wakeup_param(fw_info);
+        aic_clear_queue();
+#endif
 
     return 0;
 }
@@ -5396,7 +5398,10 @@ static int btusb_resume(struct usb_interface *intf)
     }
     #ifdef CONFIG_BT_WAKEUP_IN_PM
     reset_bt_from_wakeup_process(data->fw_info);
-	hci_resume_hardware_error();
+    //hci_resume_hardware_error();
+    err = aic_cmd_enable_scan(data->fw_info);
+    AICBT_ERR("%s en scan err %x\n", __func__, err);
+    aic_event_disconnect_all_store_acl_handle();
     #endif
 
     #if 1
@@ -5504,12 +5509,10 @@ module_exit(btusb_exit);
 module_param(mp_drv_mode, int, 0644);
 MODULE_PARM_DESC(mp_drv_mode, "0: NORMAL; 1: MP MODE");
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0)
 MODULE_IMPORT_NS("VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver");
-#else
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
 MODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);
-#endif
 #endif
 
 MODULE_AUTHOR("AicSemi Corporation");
