@@ -53,9 +53,10 @@ endif
 
 ifeq ($(CONFIG_PLATFORM_UBUNTU), y)
 ccflags-$(CONFIG_PLATFORM_UBUNTU) += -DCONFIG_PLATFORM_UBUNTU
-KDIR  := /lib/modules/$(shell uname -r)/build
+
+KVER ?= $(shell uname -r)
+KDIR  = /lib/modules/$(KVER)/build
 PWD   := $(shell pwd)
-KVER := $(shell uname -r)
 MODDESTDIR := /lib/modules/$(KVER)/kernel/drivers/net/wireless/aic8800
 SUBARCH = $(shell uname -m | sed -e s/i.86/i386/ -e s/armv.l/arm/ -e s/aarch64/arm64/)
 ARCH ?= $(SUBARCH)
