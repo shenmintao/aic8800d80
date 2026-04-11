@@ -16,7 +16,7 @@ There is only one problem - Bazzite has read-only filesystem.
 Install required packages and then reboot after install to apply changes.
 
 ~~~bash
-sudo rpm-ostree install rpm-build rpmdevtools
+sudo rpm-ostree install rpm-build rpmdevtools dkms
 sudo systemctl reboot
 ~~~
 
@@ -30,7 +30,8 @@ rpmdev-setuptree
 Copy aic8800d80.spec to rpmbuild/SPECS
 
 ~~~bash
-cp aic8800d80.spec $HOME/rpmbuild/SPECS
+cd $HOME/rpmbuild/SPECS
+curl -LO -s https://raw.githubusercontent.com/shenmintao/aic8800d80/refs/heads/main/bazzite/aic8800d80.spec
 ~~~
 
 Prepare and download required files.
