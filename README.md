@@ -3,7 +3,7 @@ This driver is for the AIC8800D80 chipset, supported by devices such as the Tend
 
 Added support for devices with Vendor ID 368B (tested).
 
-Tested on Linux kernel 6.16 with Ubuntu 25.04 and 6.1.0.27 with Debian 12.
+Tested on Linux kernel 6.16 with Ubuntu 25.04, 6.1.0.27 with Debian 12, and 7.0.5 (zen) with Arch Linux.
 
 > **Bluetooth Support**: The [`bluetooth`](https://github.com/shenmintao/aic8800d80/tree/bluetooth) branch fully supports Bluetooth. This main branch only provides Wi-Fi functionality. Please switch to the `bluetooth` branch if you need Bluetooth support.
 
