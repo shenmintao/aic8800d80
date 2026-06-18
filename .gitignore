@@ -1,0 +1,6 @@
+*.o
+*.ko
+*.cmd
+.*.o.cmd
+.module-common.o
+
