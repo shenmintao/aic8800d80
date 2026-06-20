@@ -548,7 +548,7 @@ main() {
     
     echo -e "${CYAN}"
     echo "╔════════════════════════════════════════════════════════════════╗"
-    echo "║     AIC8800D80 WiFi 6 Driver - Universal Installer (DKMS)     ║"
+    echo "║     AIC8800D80 WiFi 6 Driver - Universal Installer (DKMS)      ║"
     echo "║                   Version 2.0.4 (Fixed)                        ║"
     echo "╚════════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
