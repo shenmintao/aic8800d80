@@ -1310,7 +1310,7 @@ static void rwnx_rx_add_rtap_hdr(struct rwnx_hw* rwnx_hw,
 
     // Check for HE frames
     if (rxvect->format_mod == FORMATMOD_HE_SU) {
-        struct ieee80211_radiotap_he he;
+        struct ieee80211_radiotap_he he = {0};
         #define HE_PREP(f, val) cpu_to_le16(FIELD_PREP(IEEE80211_RADIOTAP_HE_##f, val))
         #define D1_KNOWN(f) cpu_to_le16(IEEE80211_RADIOTAP_HE_DATA1_##f##_KNOWN)
         #define D2_KNOWN(f) cpu_to_le16(IEEE80211_RADIOTAP_HE_DATA2_##f##_KNOWN)
@@ -1366,10 +1366,18 @@ static void rwnx_rx_add_rtap_hdr(struct rwnx_hw* rwnx_hw,
         while ((pos - (u8 *)rtap) & 1)
             pos++;
         rtap->it_present |= cpu_to_le32(1 << IEEE80211_RADIOTAP_HE);
-        //memcpy(pos, &he, sizeof(he));
-		//pos += sizeof(he);
-		*(struct ieee80211_radiotap_he *)pos = he;
-		pos += sizeof(struct ieee80211_radiotap_he);
+        put_unaligned_le16(le16_to_cpu(he.data1), pos);
+        pos += 2;
+        put_unaligned_le16(le16_to_cpu(he.data2), pos);
+        pos += 2;
+        put_unaligned_le16(le16_to_cpu(he.data3), pos);
+        pos += 2;
+        put_unaligned_le16(le16_to_cpu(he.data4), pos);
+        pos += 2;
+        put_unaligned_le16(le16_to_cpu(he.data5), pos);
+        pos += 2;
+        put_unaligned_le16(le16_to_cpu(he.data6), pos);
+        pos += 2;
     }
 
     // Rx Chains
