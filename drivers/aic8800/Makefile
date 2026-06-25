@@ -60,9 +60,21 @@ endif
 
 MAKEFLAGS +=-j$(shell nproc)
 
+KERNEL_AUTOCONF := $(KDIR)/include/config/auto.conf
+KERNEL_CONFIG := $(KDIR)/.config
+KERNEL_CC_IS_CLANG := $(shell if [ -r "$(KERNEL_AUTOCONF)" ] && grep -q '^CONFIG_CC_IS_CLANG=y' "$(KERNEL_AUTOCONF)"; then echo y; elif [ -r "$(KERNEL_CONFIG)" ] && grep -q '^CONFIG_CC_IS_CLANG=y' "$(KERNEL_CONFIG)"; then echo y; fi)
+
+ifeq ($(KERNEL_CC_IS_CLANG),y)
+LLVM ?= 1
+endif
+
+ifneq ($(LLVM),)
+KBUILD_EXTRA_ARGS += LLVM=$(LLVM)
+endif
+
 all: modules
 modules:
-	make -C $(KDIR) M=$(PWD) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) modules
+	make -C $(KDIR) M=$(PWD) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) $(KBUILD_EXTRA_ARGS) modules
 
 install:
 	mkdir -p $(MODDESTDIR)
