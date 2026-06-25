@@ -426,7 +426,17 @@ install_via_dkms() {
     
     # Install with DKMS
     print_info "Installing module..."
-    dkms install -m "${DRV_NAME}" -v "${DRV_VERSION}" >> "$LOG_FILE" 2>&1
+    if ! dkms install -m "${DRV_NAME}" -v "${DRV_VERSION}" >> "$LOG_FILE" 2>&1; then
+        if grep -qi "override by specifying --force" "$LOG_FILE"; then
+            print_warning "Existing AIC8800 modules found for this kernel; retrying DKMS install with --force..."
+            dkms install -m "${DRV_NAME}" -v "${DRV_VERSION}" --force >> "$LOG_FILE" 2>&1
+        else
+            print_error "DKMS install failed!"
+            echo ""
+            echo "Please check the log file: $LOG_FILE"
+            exit 1
+        fi
+    fi
     
     print_success "Module installed via DKMS."
     print_info "The driver will automatically rebuild after kernel updates."
