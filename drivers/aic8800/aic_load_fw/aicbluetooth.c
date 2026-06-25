@@ -1447,7 +1447,6 @@ int aicbt_patch_table_load(struct aic_usb_dev *usbdev, struct aicbt_patch_table 
 
 int aicbt_patch_info_unpack(struct aicbt_patch_info_t *patch_info, struct aicbt_patch_table *head_t)
 {
-    uint8_t *patch_info_array = (uint8_t*)patch_info;
     int base_len = 0;
     int memcpy_len = 0;
     
@@ -1467,13 +1466,30 @@ int aicbt_patch_info_unpack(struct aicbt_patch_info_t *patch_info, struct aicbt_
 
         if (patch_info->info_len == 0)
             return 0;
-       
-        memcpy(((patch_info_array) + sizeof(patch_info->info_len)), 
-            head_t->data, 
-            memcpy_len * sizeof(uint32_t) * 2);
+
+        if (memcpy_len >= 1) {
+            patch_info->adid_addrinf = head_t->data[0];
+            patch_info->addr_adid = head_t->data[1];
+        }
+        if (memcpy_len >= 2) {
+            patch_info->patch_addrinf = head_t->data[2];
+            patch_info->addr_patch = head_t->data[3];
+        }
+        if (memcpy_len >= 3) {
+            patch_info->reset_addr = head_t->data[4];
+            patch_info->reset_val = head_t->data[5];
+        }
+        if (memcpy_len >= 4) {
+            patch_info->adid_flag_addr = head_t->data[6];
+            patch_info->adid_flag = head_t->data[7];
+        }
+        if (memcpy_len >= 5) {
+            patch_info->ext_patch_nb_addr = head_t->data[8];
+            patch_info->ext_patch_nb = head_t->data[9];
+        }
         AICWFDBG(LOGDEBUG, "%s adid_addrinf:%x addr_adid:%x \r\n", __func__, 
-            ((struct aicbt_patch_info_t *)patch_info_array)->adid_addrinf,
-            ((struct aicbt_patch_info_t *)patch_info_array)->addr_adid);
+            patch_info->adid_addrinf,
+            patch_info->addr_adid);
 
         if (patch_info->ext_patch_nb > 0){
             int index = 0;
