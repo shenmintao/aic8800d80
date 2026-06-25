@@ -188,6 +188,14 @@ detect_package_manager() {
     DETECTED_PKG_MANAGER="$pkg_manager"
 }
 
+is_volumio() {
+    if [ -r /etc/os-release ] && grep -Eiq '(^ID="?volumio"?$|^NAME="?volumio"?$|^PRETTY_NAME=.*volumio)' /etc/os-release; then
+        return 0
+    fi
+
+    return 1
+}
+
 install_dependencies() {
     local pkg_manager="$1"
     
@@ -197,9 +205,15 @@ install_dependencies() {
         apt)
             print_info "Updating package database..."
             apt-get update -qq >> "$LOG_FILE" 2>&1
-            
-            print_info "Installing: dkms, build-essential, linux-headers, mokutil..."
-            apt-get install -y dkms build-essential linux-headers-$(uname -r) mokutil >> "$LOG_FILE" 2>&1
+
+            if is_volumio; then
+                print_info "Volumio detected; skipping generic linux-headers package."
+                print_info "Installing: dkms, build-essential, mokutil..."
+                apt-get install -y dkms build-essential mokutil >> "$LOG_FILE" 2>&1
+            else
+                print_info "Installing: dkms, build-essential, linux-headers, mokutil..."
+                apt-get install -y dkms build-essential linux-headers-$(uname -r) mokutil >> "$LOG_FILE" 2>&1
+            fi
             ;;
             
         dnf)
@@ -233,6 +247,28 @@ install_dependencies() {
     esac
     
     print_success "Dependencies installed successfully."
+}
+
+check_kernel_build_tree() {
+    local kernel_build_dir="/lib/modules/$(uname -r)/build"
+
+    if [ -e "$kernel_build_dir" ]; then
+        return 0
+    fi
+
+    print_error "Kernel build directory not found: $kernel_build_dir"
+    echo ""
+    if is_volumio; then
+        echo "Volumio does not use the normal linux-headers package flow."
+        echo "Prepare the kernel source first, then rerun this installer:"
+        echo ""
+        echo "  sudo volumio kernelsource"
+        echo "  sudo ./install.sh"
+    else
+        echo "Install the kernel headers for your running kernel, then rerun this installer."
+    fi
+    echo ""
+    exit 1
 }
 
 #############################################################################
@@ -394,6 +430,44 @@ install_via_dkms() {
     
     print_success "Module installed via DKMS."
     print_info "The driver will automatically rebuild after kernel updates."
+}
+
+#############################################################################
+# Initramfs Refresh
+#############################################################################
+
+refresh_initramfs() {
+    print_step "Refreshing initramfs..."
+
+    if is_volumio; then
+        print_info "Volumio detected; skipping automatic initramfs refresh."
+        return 0
+    fi
+
+    if command -v update-initramfs > /dev/null 2>&1; then
+        print_info "Running update-initramfs for the current kernel..."
+        if update-initramfs -u -k "$(uname -r)" >> "$LOG_FILE" 2>&1; then
+            print_success "Initramfs refreshed successfully."
+        else
+            print_warning "update-initramfs failed; firmware may not be available during early boot."
+        fi
+    elif command -v dracut > /dev/null 2>&1; then
+        print_info "Running dracut for the current kernel..."
+        if dracut -f >> "$LOG_FILE" 2>&1; then
+            print_success "Initramfs refreshed successfully."
+        else
+            print_warning "dracut failed; firmware may not be available during early boot."
+        fi
+    elif command -v mkinitcpio > /dev/null 2>&1; then
+        print_info "Running mkinitcpio presets..."
+        if mkinitcpio -P >> "$LOG_FILE" 2>&1; then
+            print_success "Initramfs refreshed successfully."
+        else
+            print_warning "mkinitcpio failed; firmware may not be available during early boot."
+        fi
+    else
+        print_info "No supported initramfs refresh tool found; skipping."
+    fi
 }
 
 #############################################################################
@@ -612,23 +686,29 @@ main() {
     
     # Step 4: Install dependencies
     install_dependencies "$DETECTED_PKG_MANAGER"
-    
-    # Step 5: Install firmware
+
+    # Step 5: Check kernel build tree
+    check_kernel_build_tree
+
+    # Step 6: Install firmware
     install_firmware
     
-    # Step 6: Create DKMS configuration
+    # Step 7: Create DKMS configuration
     create_dkms_conf
     
-    # Step 7: Install via DKMS
+    # Step 8: Install via DKMS
     install_via_dkms
     
-    # Step 8: Load the module
+    # Step 9: Refresh initramfs
+    refresh_initramfs
+
+    # Step 10: Load the module
     load_module
     
-    # Step 9: Verify installation
+    # Step 11: Verify installation
     verify_installation
     
-    # Step 10: Show final instructions
+    # Step 12: Show final instructions
     show_final_instructions
     
     log_message "END" "Installation completed successfully"
