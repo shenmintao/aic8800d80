@@ -6,3 +6,4 @@ KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="5726",  SYMLINK+="ten
 KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="5727",  SYMLINK+="tendaudiskv4", RUN+="/usr/bin/eject /dev/%k"
 KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="572a",  SYMLINK+="tendaudiskv5", RUN+="/usr/bin/eject /dev/%k"
 KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="572c",  SYMLINK+="cudydiskv2", RUN+="/usr/bin/eject /dev/%k"
+KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="572f",  SYMLINK+="aicudisk572f", RUN+="/usr/bin/eject /dev/%k"

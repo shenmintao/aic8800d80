@@ -70,13 +70,29 @@ print_step() {
     log_message "STEP" "$1"
 }
 
+run_logged() {
+    local description="$1"
+    shift
+    local command_status=0
+
+    "$@" 2>&1 | tee -a "$LOG_FILE"
+    command_status="${PIPESTATUS[0]}"
+    if [ "$command_status" -ne 0 ]; then
+        print_error "$description failed (exit code $command_status)."
+    fi
+
+    return "$command_status"
+}
+
 #############################################################################
 # Error Handling
 #############################################################################
 
 cleanup_on_error() {
-    print_error "Installation failed. Check $LOG_FILE for details."
-    exit 1
+    local exit_code=$?
+    trap - ERR
+    print_error "Installation failed (exit code $exit_code). Check $LOG_FILE for details."
+    exit "$exit_code"
 }
 
 trap cleanup_on_error ERR
@@ -180,6 +196,8 @@ detect_package_manager() {
         echo "  - build-essential / base-devel / development tools"
         echo "  - linux-headers for your kernel version"
         echo "  - mokutil (optional, for Secure Boot detection)"
+        echo "  - eject"
+        echo "  - usb_modeswitch / usb-modeswitch"
         echo ""
         exit 1
     fi
@@ -196,48 +214,78 @@ is_volumio() {
     return 1
 }
 
+kernel_build_tree_available() {
+    local kernel_build_dir="/lib/modules/$(uname -r)/build"
+
+    [ -d "$kernel_build_dir" ] && [ -r "$kernel_build_dir/Makefile" ]
+}
+
 install_dependencies() {
     local pkg_manager="$1"
+    local install_kernel_headers=true
     
     print_step "Installing dependencies..."
+
+    if kernel_build_tree_available; then
+        install_kernel_headers=false
+        print_info "Kernel build tree already exists; skipping generic kernel headers package."
+    elif is_volumio; then
+        install_kernel_headers=false
+        print_info "Volumio detected; skipping generic kernel headers package."
+    fi
     
     case "$pkg_manager" in
         apt)
             print_info "Updating package database..."
-            apt-get update -qq >> "$LOG_FILE" 2>&1
+            run_logged "Package database update" apt-get update
 
-            if is_volumio; then
-                print_info "Volumio detected; skipping generic linux-headers package."
-                print_info "Installing: dkms, build-essential, mokutil..."
-                apt-get install -y dkms build-essential mokutil >> "$LOG_FILE" 2>&1
-            else
-                print_info "Installing: dkms, build-essential, linux-headers, mokutil..."
-                apt-get install -y dkms build-essential linux-headers-$(uname -r) mokutil >> "$LOG_FILE" 2>&1
+            local -a packages=(dkms build-essential mokutil eject usb-modeswitch)
+            if [ "$install_kernel_headers" = true ]; then
+                packages+=("linux-headers-$(uname -r)")
             fi
+            print_info "Installing: ${packages[*]}..."
+            run_logged "Dependency installation" env DEBIAN_FRONTEND=noninteractive apt-get install -y "${packages[@]}"
             ;;
             
         dnf)
-            print_info "Installing: dkms, gcc, make, kernel-devel, kernel-headers, mokutil..."
-            dnf install -y dkms make gcc kernel-devel kernel-headers mokutil >> "$LOG_FILE" 2>&1
+            local -a packages=(dkms make gcc mokutil util-linux usb_modeswitch)
+            if [ "$install_kernel_headers" = true ]; then
+                packages+=(kernel-devel kernel-headers)
+            fi
+            print_info "Installing: ${packages[*]}..."
+            run_logged "Dependency installation" dnf install -y "${packages[@]}"
             ;;
             
         yum)
-            print_info "Installing: dkms, gcc, make, kernel-devel, mokutil..."
-            yum install -y epel-release >> "$LOG_FILE" 2>&1
-            yum install -y dkms make gcc kernel-devel mokutil >> "$LOG_FILE" 2>&1
+            local -a packages=(dkms make gcc mokutil util-linux usb_modeswitch)
+            if [ "$install_kernel_headers" = true ]; then
+                packages+=(kernel-devel)
+            fi
+            print_info "Enabling EPEL repository..."
+            run_logged "EPEL repository installation" yum install -y epel-release
+            print_info "Installing: ${packages[*]}..."
+            run_logged "Dependency installation" yum install -y "${packages[@]}"
             ;;
             
         pacman)
             print_info "Syncing package database..."
-            pacman -Sy --noconfirm >> "$LOG_FILE" 2>&1
-            
-            print_info "Installing: dkms, base-devel, linux-headers, mokutil..."
-            pacman -S --noconfirm dkms base-devel linux-headers mokutil >> "$LOG_FILE" 2>&1
+            run_logged "Package database sync" pacman -Sy --noconfirm
+
+            local -a packages=(dkms base-devel mokutil util-linux usb_modeswitch)
+            if [ "$install_kernel_headers" = true ]; then
+                packages+=(linux-headers)
+            fi
+            print_info "Installing: ${packages[*]}..."
+            run_logged "Dependency installation" pacman -S --needed --noconfirm "${packages[@]}"
             ;;
             
         zypper)
-            print_info "Installing: dkms, gcc, make, kernel-devel, mokutil..."
-            zypper install -y dkms make gcc kernel-devel mokutil >> "$LOG_FILE" 2>&1
+            local -a packages=(dkms make gcc mokutil util-linux usb_modeswitch)
+            if [ "$install_kernel_headers" = true ]; then
+                packages+=(kernel-devel)
+            fi
+            print_info "Installing: ${packages[*]}..."
+            run_logged "Dependency installation" zypper --non-interactive install "${packages[@]}"
             ;;
             
         *)
@@ -252,11 +300,11 @@ install_dependencies() {
 check_kernel_build_tree() {
     local kernel_build_dir="/lib/modules/$(uname -r)/build"
 
-    if [ -e "$kernel_build_dir" ]; then
+    if kernel_build_tree_available; then
         return 0
     fi
 
-    print_error "Kernel build directory not found: $kernel_build_dir"
+    print_error "Kernel build directory is missing or incomplete: $kernel_build_dir"
     echo ""
     if is_volumio; then
         echo "Volumio does not use the normal linux-headers package flow."
