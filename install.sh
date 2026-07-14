@@ -323,6 +323,46 @@ check_kernel_build_tree() {
 # Firmware Installation
 #############################################################################
 
+cleanup_legacy_bluetooth_config() {
+    local legacy_conf="/etc/modprobe.d/aic8800-bt.conf"
+    local legacy_udev="/etc/udev/rules.d/90-aic8800-mode-switch.rules"
+    local changed=false
+
+    if [ -f "$legacy_conf" ] && grep -Eq '^[[:space:]]*(softdep|alias)[^#]*aic_btusb([[:space:]]|$)' "$legacy_conf"; then
+        print_info "Removing obsolete aic_btusb directives from $legacy_conf..."
+        if [ ! -f "${legacy_conf}.aic8800-backup" ]; then
+            cp -a "$legacy_conf" "${legacy_conf}.aic8800-backup" >> "$LOG_FILE" 2>&1
+        fi
+        sed -i -E '/^[[:space:]]*(softdep|alias)[^#]*aic_btusb([[:space:]]|$)/d' "$legacy_conf"
+        if ! grep -Eq '^[[:space:]]*[^#[:space:]]' "$legacy_conf"; then
+            rm -f "$legacy_conf"
+        fi
+        changed=true
+    fi
+
+    if [ -f "$legacy_udev" ] && grep -q 'aic_btusb/new_id' "$legacy_udev"; then
+        print_info "Removing obsolete aic_btusb binding rules from $legacy_udev..."
+        if [ ! -f "${legacy_udev}.aic8800-backup" ]; then
+            cp -a "$legacy_udev" "${legacy_udev}.aic8800-backup" >> "$LOG_FILE" 2>&1
+        fi
+        sed -i '/aic_btusb\/new_id/d' "$legacy_udev"
+        changed=true
+    fi
+
+    if lsmod | awk '{print $1}' | grep -qx 'aic_btusb'; then
+        print_info "Unloading obsolete aic_btusb module..."
+        if modprobe -r aic_btusb >> "$LOG_FILE" 2>&1; then
+            changed=true
+        else
+            print_warning "aic_btusb is still in use; reboot or replug the adapter after installation."
+        fi
+    fi
+
+    if [ "$changed" = true ]; then
+        print_success "Legacy Bluetooth configuration cleaned up."
+    fi
+}
+
 install_firmware() {
     print_step "Installing firmware..."
 
@@ -333,6 +373,8 @@ install_firmware() {
         echo "Please ensure you're running the script from the repository root."
         exit 1
     fi
+
+    cleanup_legacy_bluetooth_config
 
     # Remove old firmware versions
     if [ -d "/lib/firmware" ] && [ -n "$(find /lib/firmware -maxdepth 1 -name 'aic8800*' -type d 2>/dev/null)" ]; then

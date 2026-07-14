@@ -43,7 +43,7 @@ echo ""
 
 # 3. 检查已加载的模块
 echo "3. 已加载的相关模块 (期望: aic_load_fw + btusb):"
-lsmod | grep -E "aic_load_fw|aicwf|btusb|bluetooth" || echo "   未找到相关模块"
+lsmod | grep -E "aic_load_fw|aicwf|aic_btusb|btusb|bluetooth" || echo "   未找到相关模块"
 echo ""
 
 # 4. 检查 HCI 设备
@@ -61,15 +61,52 @@ echo "6. RF-Kill 状态:"
 rfkill list bluetooth 2>/dev/null || echo "   无法获取 rfkill 信息"
 echo ""
 
-# 7. 检查残留的旧 modprobe 配置 (issue #53)
+# 7. 检查残留的旧 aic_btusb 配置 (issue #53)
 echo "7. 残留旧配置检查:"
-if [ -f /etc/modprobe.d/aic8800-bt.conf ]; then
-    echo "   ⚠️  发现 /etc/modprobe.d/aic8800-bt.conf —— 这是早期版本残留, 应删除"
-    echo "   该文件 softdep / alias 到不再存在的 aic_btusb, 会导致 btusb 接管设备"
-    echo "   但固件未上传, 表现为 hci0 HCI_Reset 超时 (-110)"
-    echo "   修复: sudo rm /etc/modprobe.d/aic8800-bt.conf && sudo update-initramfs -u (若用 initramfs)"
+legacy_refs_found=false
+mapfile -t legacy_modprobe_files < <(
+    grep -RIlE '^[[:space:]]*(softdep|alias)[^#]*aic_btusb([[:space:]]|$)' \
+        /etc/modprobe.d /run/modprobe.d /usr/local/lib/modprobe.d /usr/lib/modprobe.d /lib/modprobe.d \
+        2>/dev/null || true
+)
+mapfile -t legacy_udev_files < <(
+    grep -RIl 'aic_btusb/new_id' \
+        /etc/udev/rules.d /run/udev/rules.d /usr/lib/udev/rules.d /lib/udev/rules.d \
+        2>/dev/null || true
+)
+
+for legacy_file in "${legacy_modprobe_files[@]}"; do
+    echo "   ⚠️  发现旧 modprobe 指令: $legacy_file"
+    legacy_refs_found=true
+done
+
+for legacy_file in "${legacy_udev_files[@]}"; do
+    echo "   ⚠️  发现旧 udev 绑定规则: $legacy_file"
+    legacy_refs_found=true
+done
+
+if lsmod | awk '{print $1}' | grep -qx 'aic_btusb'; then
+    echo "   ⚠️  旧 aic_btusb 模块当前仍已加载"
+    legacy_refs_found=true
+fi
+
+if modinfo -n aic_btusb >/dev/null 2>&1; then
+    echo "   ⚠️  系统中仍存在 aic_btusb 模块: $(modinfo -n aic_btusb 2>/dev/null)"
+    legacy_refs_found=true
+fi
+
+if [ "$legacy_refs_found" = true ]; then
+    echo "   这些残留会尝试加载已删除的模块, 并干扰标准 btusb 的自动加载/绑定顺序。"
+    echo "   修复: 拉取最新 bluetooth 分支后重新运行 sudo ./install.sh"
+    if command -v update-initramfs >/dev/null 2>&1; then
+        echo "   然后执行: sudo update-initramfs -u"
+    elif command -v dracut >/dev/null 2>&1; then
+        echo "   然后执行: sudo dracut -f"
+    elif command -v mkinitcpio >/dev/null 2>&1; then
+        echo "   然后执行: sudo mkinitcpio -P"
+    fi
 else
-    echo "   /etc/modprobe.d/aic8800-bt.conf 不存在 (正常)"
+    echo "   未发现活动的 aic_btusb 配置、规则或模块 (正常)"
 fi
 echo ""
 
@@ -89,7 +126,7 @@ fi
 if dmesg | grep -iE "hci0:.*command (0x|tx) timed out|hci0.*opcode.*0x0c03" | tail -5 | grep -q .; then
     echo "⚠️  检测到 HCI 命令超时 (HCI_Reset/-110)"
     echo "   常见原因:"
-    echo "     a) /etc/modprobe.d/aic8800-bt.conf 残留 (见第 7 项)"
+    echo "     a) 旧 aic_btusb 配置或 udev 规则残留 (见第 7 项)"
     echo "     b) aic_load_fw 没有先把蓝牙固件 patch 上传到芯片"
     echo "     c) usb_modeswitch 没把 1111:1111 切换到真实 VID:PID"
     echo "   排查: 看上面第 5 项日志, 应能看到 fw_patch_table_8800d80 / fw_adid 字样"
