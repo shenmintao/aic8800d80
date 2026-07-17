@@ -1,0 +1,2 @@
+tests/issue63-btusb-zlp/*.patch -whitespace
+tests/issue63-btusb-zlp/*.sh text eol=lf

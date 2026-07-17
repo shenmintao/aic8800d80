@@ -1,0 +1,74 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Shen Mintao <cx330.shen@autocore.ai>
+Date: Fri, 17 Jul 2026 21:00:00 +0800
+Subject: [PATCH] Bluetooth: btusb: add bulk TX ZLP quirk for AIC 8800D80
+
+The AIC 8800D80 controller can stop returning HCI Number Of Completed
+Packets events during sustained AAC A2DP traffic when driven by the
+generic btusb transport.  Once the controller's ACL credits are
+exhausted, the connection is terminated by the HCI ACL TX watchdog.
+
+The vendor transport sets URB_ZERO_PACKET on every ACL bulk OUT URB.
+Add an equivalent, device-specific quirk to btusb for the 368b:8d81
+variant so that the standard kernel driver retains control of the
+device.
+
+This is intentionally limited to the USB ID from the reproducer while
+the behaviour is validated on additional AIC variants.
+
+Link: https://github.com/shenmintao/aic8800d80/issues/63
+Signed-off-by: Shen Mintao <cx330.shen@autocore.ai>
+---
+ drivers/bluetooth/btusb.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/drivers/bluetooth/btusb.c b/drivers/bluetooth/btusb.c
+index 830fefb342c6..97118c095369 100644
+--- a/drivers/bluetooth/btusb.c
++++ b/drivers/bluetooth/btusb.c
+@@ -67,6 +67,7 @@ static bool reset = true;
+ #define BTUSB_INTEL_NO_WBS_SUPPORT	BIT(26)
+ #define BTUSB_ACTIONS_SEMI		BIT(27)
+ #define BTUSB_BARROT			BIT(28)
++#define BTUSB_BULK_TX_ZLP		BIT(29)
+ 
+ static const struct usb_device_id btusb_table[] = {
+ 	/* Generic Bluetooth USB device */
+@@ -178,5 +179,9 @@ MODULE_DEVICE_TABLE(usb, btusb_table);
+ 
+ static const struct usb_device_id quirks_table[] = {
++	/* AIC Semiconductor AIC 8800D80 */
++	{ USB_DEVICE(0x368b, 0x8d81),
++	  .driver_info = BTUSB_BULK_TX_ZLP },
++
+ 	/* CSR BlueCore devices */
+ 	{ USB_DEVICE(0x0a12, 0x0001), .driver_info = BTUSB_CSR },
+ 
+@@ -949,6 +954,7 @@ struct btusb_data {
+ 	unsigned long flags;
+ 
+ 	bool poll_sync;
++	bool bulk_tx_zlp;
+ 	int intr_interval;
+ 	struct work_struct  work;
+ 	struct work_struct  waker;
+@@ -2138,6 +2144,9 @@ static struct urb *alloc_bulk_urb(struct hci_dev *hdev, struct sk_buff *skb)
+ 	usb_fill_bulk_urb(urb, data->udev, pipe,
+ 			  skb->data, skb->len, btusb_tx_complete, skb);
+ 
++	if (data->bulk_tx_zlp)
++		urb->transfer_flags |= URB_ZERO_PACKET;
++
+ 	skb->dev = (void *)hdev;
+ 
+ 	return urb;
+@@ -4100,6 +4109,7 @@ static int btusb_probe(struct usb_interface *intf,
+ 
+ 	data->udev = interface_to_usbdev(intf);
+ 	data->intf = intf;
++	data->bulk_tx_zlp = id->driver_info & BTUSB_BULK_TX_ZLP;
+ 
+ 	INIT_WORK(&data->work, btusb_work);
+ 	INIT_WORK(&data->waker, btusb_waker);
+-- 
+2.50.1
