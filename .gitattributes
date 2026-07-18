@@ -1,0 +1,8 @@
+/.gitattributes text eol=lf
+tests/issue63-btusb-zlp/*.patch -whitespace
+tests/issue63-btusb-zlp/*.sh text eol=lf
+tests/issue63-zlp-quirk/*.c text eol=lf
+tests/issue63-zlp-quirk/*.conf text eol=lf
+tests/issue63-zlp-quirk/*.md text eol=lf
+tests/issue63-zlp-quirk/*.sh text eol=lf
+tests/issue63-zlp-quirk/Makefile text eol=lf
