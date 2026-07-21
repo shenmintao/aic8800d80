@@ -67,23 +67,9 @@ lvl_11ax_mcs9_5g=13
 lvl_11ax_mcs10_5g=12
 lvl_11ax_mcs11_5g=12
 
-# txpwr_lvl_adj
-lvl_adj_enable=0
-lvl_adj_2g4_chan_1_4=0
-lvl_adj_2g4_chan_5_9=0
-lvl_adj_2g4_chan_10_13=0
-lvl_adj_5g_chan_42=0
-lvl_adj_5g_chan_58=0
-lvl_adj_5g_chan_106=0
-lvl_adj_5g_chan_122=0
-lvl_adj_5g_chan_138=0
-lvl_adj_5g_chan_155=0
-
 # txpwr_loss
-loss_enable_2g4=0
-loss_value_2g4=2
-loss_enable_5g=0
-loss_value_5g=5
+loss_enable=0
+loss_value=2
 
 # txpwr_ofst
 ofst_enable=0
