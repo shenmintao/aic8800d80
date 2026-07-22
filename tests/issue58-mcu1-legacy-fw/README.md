@@ -9,8 +9,10 @@ chip_id=7, chip_mcu_id=1
 ```
 
 Do not merge this branch as a general firmware downgrade. It replaces the
-complete `fw/aic8800D80` firmware set so that an affected device can test one
-specific hypothesis. Firmware for D80N, D80X2, DC, and other variants is not
+complete `fw/aic8800D80` firmware set and matches the D80 loader's FMAC patch
+table, patch-buffer layout, and MCU cache setup to that firmware generation.
+The USB transport and modern-kernel compatibility code remain current.
+Firmware and loader paths for D80N, D80X2, DC, and other variants are not
 changed.
 
 ## Hypothesis
@@ -30,6 +32,12 @@ fixed at upstream commit
 The normal FMAC file has SHA-256
 `1ec680c2b63dcaa0e5d33c5fb6d1857d030f8145c05c385e243760388a61a0da`.
 
+The first hardware test proved that this image uploads completely without the
+`0x170400` timeout, but the device then failed to re-enumerate while the newer
+loader was still applying SDK V5-era FMAC patches and MCU cache setup. This
+follow-up matches those loader operations to V3 so that their effect can be
+tested separately, while retaining unrelated fixes in the current driver.
+
 ## Install the test branch
 
 From an existing clone:
@@ -37,6 +45,7 @@ From an existing clone:
 ```bash
 git fetch origin
 git switch test/issue-58-mcu1-legacy-fw
+git pull --ff-only
 sudo ./install.sh
 ```
 
@@ -45,46 +54,62 @@ device does not re-enumerate cleanly.
 
 ## Verify
 
-First save the complete kernel log and confirm that firmware upload passes the
-old failure address without a command timeout:
+First save the complete kernel log and confirm that the V3 loader profile is
+active, firmware upload passes the old failure address, and the adapter
+re-enumerates after `a69c:8d80`:
 
 ```bash
 sudo dmesg -C
 # Disconnect and reconnect the device, then wait for initialization.
 sudo dmesg | tee issue58-legacy-fw-dmesg.txt
-sudo dmesg | grep -iE 'aic|chip_id|chip_mcu_id|fmacfw|bin upload|cmd timed-out'
+sudo dmesg | grep -iE 'aic|issue58|chip_id|chip_mcu_id|fmacfw|bin upload|cmd timed-out|error -110'
+lsusb
+lsusb -t
+```
+
+The log must contain:
+
+```text
+issue58: using Radxa SDK V3 D80 loader profile
 ```
 
 Please report all of the following, even if an earlier item fails:
 
 1. The `chip_id` and `chip_mcu_id` lines, and whether firmware upload completes.
-2. Whether nearby SSIDs can be scanned.
-3. Whether Wi-Fi association succeeds.
-4. Whether the interface receives an address by DHCP.
-5. Whether the gateway and an Internet address can be pinged, and whether real
+2. Whether the adapter re-enumerates and creates an interface owned by
+   `aic8800_fdrv`.
+3. Whether nearby SSIDs can be scanned through that AIC interface.
+4. Whether Wi-Fi association succeeds through that interface.
+5. Whether the interface receives an address by DHCP.
+6. Whether the gateway and an Internet address can be pinged, and whether real
    traffic works.
-6. Whether Bluetooth still enumerates and works through the kernel's standard
+7. Whether Bluetooth still enumerates and works through the kernel's standard
    `btusb` driver. This test does not install or use `aic_btusb`.
 
 Useful commands:
 
 ```bash
 iw dev
+nmcli device status
 nmcli device wifi list
 ip address
 ip route
-ping -c 4 "$(ip route | awk '/default/ {print $3; exit}')"
-ping -c 4 1.1.1.1
 lsusb -t
 bluetoothctl list
 ```
 
-If NetworkManager is unavailable, identify the interface with `iw dev`, then
-replace `wlan0` below with that interface name:
+Identify the new AIC interface with `iw dev`, then replace `wlan0` below with
+that interface name. Confirm its driver before treating scan or traffic from
+another onboard adapter as a successful result:
 
 ```bash
+readlink -f /sys/class/net/wlan0/device/driver
 sudo iw dev wlan0 scan | grep SSID
+ip route show dev wlan0
+ping -I wlan0 -c 4 1.1.1.1
 ```
+
+The driver path should end in `/aic8800_fdrv`.
 
 ## Return to the current V5 firmware
 
