@@ -1,4 +1,4 @@
-# Issue #58: legacy firmware test for D80 MCU revision 1
+# Issue #58: V3 firmware and MCU1 Bluetooth cache test
 
 This branch is an experimental build for
 [issue #58](https://github.com/shenmintao/aic8800d80/issues/58). It is intended
@@ -10,10 +10,11 @@ chip_id=7, chip_mcu_id=1
 
 Do not merge this branch as a general firmware downgrade. It replaces the
 complete `fw/aic8800D80` firmware set and matches the D80 loader's FMAC patch
-table, patch-buffer layout, and MCU cache setup to that firmware generation.
-The USB transport and modern-kernel compatibility code remain current.
-Firmware and loader paths for D80N, D80X2, DC, and other variants are not
-changed.
+table and patch-buffer layout to that firmware generation. It additionally
+sets bit 0 of register `0x40100020` only when `chip_mcu_id=1`, as tested in
+[PR #35](https://github.com/shenmintao/aic8800d80/pull/35). The USB transport
+and modern-kernel compatibility code remain current. Firmware and loader paths
+for D80N, D80X2, DC, and other variants are not changed.
 
 ## Hypothesis
 
@@ -32,11 +33,17 @@ fixed at upstream commit
 The normal FMAC file has SHA-256
 `1ec680c2b63dcaa0e5d33c5fb6d1857d030f8145c05c385e243760388a61a0da`.
 
-The first hardware test proved that this image uploads completely without the
-`0x170400` timeout, but the device then failed to re-enumerate while the newer
-loader was still applying SDK V5-era FMAC patches and MCU cache setup. This
-follow-up matches those loader operations to V3 so that their effect can be
-tested separately, while retaining unrelated fixes in the current driver.
+Hardware testing of commit `7b2541e` proved that the matched V3 firmware and
+loader upload completely without the `0x170400` timeout, re-enumerate as
+`a69c:8d81`, and provide working 2.4 GHz and 5 GHz Wi-Fi. Its Bluetooth
+interfaces bind to the kernel's standard `btusb` driver, but HCI initialization
+fails with `Opcode 0x0c03 failed: -110`.
+
+This follow-up changes one loader behavior only: for MCU revision 1 it reads
+register `0x40100020`, sets bit 0, and writes the value back before firmware
+upload. PR #35 independently found that this is required for correct Bluetooth
+firmware block writes on MCU1 and verified it with the system `btusb` driver.
+This branch does not contain or install `aic_btusb`.
 
 ## Install the test branch
 
@@ -44,7 +51,7 @@ From an existing clone:
 
 ```bash
 git fetch origin
-git switch test/issue-58-mcu1-legacy-fw
+git switch test/issue-58-mcu1-v3-fw-cache
 git pull --ff-only
 sudo ./install.sh
 ```
@@ -61,8 +68,8 @@ re-enumerates after `a69c:8d80`:
 ```bash
 sudo dmesg -C
 # Disconnect and reconnect the device, then wait for initialization.
-sudo dmesg | tee issue58-legacy-fw-dmesg.txt
-sudo dmesg | grep -iE 'aic|issue58|chip_id|chip_mcu_id|fmacfw|bin upload|cmd timed-out|error -110'
+sudo dmesg | tee issue58-v3-cache-dmesg.txt
+sudo dmesg | grep -iE 'aic|issue58|chip_id|chip_mcu_id|fmacfw|bin upload|cmd timed-out|Bluetooth|btusb|0x0c03|error -110'
 lsusb
 lsusb -t
 ```
@@ -70,7 +77,7 @@ lsusb -t
 The log must contain:
 
 ```text
-issue58: using Radxa SDK V3 D80 loader profile
+issue58: using Radxa SDK V3 D80 loader profile with MCU1 cache fix
 ```
 
 Please report all of the following, even if an earlier item fails:
@@ -83,8 +90,10 @@ Please report all of the following, even if an earlier item fails:
 5. Whether the interface receives an address by DHCP.
 6. Whether the gateway and an Internet address can be pinged, and whether real
    traffic works.
-7. Whether Bluetooth still enumerates and works through the kernel's standard
-   `btusb` driver. This test does not install or use `aic_btusb`.
+7. Whether both Bluetooth interfaces are bound to the kernel's standard
+   `btusb` driver and the earlier HCI Reset timeout is gone.
+8. Whether Bluetooth can scan, pair, and establish a real connection. This
+   test does not install or use `aic_btusb`.
 
 Useful commands:
 
@@ -96,6 +105,8 @@ ip address
 ip route
 lsusb -t
 bluetoothctl list
+bluetoothctl show
+bluetoothctl scan on
 ```
 
 Identify the new AIC interface with `iw dev`, then replace `wlan0` below with
