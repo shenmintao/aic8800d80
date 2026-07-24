@@ -1,10 +1,10 @@
-# Issue #71: complete MCU1 V3 DC/DW profile
+# AIC8800DC/DW legacy MCU revision 1 support
 
-This branch is the second test for
+The `legacy-mcu1` branch is the maintained compatibility profile for older
+AIC8800DC/DW devices tracked in
 [issue #71](https://github.com/shenmintao/aic8800d80/issues/71). It follows the
-same method as the successful issue #58 legacy MCU1 branch: use a complete,
-matched legacy firmware and loader profile rather than mixing firmware
-generations.
+same method as the successful issue #58 D80 profile: use a complete, matched
+legacy firmware and loader rather than mixing firmware generations.
 
 The branch keeps the current USB transport, cfg80211 integration, device IDs,
 DKMS installer, and modern-kernel compatibility. For AIC8800DC/DW it restores
@@ -12,16 +12,17 @@ the complete firmware directory and matching loader from immediately before
 SDK V5 commit `d66e5cb`. That loader includes the MCU1 cache fix and flash DPD
 validation used by the reporter's previously working driver.
 
-The first issue #71 test proved that the DPD result stored in flash is valid,
-but the V5 main application still timed out at `DBG_START_APP_REQ`. This branch
-tests the complete profile that produced the reporter's known-good firmware
-hashes.
+The first issue #71 test proved that the DPD result stored in flash was valid,
+but the V5 main application still timed out at `DBG_START_APP_REQ`. Test commit
+[`d999571`](https://github.com/shenmintao/aic8800d80/commit/d999571) restored the
+complete profile matching the reporter's known-good firmware hashes, after
+which the reporter confirmed that the TX1U Nano worked.
 
 ## Install
 
 ```bash
 git fetch origin
-git switch test/issue-71-mcu1-v3-profile
+git switch legacy-mcu1
 git pull --ff-only
 sudo ./install.sh
 sudo poweroff
@@ -61,10 +62,8 @@ New interface create wlan0
 There should be no command timeout, `err_lmac_reqs`, or failed USB probe after
 the main application starts.
 
-If the interface is created, also test scanning, association, DHCP, gateway
-and Internet reachability, at least 10 minutes of real traffic, and one USB
-unplug/replug cycle. Attach `issue71-v3-profile.log` whether the result passes
-or fails.
+Confirm scanning, association, DHCP, gateway and Internet reachability, real
+traffic, and clean initialization after a USB unplug/replug cycle.
 
 ## Roll back
 

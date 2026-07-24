@@ -37,7 +37,9 @@ identified in [PR #35](https://github.com/shenmintao/aic8800d80/pull/35).
 Bluetooth continues to use the kernel's standard `btusb` driver; this branch
 does not contain or install `aic_btusb`.
 
-Firmware and loader paths for D80N, D80X2, DC, and other variants are unchanged.
+Firmware and loader paths for D80N, D80X2, and other variants are unchanged.
+The same branch now also carries the separately validated legacy DC/DW profile
+documented in the [issue #71 support notes](../issue71-mcu1-v3-profile/README.md).
 
 ## Hardware validation
 

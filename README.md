@@ -1,15 +1,17 @@
-# AIC8800D80 Linux Driver
-This driver is for the AIC8800D80 chipset, supported by devices such as the Tenda U11 and AX913B.
+# AIC8800 Linux Driver
+This driver supports AIC8800-family chipsets used by devices such as the Tenda U11, AX913B, and TP-Link Archer TX1U Nano.
 
 > **Legacy MCU revision 1 branch:** You are viewing `legacy-mcu1`. This branch
-> is only for AIC8800D80 devices that report `chip_id=7, chip_mcu_id=1` and fail
-> the current V5 FMAC upload at `0x170400`. It uses the complete matched Radxa
-> SDK V3 D80 firmware and loader profile validated in
-> [issue #58](https://github.com/shenmintao/aic8800d80/issues/58). Use
+> is only for AIC8800D80 or AIC8800DC/DW devices that report
+> `chip_id=7, chip_mcu_id=1`. It provides complete matched V3 firmware and
+> loader profiles for the D80 upload-limit failure validated in
+> [issue #58](https://github.com/shenmintao/aic8800d80/issues/58) and the DC/DW
+> V5 main-application timeout validated in
+> [issue #71](https://github.com/shenmintao/aic8800d80/issues/71). Use
 > [`main`](https://github.com/shenmintao/aic8800d80/tree/main) for newer
 > `chip_mcu_id=0` hardware or when the MCU revision is unknown. See the
-> [legacy MCU1 support notes](tests/issue58-mcu1-legacy-fw/README.md) before
-> installing.
+> [D80](tests/issue58-mcu1-legacy-fw/README.md) and
+> [DC/DW](tests/issue71-mcu1-v3-profile/README.md) support notes before installing.
 
 Added support for devices with Vendor ID 368B (tested).
 
