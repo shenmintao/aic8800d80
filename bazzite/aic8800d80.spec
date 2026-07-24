@@ -5,7 +5,7 @@
 Name:           aic8800d80
 Version:        %{shortcommit}
 Release:        1%{?dist}
-Summary:        AIC8800D80 USB Wi-Fi driver
+Summary:        AIC8800 USB Wi-Fi and Bluetooth firmware driver
 
 License:        GPL-2.0-only
 URL:            https://github.com/shenmintao/aic8800d80
@@ -22,9 +22,9 @@ Requires(post): /usr/sbin/depmod
 Requires(postun): /usr/sbin/depmod
 
 %description
-Out-of-tree AIC8800D80 USB Wi-Fi driver with udev mode-switch rules and all
-firmware variants shipped by the upstream repository. This main-branch package
-does not install a custom Bluetooth transport driver.
+Out-of-tree AIC8800 USB driver with Wi-Fi support, Bluetooth firmware loading,
+udev mode-switch rules, and all firmware variants shipped by the upstream
+repository. Combo adapters use the standard Linux btusb transport driver.
 
 %prep
 %autosetup -n %{name}-%{commit}

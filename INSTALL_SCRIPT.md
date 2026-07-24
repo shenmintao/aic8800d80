@@ -2,12 +2,16 @@
 
 ## Overview
 
-This automated installation script (`install.sh`) simplifies the process of installing the AIC8800D80 WiFi driver on Linux systems.
+This automated installation script (`install.sh`) installs the AIC8800 Wi-Fi
+driver and firmware loader on Linux systems. Wi-Fi/Bluetooth combo adapters use
+the standard kernel `btusb` driver after firmware initialization.
 
 - Automatic Secure Boot detection
 - Automatic dependency installation
 - Automatic driver compilation and installation
 - Automatic module loading on boot
+- Automatic cleanup of obsolete `aic_btusb` configuration
+- Wi-Fi-only and Wi-Fi/Bluetooth combo adapter support from the same branch
 - Comprehensive error handling
 - Colored output and logging
 - Compatible with Ubuntu, Debian, Fedora, and derivatives (DKMS supported `dkms.conf`)

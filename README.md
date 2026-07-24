@@ -1,4 +1,4 @@
-# AIC8800D80 Linux Driver
+# AIC8800 Linux Wi-Fi and Bluetooth Driver
 This driver is for the AIC8800D80 chipset, supported by devices such as the Tenda U11 and AX913B.
 
 > [!IMPORTANT]
@@ -20,7 +20,10 @@ Added support for devices with Vendor ID 368B (tested).
 
 Tested on Linux kernel 6.16 with Ubuntu 25.04 and 6.1.0.27 with Debian 12.
 
-> **Bluetooth Support**: The [`bluetooth`](https://github.com/shenmintao/aic8800d80/tree/bluetooth) branch fully supports Bluetooth. This main branch only provides Wi-Fi functionality. Please switch to the `bluetooth` branch if you need Bluetooth support.
+The same driver supports Wi-Fi-only adapters and Wi-Fi/Bluetooth combo
+adapters. On combo devices, `aic_load_fw` uploads the AIC firmware and the
+standard Linux `btusb` driver handles the Bluetooth HCI interface. The obsolete
+custom `aic_btusb` module is not used.
 
 ### Disclaimer
 I did not develop this software, The code is sourced from the Tenda U11 driver. I only made some modifications to the code to adapt it to newer kernel versions. Apart from compilation issues, I am unable to address other problems.
@@ -35,18 +38,18 @@ Before installing the driver, delete all aic8800-related folders under /lib/firm
 #### Method 2: Manual Installation
 
 #### Copy udev rules:
-Copy the aic.rules file to /lib/udev/rules.d/:
+Copy the aic.rules file to /usr/lib/udev/rules.d/:
 
 ```bash
-sudo cp aic.rules /lib/udev/rules.d/
+sudo cp aic.rules /usr/lib/udev/rules.d/
 ```
 
 #### Copy firmware:
 
-Copy the aic8800D80 folder from ./fw to /lib/firmware/:
+Copy the firmware directories from `./fw` to `/lib/firmware/`:
 
 ```bash
-sudo cp -r ./fw/aic8800D80 /lib/firmware/
+sudo cp -r ./fw/aic8800* /lib/firmware/
 ```
 #### Navigate to the driver directory:
 
@@ -112,4 +115,40 @@ If the device is still not active, check the kernel logs for any errors related 
 ```bash
 sudo dmesg
 ```
+
+### Bluetooth on Combo Adapters
+
+Bluetooth support does not require a separate AIC transport module. After
+`aic_load_fw` initializes a combo adapter, the kernel automatically binds its
+Bluetooth interface to `btusb`. A Wi-Fi-only adapter does not expose that
+interface, so the Bluetooth path remains inactive.
+
+Verify the expected modules and controller with:
+
+```bash
+lsmod | grep -E 'aic_load_fw|aic8800_fdrv|btusb'
+lsusb -t
+bluetoothctl list
+```
+
+To scan after a controller appears:
+
+```bash
+bluetoothctl
+power on
+scan on
+```
+
+If Bluetooth is missing or reports HCI timeouts, run the read-only diagnostic
+script and attach its output together with the current boot log:
+
+```bash
+chmod +x diagnose_bt.sh
+sudo ./diagnose_bt.sh
+sudo journalctl -k -b --no-pager
+```
+
+The installer removes active references to the retired `aic_btusb` integration.
+It does not force-load `btusb` or globally change the Bluetooth rfkill state;
+normal kernel device matching and the user's system policy remain in control.
 
