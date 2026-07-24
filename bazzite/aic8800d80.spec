@@ -1,4 +1,4 @@
-%global commit d10bc52903f30a45e49777fd8254765403c9eb64
+%global commit 88dbc0a9531a2515934d11ae1c760ef1c2233d4c
 %global shortcommit %(echo %{commit} | cut -c1-7)
 %{!?kver:%global kver %(uname -r)}
 
@@ -70,6 +70,10 @@ cp -a fw/aic8800* %{buildroot}/usr/lib/firmware/
 /usr/lib/firmware/aic8800*
 
 %changelog
+* Fri Jul 24 2026 Shen Mintao <shenmintao@gmail.com> - 88dbc0a-1
+- Use the unified Wi-Fi and Bluetooth installer/package description.
+- Keep Bluetooth transport on the standard Linux btusb driver.
+
 * Tue Jul 14 2026 Shen Mintao <shenmintao@gmail.com> - d10bc52-1
 - Build the current main branch without the legacy custom Bluetooth module.
 - Package all firmware variants and current mode-switch rules.
