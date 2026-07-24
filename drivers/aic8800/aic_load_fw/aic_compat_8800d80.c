@@ -246,7 +246,7 @@ int system_config_8800d80(struct aic_usb_dev *usb_dev){
         }
 		chip_id = (u8)(rd_mem_addr_cfm.memdata >> 16);
 		printk("chip_id=%x, chip_mcu_id = %d\n", chip_id, chip_mcu_id);
-		printk("issue58: using Radxa SDK V3 D80 loader profile with MCU1 cache fix\n");
+		printk("AIC8800D80 legacy: using Radxa SDK V3 loader profile\n");
 		if (chip_mcu_id == 1) {
 			ret = rwnx_send_dbg_mem_read_req(usb_dev, cache_mem_addr, &rd_mem_addr_cfm);
 			if (ret) {
@@ -259,6 +259,7 @@ int system_config_8800d80(struct aic_usb_dev *usb_dev){
 				printk("%x write fail: %d\n", cache_mem_addr, ret);
 				return ret;
 			}
+			printk("AIC8800D80 MCU1: enabled Bluetooth cache fix\n");
 		}
     #if 1
 		syscfg_num = sizeof(syscfg_tbl_8800d80) / sizeof(u32) / 2;
