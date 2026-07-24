@@ -14,7 +14,7 @@ validation used by the reporter's previously working driver.
 
 The first issue #71 test proved that the DPD result stored in flash was valid,
 but the V5 main application still timed out at `DBG_START_APP_REQ`. Test commit
-[`d999571`](https://github.com/shenmintao/aic8800d80/commit/d999571) restored the
+[`dbfbfa0`](https://github.com/shenmintao/aic8800d80/commit/dbfbfa0) restored the
 complete profile matching the reporter's known-good firmware hashes, after
 which the reporter confirmed that the TX1U Nano worked.
 
