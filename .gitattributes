@@ -1,2 +1,4 @@
 fw/aic8800D80/*.txt text eol=lf
 fw/aic8800D80/*.bin binary
+fw/aic8800DC/*.txt text eol=lf
+fw/aic8800DC/*.bin binary
