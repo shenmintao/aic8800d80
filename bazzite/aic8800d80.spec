@@ -1,4 +1,4 @@
-%global commit 88dbc0a9531a2515934d11ae1c760ef1c2233d4c
+%global commit 13baa9b0b1692f94233bcf6e752060b408062026
 %global shortcommit %(echo %{commit} | cut -c1-7)
 %{!?kver:%global kver %(uname -r)}
 
@@ -77,6 +77,11 @@ cp -a fw/aic8800* %{buildroot}/usr/lib/firmware/
 /usr/lib/firmware/aic8800*
 
 %changelog
+* Sat Jul 25 2026 Shen Mintao <shenmintao@gmail.com> - 13baa9b-1
+- Unify Wi-Fi and standard-btusb Bluetooth support in one package.
+- Add the device-scoped 368b:8d81 ACL bulk TX ZLP companion module.
+- Clean up obsolete aic_btusb and issue #63 diagnostic installations.
+
 * Fri Jul 24 2026 Shen Mintao <shenmintao@gmail.com> - 88dbc0a-1
 - Use the unified Wi-Fi and Bluetooth installer/package description.
 - Keep Bluetooth transport on the standard Linux btusb driver.
