@@ -5,7 +5,7 @@
 Name:           aic8800d80
 Version:        %{shortcommit}
 Release:        1%{?dist}
-Summary:        AIC8800 USB Wi-Fi and Bluetooth firmware driver
+Summary:        AIC8800 USB Wi-Fi, Bluetooth firmware, and ZLP quirk driver
 
 License:        GPL-2.0-only
 URL:            https://github.com/shenmintao/aic8800d80
@@ -24,7 +24,9 @@ Requires(postun): /usr/sbin/depmod
 %description
 Out-of-tree AIC8800 USB driver with Wi-Fi support, Bluetooth firmware loading,
 udev mode-switch rules, and all firmware variants shipped by the upstream
-repository. Combo adapters use the standard Linux btusb transport driver.
+repository. Combo adapters use the standard Linux btusb transport driver. A
+device-scoped companion module supplies the required ACL bulk TX ZLP behavior
+for USB device 368b:8d81 without replacing the distribution btusb module.
 
 %prep
 %autosetup -n %{name}-%{commit}
@@ -43,6 +45,10 @@ install -Dpm0644 \
 install -Dpm0644 \
   drivers/aic8800/aic_load_fw/aic_load_fw.ko \
   %{buildroot}/usr/lib/modules/%{kver}/kernel/drivers/net/wireless/aic8800/aic_load_fw.ko
+
+install -Dpm0644 \
+  drivers/aic8800/aic_zlp_quirk/aic_zlp_quirk.ko \
+  %{buildroot}/usr/lib/modules/%{kver}/kernel/drivers/bluetooth/aic8800/aic_zlp_quirk.ko
 
 install -Dpm0644 \
   aic.rules \
@@ -65,6 +71,7 @@ cp -a fw/aic8800* %{buildroot}/usr/lib/firmware/
 %dir /usr/lib/modules/%{kver}/kernel/drivers/net/wireless/aic8800
 /usr/lib/modules/%{kver}/kernel/drivers/net/wireless/aic8800/aic8800_fdrv.ko
 /usr/lib/modules/%{kver}/kernel/drivers/net/wireless/aic8800/aic_load_fw.ko
+/usr/lib/modules/%{kver}/kernel/drivers/bluetooth/aic8800/aic_zlp_quirk.ko
 /usr/lib/udev/rules.d/90-aic8800-mode-switch.rules
 %config(noreplace) /etc/usb_modeswitch.d/1111:1111
 /usr/lib/firmware/aic8800*

@@ -224,5 +224,6 @@ module_exit(aic_zlp_quirk_exit);
 MODULE_AUTHOR("Shen Mintao <cx330.shen@autocore.ai>");
 MODULE_DESCRIPTION("AIC 8800D80 standard btusb ACL bulk TX ZLP quirk");
 MODULE_LICENSE("GPL");
-MODULE_VERSION("0.1");
+MODULE_VERSION("1.0");
 MODULE_SOFTDEP("pre: btusb");
+MODULE_ALIAS("usb:v368Bp8D81d*dc*dsc*dp*ic*isc*ip*in*");

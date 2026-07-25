@@ -326,6 +326,7 @@ check_kernel_build_tree() {
 cleanup_legacy_bluetooth_config() {
     local legacy_conf="/etc/modprobe.d/aic8800-bt.conf"
     local legacy_udev="/etc/udev/rules.d/90-aic8800-mode-switch.rules"
+    local legacy_package
     local changed=false
 
     if [ -f "$legacy_conf" ] && grep -Eq '^[[:space:]]*(softdep|alias)[^#]*aic_btusb([[:space:]]|$)' "$legacy_conf"; then
@@ -357,6 +358,21 @@ cleanup_legacy_bluetooth_config() {
             print_warning "aic_btusb is still in use; reboot or replug the adapter after installation."
         fi
     fi
+
+    # Remove the two issue #63 diagnostic DKMS packages before the production
+    # quirk is installed as part of aic8800/1.0.0. A patched btusb may remain
+    # active in memory until reboot, but DKMS restores the distribution module
+    # on disk when its test package is removed.
+    for legacy_package in "btusb-aic-zlp/0.1" "aic-zlp-quirk/0.1"; do
+        if dkms status 2>/dev/null | grep -q "^${legacy_package},"; then
+            print_info "Removing superseded test package ${legacy_package}..."
+            if dkms remove "$legacy_package" --all >> "$LOG_FILE" 2>&1; then
+                changed=true
+            else
+                print_warning "Could not remove ${legacy_package}; remove it manually before reboot."
+            fi
+        fi
+    done
 
     if [ "$changed" = true ]; then
         print_success "Legacy Bluetooth configuration cleaned up."
@@ -459,6 +475,11 @@ DEST_MODULE_LOCATION[0]="/updates/dkms"
 BUILT_MODULE_NAME[1]="aic_load_fw"
 BUILT_MODULE_LOCATION[1]="drivers/aic8800/aic_load_fw"
 DEST_MODULE_LOCATION[1]="/updates/dkms"
+
+# Quirk ZLP para Bluetooth ACL bulk TX (somente 368b:8d81)
+BUILT_MODULE_NAME[2]="aic_zlp_quirk"
+BUILT_MODULE_LOCATION[2]="drivers/aic8800/aic_zlp_quirk"
+DEST_MODULE_LOCATION[2]="/updates/dkms"
 
 AUTOINSTALL="yes"
 EOF
@@ -569,6 +590,20 @@ refresh_initramfs() {
 # Module Loading
 #############################################################################
 
+aic_zlp_target_present() {
+    local device
+
+    for device in /sys/bus/usb/devices/*; do
+        [ -r "$device/idVendor" ] || continue
+        [ -r "$device/idProduct" ] || continue
+        [ "$(cat "$device/idVendor")" = "368b" ] || continue
+        [ "$(cat "$device/idProduct")" = "8d81" ] || continue
+        return 0
+    done
+
+    return 1
+}
+
 load_module() {
     print_step "Loading kernel modules..."
     
@@ -611,6 +646,19 @@ load_module() {
     fi
 
     print_info "Combo adapters use the standard btusb driver when their Bluetooth interface appears."
+
+    # The module has a USB alias and normally autoloads when 368b:8d81 appears.
+    # Explicitly load it here as well when that device was already present before
+    # DKMS installation and therefore did not generate a new modalias event.
+    if aic_zlp_target_present; then
+        print_info "Loading the 368b:8d81 Bluetooth ACL ZLP quirk..."
+        if modprobe aic_zlp_quirk >> "$LOG_FILE" 2>&1; then
+            print_success "Device-scoped Bluetooth ZLP quirk is active."
+        else
+            print_warning "The ZLP quirk could not attach; system btusb remains unchanged."
+            print_info "Check CONFIG_KPROBES, Secure Boot, and: sudo dmesg | grep aic_zlp_quirk"
+        fi
+    fi
 }
 
 #############################################################################
@@ -641,6 +689,20 @@ verify_installation() {
         print_success "A Bluetooth controller or the standard btusb module is present."
     else
         print_info "No Bluetooth controller is present (normal for Wi-Fi-only adapters or when no combo adapter is connected)."
+    fi
+
+    if aic_zlp_target_present; then
+        if lsmod | awk '{print $1}' | grep -qx 'aic_zlp_quirk'; then
+            local zlp_hook="unknown"
+            if [ -r /sys/module/aic_zlp_quirk/parameters/hook ]; then
+                zlp_hook=$(cat /sys/module/aic_zlp_quirk/parameters/hook)
+            fi
+            print_success "Bluetooth ACL ZLP quirk is loaded (hook: $zlp_hook)."
+        else
+            print_warning "USB device 368b:8d81 is present but aic_zlp_quirk is not loaded."
+        fi
+    else
+        print_info "Bluetooth ZLP quirk is installed but inactive (no 368b:8d81 device present)."
     fi
 
     echo ""
@@ -690,6 +752,7 @@ show_final_instructions() {
     echo ""
     echo "✓ Wi-Fi driver and firmware loader installed via DKMS"
     echo "✓ Combo adapters use the standard Linux btusb driver"
+    echo "✓ Device-scoped Bluetooth ACL ZLP quirk installed for 368b:8d81"
     echo "✓ Automatic rebuild enabled for kernel updates"
     echo "✓ Firmware installed in /lib/firmware/"
     echo ""
@@ -721,6 +784,7 @@ show_final_instructions() {
     echo ""
     echo "• Check loaded modules:"
     echo "  ${BLUE}lsmod | grep -E 'aic|btusb'${NC}"
+    echo "  ${BLUE}cat /sys/module/aic_zlp_quirk/parameters/{hook,injections}${NC}"
     echo ""
     echo "• Manually load the Wi-Fi module and firmware loader:"
     echo "  ${BLUE}sudo modprobe aic8800_fdrv${NC}"

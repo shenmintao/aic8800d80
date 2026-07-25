@@ -4,13 +4,16 @@
 
 This automated installation script (`install.sh`) installs the AIC8800 Wi-Fi
 driver and firmware loader on Linux systems. Wi-Fi/Bluetooth combo adapters use
-the standard kernel `btusb` driver after firmware initialization.
+the standard kernel `btusb` driver after firmware initialization. For USB
+device `368b:8d81`, it also installs a device-scoped ACL bulk TX ZLP companion
+module without replacing the distribution's `btusb.ko`.
 
 - Automatic Secure Boot detection
 - Automatic dependency installation
 - Automatic driver compilation and installation
 - Automatic module loading on boot
 - Automatic cleanup of obsolete `aic_btusb` configuration
+- Automatic `aic_zlp_quirk` handling for the validated `368b:8d81` device
 - Wi-Fi-only and Wi-Fi/Bluetooth combo adapter support from the same branch
 - Comprehensive error handling
 - Colored output and logging

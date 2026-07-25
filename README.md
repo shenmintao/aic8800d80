@@ -10,8 +10,8 @@ This driver is for the AIC8800D80 chipset, supported by devices such as the Tend
 > to avoid the deterministic firmware upload timeout at `0x170400`. Use
 > `main` when `chip_mcu_id=0` or when the MCU revision is unknown.
 >
-> Hardware revision takes precedence over the Bluetooth feature branch. MCU1
-> devices should remain on `legacy-mcu1`, which initializes Bluetooth for the
+> Hardware revision determines the firmware branch. MCU1 devices should use
+> `legacy-mcu1`, which also initializes Bluetooth for the
 > kernel's standard `btusb` driver. After switching branches, rerun
 > `sudo ./install.sh` and reboot; switching the Git branch alone does not
 > replace the firmware already installed under `/lib/firmware`.
@@ -24,6 +24,13 @@ The same driver supports Wi-Fi-only adapters and Wi-Fi/Bluetooth combo
 adapters. On combo devices, `aic_load_fw` uploads the AIC firmware and the
 standard Linux `btusb` driver handles the Bluetooth HCI interface. The obsolete
 custom `aic_btusb` module is not used.
+
+USB device `368b:8d81` also uses the bundled `aic_zlp_quirk` companion module.
+It adds the Bluetooth ACL bulk TX zero-length-packet behavior validated in
+[issue #63](https://github.com/shenmintao/aic8800d80/issues/63), while leaving
+the distribution's original `btusb.ko` installed and bound to the device. The
+quirk is filtered to that VID:PID and fails closed when the required kernel
+probe support is unavailable.
 
 ### Disclaimer
 I did not develop this software, The code is sourced from the Tenda U11 driver. I only made some modifications to the code to adapt it to newer kernel versions. Apart from compilation issues, I am unable to address other problems.
@@ -126,7 +133,7 @@ interface, so the Bluetooth path remains inactive.
 Verify the expected modules and controller with:
 
 ```bash
-lsmod | grep -E 'aic_load_fw|aic8800_fdrv|btusb'
+lsmod | grep -E 'aic_load_fw|aic8800_fdrv|aic_zlp_quirk|btusb'
 lsusb -t
 bluetoothctl list
 ```
@@ -151,4 +158,17 @@ sudo journalctl -k -b --no-pager
 The installer removes active references to the retired `aic_btusb` integration.
 It does not force-load `btusb` or globally change the Bluetooth rfkill state;
 normal kernel device matching and the user's system policy remain in control.
+
+For `368b:8d81`, verify the ZLP hook and its injection counter while Bluetooth
+traffic is active:
+
+```bash
+cat /sys/module/aic_zlp_quirk/parameters/hook
+cat /sys/module/aic_zlp_quirk/parameters/injections
+```
+
+The Wi-Fi-reset recovery behavior tracked in
+[issue #53](https://github.com/shenmintao/aic8800d80/issues/53) remains a known
+limitation: after an airplane-mode or hotspot reset, Bluetooth may require a
+physical unplug/replug of the adapter.
 

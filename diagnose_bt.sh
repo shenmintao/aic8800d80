@@ -19,6 +19,7 @@ echo ""
 echo "2. USB interfaces and bound drivers:"
 bt_interface_found=false
 btusb_bound=false
+zlp_target_found=false
 for dev in /sys/bus/usb/devices/*; do
     [ -f "$dev/idVendor" ] || continue
     [ -f "$dev/idProduct" ] || continue
@@ -31,6 +32,9 @@ for dev in /sys/bus/usb/devices/*; do
     esac
 
     echo "   Device: $vid:$pid"
+    if [ "$vid" = "368b" ] && [ "$pid" = "8d81" ]; then
+        zlp_target_found=true
+    fi
     for intf in "$dev"/*:*; do
         [ -d "$intf" ] || continue
         class=$(cat "$intf/bInterfaceClass" 2>/dev/null)
@@ -50,7 +54,7 @@ done
 echo ""
 
 echo "3. Relevant kernel modules (combo expectation: aic_load_fw + btusb):"
-lsmod | grep -E '^(aic_load_fw|aic8800_fdrv|aic_btusb|btusb|bluetooth)[[:space:]]' || \
+lsmod | grep -E '^(aic_load_fw|aic8800_fdrv|aic_zlp_quirk|aic_btusb|btusb|bluetooth)[[:space:]]' || \
     echo "   No related module is currently loaded"
 echo ""
 
@@ -64,8 +68,8 @@ else
 fi
 echo ""
 
-echo "5. Firmware, btusb, and HCI log messages:"
-dmesg 2>/dev/null | grep -iE 'fw_patch|fw_adid|aicbt|bluetooth|btusb|hci' | tail -80 || true
+echo "5. Firmware, btusb, ZLP quirk, and HCI log messages:"
+dmesg 2>/dev/null | grep -iE 'fw_patch|fw_adid|aicbt|aic_zlp_quirk|bluetooth|btusb|hci' | tail -80 || true
 echo ""
 
 echo "6. Bluetooth rfkill state:"
@@ -110,6 +114,27 @@ if [ "$legacy_refs_found" = false ]; then
 fi
 echo ""
 
+echo "8. Device-scoped Bluetooth ACL ZLP quirk:"
+if [ "$zlp_target_found" = true ]; then
+    if [ -d /sys/module/aic_zlp_quirk ]; then
+        zlp_hook="unknown"
+        zlp_injections="unavailable"
+        [ -r /sys/module/aic_zlp_quirk/parameters/hook ] && \
+            zlp_hook=$(cat /sys/module/aic_zlp_quirk/parameters/hook)
+        [ -r /sys/module/aic_zlp_quirk/parameters/injections ] && \
+            zlp_injections=$(cat /sys/module/aic_zlp_quirk/parameters/injections)
+        echo "   Target 368b:8d81 present"
+        echo "   aic_zlp_quirk loaded: yes"
+        echo "   active hook: $zlp_hook"
+        echo "   ZLP injections: $zlp_injections"
+    else
+        echo "   Target 368b:8d81 present, but aic_zlp_quirk is not loaded"
+    fi
+else
+    echo "   Target 368b:8d81 not present; quirk is not required"
+fi
+echo ""
+
 echo "=== Assessment ==="
 if ! lsmod | awk '{print $1}' | grep -qx 'aic_load_fw'; then
     echo "- aic_load_fw is not loaded; run: sudo modprobe aic8800_fdrv"
@@ -124,6 +149,10 @@ if dmesg 2>/dev/null | grep -iE 'hci[0-9]+:.*(command|opcode|tx).*timed out|hci[
 fi
 if [ "$bt_interface_found" = false ]; then
     echo "- No Bluetooth HCI USB interface was found. This is normal for a Wi-Fi-only adapter."
+fi
+if [ "$zlp_target_found" = true ] && [ ! -d /sys/module/aic_zlp_quirk ]; then
+    echo "- Device 368b:8d81 requires the ACL ZLP quirk, but the module is not loaded."
+    echo "  Try: sudo modprobe aic_zlp_quirk"
 fi
 
 echo "=== Diagnostics complete ==="

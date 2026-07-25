@@ -9,6 +9,8 @@ KERNEL_BUILD_DIR="/lib/modules/${KERNEL_RELEASE}/build"
 SOURCE_DIR="/usr/src/${PACKAGE_NAME}-${PACKAGE_VERSION}"
 MODULES_LOAD_FILE="/etc/modules-load.d/${PACKAGE_NAME}.conf"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
+QUIRK_SOURCE="${REPO_ROOT}/drivers/aic8800/aic_zlp_quirk/aic_zlp_quirk.c"
 
 log() {
     printf '[aic-zlp-quirk-test] %s\n' "$*"
@@ -53,7 +55,7 @@ patched_btusb_installed() {
 
 copy_sources() {
     install -d "${SOURCE_DIR}"
-    install -m 0644 "${SCRIPT_DIR}/aic_zlp_quirk.c" "${SOURCE_DIR}/"
+    install -m 0644 "${QUIRK_SOURCE}" "${SOURCE_DIR}/"
     install -m 0644 "${SCRIPT_DIR}/Makefile" "${SOURCE_DIR}/"
     install -m 0644 "${SCRIPT_DIR}/dkms.conf" "${SOURCE_DIR}/"
 }
