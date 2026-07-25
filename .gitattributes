@@ -1,0 +1,7 @@
+/.gitattributes text eol=lf
+drivers/aic8800/aic_zlp_quirk/*.c text eol=lf
+drivers/aic8800/aic_zlp_quirk/Makefile text eol=lf
+tests/issue63-zlp-quirk/*.conf text eol=lf
+tests/issue63-zlp-quirk/*.md text eol=lf
+tests/issue63-zlp-quirk/*.sh text eol=lf
+tests/issue63-zlp-quirk/Makefile text eol=lf
