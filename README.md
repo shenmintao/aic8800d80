@@ -21,6 +21,15 @@ Added support for devices with Vendor ID 368B (tested).
 
 Tested on Linux kernel 6.16 with Ubuntu 25.04 and 6.1.0.27 with Debian 12.
 
+> [!NOTE]
+> **Bluetooth branch retirement:** The separate
+> [`bluetooth`](https://github.com/shenmintao/aic8800d80/tree/bluetooth) branch
+> is deprecated and is being kept only during the migration period. This
+> branch is the unified candidate for promotion to `main` in
+> [PR #73](https://github.com/shenmintao/aic8800d80/pull/73). After hardware
+> validation and promotion, the separate `bluetooth` branch will be removed.
+> MCU1 hardware must use `legacy-mcu1`.
+
 The same driver supports Wi-Fi-only adapters and Wi-Fi/Bluetooth combo
 adapters. On combo devices, `aic_load_fw` uploads the AIC firmware and the
 standard Linux `btusb` driver handles the Bluetooth HCI interface. The obsolete
