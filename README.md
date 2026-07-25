@@ -21,6 +21,16 @@ Tested on Linux kernel 6.16 with Ubuntu 25.04 and 6.1.0.27 with Debian 12.
 > controller for the kernel's standard `btusb` driver. It does not contain or
 > install `aic_btusb`.
 
+> [!NOTE]
+> **Bluetooth branch retirement:** Do not switch MCU1 hardware to the separate
+> [`bluetooth`](https://github.com/shenmintao/aic8800d80/tree/bluetooth) branch.
+> That branch is deprecated, is being kept only during migration, and will be
+> removed after the unified builds are validated. `legacy-mcu1` already
+> provides Bluetooth through the kernel's standard `btusb` driver. Its unified
+> installer and device-scoped `368b:8d81` ZLP support are being validated in
+> [PR #74](https://github.com/shenmintao/aic8800d80/pull/74); the ZLP module
+> remains inactive on other VID:PID combinations.
+
 ### Disclaimer
 I did not develop this software, The code is sourced from the Tenda U11 driver. I only made some modifications to the code to adapt it to newer kernel versions. Apart from compilation issues, I am unable to address other problems.
 
