@@ -10,7 +10,7 @@ This driver is for the AIC8800D80 chipset, supported by devices such as the Tend
 > to avoid the deterministic firmware upload timeout at `0x170400`. Use
 > `main` when `chip_mcu_id=0` or when the MCU revision is unknown.
 >
-> Hardware revision takes precedence over the Bluetooth feature branch. MCU1
+> Hardware revision takes precedence over the separate Bluetooth branch. MCU1
 > devices should remain on `legacy-mcu1`, which initializes Bluetooth for the
 > kernel's standard `btusb` driver. After switching branches, rerun
 > `sudo ./install.sh` and reboot; switching the Git branch alone does not
@@ -20,7 +20,16 @@ Added support for devices with Vendor ID 368B (tested).
 
 Tested on Linux kernel 6.16 with Ubuntu 25.04 and 6.1.0.27 with Debian 12.
 
-> **Bluetooth Support**: The [`bluetooth`](https://github.com/shenmintao/aic8800d80/tree/bluetooth) branch fully supports Bluetooth. This main branch only provides Wi-Fi functionality. Please switch to the `bluetooth` branch if you need Bluetooth support.
+> [!NOTE]
+> **Bluetooth branch retirement:** The separate
+> [`bluetooth`](https://github.com/shenmintao/aic8800d80/tree/bluetooth) branch
+> is deprecated and is being kept only during the migration period. Wi-Fi and
+> standard-`btusb` Bluetooth support are being consolidated into `main` in
+> [PR #73](https://github.com/shenmintao/aic8800d80/pull/73). After hardware
+> validation and promotion, the `bluetooth` branch will be removed. Existing
+> users may remain on it temporarily; new validation should use
+> `test/unified-wifi-bt-zlp`. MCU1 hardware must use `legacy-mcu1`, not the
+> separate `bluetooth` branch.
 
 ### Disclaimer
 I did not develop this software, The code is sourced from the Tenda U11 driver. I only made some modifications to the code to adapt it to newer kernel versions. Apart from compilation issues, I am unable to address other problems.
