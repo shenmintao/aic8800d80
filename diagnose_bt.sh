@@ -85,12 +85,14 @@ legacy_refs_found=false
 mapfile -t legacy_modprobe_files < <(
     grep -RIlE '^[[:space:]]*(softdep|alias)[^#]*aic_btusb([[:space:]]|$)' \
         /etc/modprobe.d /run/modprobe.d /usr/local/lib/modprobe.d \
-        /usr/lib/modprobe.d /lib/modprobe.d 2>/dev/null || true
+        /usr/lib/modprobe.d /lib/modprobe.d 2>/dev/null | \
+        grep -vE '\.aic8800-backup$' || true
 )
 mapfile -t legacy_udev_files < <(
     grep -RIl 'aic_btusb/new_id' \
         /etc/udev/rules.d /run/udev/rules.d \
-        /usr/lib/udev/rules.d /lib/udev/rules.d 2>/dev/null || true
+        /usr/lib/udev/rules.d /lib/udev/rules.d 2>/dev/null | \
+        grep -vE '\.aic8800-backup$' || true
 )
 
 for legacy_file in "${legacy_modprobe_files[@]}"; do

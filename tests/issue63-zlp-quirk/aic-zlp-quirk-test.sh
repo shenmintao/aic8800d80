@@ -188,7 +188,8 @@ show_status() {
     local loaded="no"
     local injections="unavailable"
     local hook="unavailable"
-    local dkms_status
+    local integrated_dkms_status
+    local standalone_dkms_status
 
     if module_loaded "${MODULE_NAME}"; then
         loaded="yes"
@@ -200,9 +201,13 @@ show_status() {
         fi
     fi
 
-    dkms_status="$(dkms status -m "${PACKAGE_NAME}" -v "${PACKAGE_VERSION}" 2>/dev/null || true)"
-    if [ -z "${dkms_status}" ]; then
-        dkms_status="not installed"
+    standalone_dkms_status="$(dkms status -m "${PACKAGE_NAME}" -v "${PACKAGE_VERSION}" 2>/dev/null || true)"
+    if [ -z "${standalone_dkms_status}" ]; then
+        standalone_dkms_status="not installed"
+    fi
+    integrated_dkms_status="$(dkms status -m aic8800 -v 1.0.0 2>/dev/null || true)"
+    if [ -z "${integrated_dkms_status}" ]; then
+        integrated_dkms_status="not installed"
     fi
 
     printf 'kernel:        %s\n' "${KERNEL_RELEASE}"
@@ -212,7 +217,8 @@ show_status() {
     printf 'active hook:   %s\n' "${hook}"
     printf 'ZLP injections:%s\n' " ${injections}"
     printf 'legacy aic_btusb: %s\n' "$(legacy_btusb_loaded && printf 'loaded' || printf 'not loaded')"
-    printf 'dkms status:   %s\n' "${dkms_status}"
+    printf 'integrated DKMS: %s\n' "${integrated_dkms_status}"
+    printf 'standalone DKMS: %s\n' "${standalone_dkms_status}"
     show_aic_binding
 }
 
