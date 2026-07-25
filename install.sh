@@ -323,6 +323,62 @@ check_kernel_build_tree() {
 # Firmware Installation
 #############################################################################
 
+cleanup_legacy_bluetooth_config() {
+    local legacy_conf="/etc/modprobe.d/aic8800-bt.conf"
+    local legacy_udev="/etc/udev/rules.d/90-aic8800-mode-switch.rules"
+    local legacy_package
+    local changed=false
+
+    if [ -f "$legacy_conf" ] && grep -Eq '^[[:space:]]*(softdep|alias)[^#]*aic_btusb([[:space:]]|$)' "$legacy_conf"; then
+        print_info "Removing obsolete aic_btusb directives from $legacy_conf..."
+        if [ ! -f "${legacy_conf}.aic8800-backup" ]; then
+            cp -a "$legacy_conf" "${legacy_conf}.aic8800-backup" >> "$LOG_FILE" 2>&1
+        fi
+        sed -i -E '/^[[:space:]]*(softdep|alias)[^#]*aic_btusb([[:space:]]|$)/d' "$legacy_conf"
+        if ! grep -Eq '^[[:space:]]*[^#[:space:]]' "$legacy_conf"; then
+            rm -f "$legacy_conf"
+        fi
+        changed=true
+    fi
+
+    if [ -f "$legacy_udev" ] && grep -q 'aic_btusb/new_id' "$legacy_udev"; then
+        print_info "Removing obsolete aic_btusb binding rules from $legacy_udev..."
+        if [ ! -f "${legacy_udev}.aic8800-backup" ]; then
+            cp -a "$legacy_udev" "${legacy_udev}.aic8800-backup" >> "$LOG_FILE" 2>&1
+        fi
+        sed -i '/aic_btusb\/new_id/d' "$legacy_udev"
+        changed=true
+    fi
+
+    if lsmod | awk '{print $1}' | grep -qx 'aic_btusb'; then
+        print_info "Unloading obsolete aic_btusb module..."
+        if modprobe -r aic_btusb >> "$LOG_FILE" 2>&1; then
+            changed=true
+        else
+            print_warning "aic_btusb is still in use; reboot or replug the adapter after installation."
+        fi
+    fi
+
+    # Remove the two issue #63 diagnostic DKMS packages before the production
+    # quirk is installed as part of aic8800/1.0.0. A patched btusb may remain
+    # active in memory until reboot, but DKMS restores the distribution module
+    # on disk when its test package is removed.
+    for legacy_package in "btusb-aic-zlp/0.1" "aic-zlp-quirk/0.1"; do
+        if dkms status 2>/dev/null | grep -q "^${legacy_package},"; then
+            print_info "Removing superseded test package ${legacy_package}..."
+            if dkms remove "$legacy_package" --all >> "$LOG_FILE" 2>&1; then
+                changed=true
+            else
+                print_warning "Could not remove ${legacy_package}; remove it manually before reboot."
+            fi
+        fi
+    done
+
+    if [ "$changed" = true ]; then
+        print_success "Legacy Bluetooth configuration cleaned up."
+    fi
+}
+
 install_firmware() {
     print_step "Installing firmware..."
 
@@ -333,6 +389,8 @@ install_firmware() {
         echo "Please ensure you're running the script from the repository root."
         exit 1
     fi
+
+    cleanup_legacy_bluetooth_config
 
     # Remove old firmware versions
     if [ -d "/lib/firmware" ] && [ -n "$(find /lib/firmware -maxdepth 1 -name 'aic8800*' -type d 2>/dev/null)" ]; then
@@ -350,6 +408,8 @@ install_firmware() {
             cp -r "$fw_dir" "$fw_dest" >> "$LOG_FILE" 2>&1
         fi
     done
+
+    print_success "Firmware installed for all supported chip variants."
 
     # Install udev rules
     local rules_source="${SCRIPT_DIR}/aic.rules"
@@ -415,6 +475,11 @@ DEST_MODULE_LOCATION[0]="/updates/dkms"
 BUILT_MODULE_NAME[1]="aic_load_fw"
 BUILT_MODULE_LOCATION[1]="drivers/aic8800/aic_load_fw"
 DEST_MODULE_LOCATION[1]="/updates/dkms"
+
+# Quirk ZLP para Bluetooth ACL bulk TX (somente 368b:8d81)
+BUILT_MODULE_NAME[2]="aic_zlp_quirk"
+BUILT_MODULE_LOCATION[2]="drivers/aic8800/aic_zlp_quirk"
+DEST_MODULE_LOCATION[2]="/updates/dkms"
 
 AUTOINSTALL="yes"
 EOF
@@ -525,23 +590,38 @@ refresh_initramfs() {
 # Module Loading
 #############################################################################
 
+aic_zlp_target_present() {
+    local device
+
+    for device in /sys/bus/usb/devices/*; do
+        [ -r "$device/idVendor" ] || continue
+        [ -r "$device/idProduct" ] || continue
+        [ "$(cat "$device/idVendor")" = "368b" ] || continue
+        [ "$(cat "$device/idProduct")" = "8d81" ] || continue
+        return 0
+    done
+
+    return 1
+}
+
 load_module() {
-    print_step "Loading kernel module..."
+    print_step "Loading kernel modules..."
     
     # Update module dependencies
     print_info "Updating module dependencies..."
     depmod -a >> "$LOG_FILE" 2>&1
     
-    # Unload module if already loaded
     if lsmod | grep -q "$MODULE_NAME"; then
-        print_info "Module already loaded. Reloading..."
+        print_info "Wi-Fi module already loaded. Reloading..."
         modprobe -r "$MODULE_NAME" >> "$LOG_FILE" 2>&1 || true
     fi
     
-    # Load the module
+    # aic8800_fdrv depends on aic_load_fw, which initializes both Wi-Fi-only
+    # adapters and the Bluetooth firmware on combo adapters. If a standard HCI
+    # USB interface appears afterwards, the kernel USB modalias loads btusb.
     print_info "Loading $MODULE_NAME..."
     if modprobe "$MODULE_NAME" >> "$LOG_FILE" 2>&1; then
-        print_success "Module loaded successfully."
+        print_success "Wi-Fi module loaded successfully."
         
         # Verify module is loaded
         print_info "Waiting for module to initialize..."
@@ -555,14 +635,29 @@ load_module() {
         done
         
         if [ "$module_loaded" = true ]; then
-            print_success "Module is active in kernel."
+            print_success "Wi-Fi module is active in kernel."
         else
-            print_warning "Module may not be fully initialized yet."
+            print_warning "Wi-Fi module may not be fully initialized yet."
         fi
     else
-        print_warning "Module installed but could not be loaded immediately."
+        print_warning "Wi-Fi module installed but could not be loaded immediately."
         print_info "This may be due to Secure Boot or missing hardware."
         print_info "Try rebooting or check: sudo dmesg | grep aic8800"
+    fi
+
+    print_info "Combo adapters use the standard btusb driver when their Bluetooth interface appears."
+
+    # The module has a USB alias and normally autoloads when 368b:8d81 appears.
+    # Explicitly load it here as well when that device was already present before
+    # DKMS installation and therefore did not generate a new modalias event.
+    if aic_zlp_target_present; then
+        print_info "Loading the 368b:8d81 Bluetooth ACL ZLP quirk..."
+        if modprobe aic_zlp_quirk >> "$LOG_FILE" 2>&1; then
+            print_success "Device-scoped Bluetooth ZLP quirk is active."
+        else
+            print_warning "The ZLP quirk could not attach; system btusb remains unchanged."
+            print_info "Check CONFIG_KPROBES, Secure Boot, and: sudo dmesg | grep aic_zlp_quirk"
+        fi
     fi
 }
 
@@ -583,14 +678,36 @@ verify_installation() {
         print_warning "DKMS status unclear: $dkms_status"
     fi
     
-    # Check if module is loaded
+    # Check if the Wi-Fi module is loaded
     if lsmod | grep -q "$MODULE_NAME"; then
-        print_success "Kernel module is loaded."
-        echo ""
-        lsmod | grep aic
+        print_success "Wi-Fi kernel module is loaded."
     else
-        print_info "Module not currently loaded (this is OK if no hardware is connected)."
+        print_info "Wi-Fi module not currently loaded (this is OK if no hardware is connected)."
     fi
+
+    if lsmod | awk '{print $1}' | grep -qx 'btusb' || compgen -G '/sys/class/bluetooth/hci*' > /dev/null; then
+        print_success "A Bluetooth controller or the standard btusb module is present."
+    else
+        print_info "No Bluetooth controller is present (normal for Wi-Fi-only adapters or when no combo adapter is connected)."
+    fi
+
+    if aic_zlp_target_present; then
+        if lsmod | awk '{print $1}' | grep -qx 'aic_zlp_quirk'; then
+            local zlp_hook="unknown"
+            if [ -r /sys/module/aic_zlp_quirk/parameters/hook ]; then
+                zlp_hook=$(cat /sys/module/aic_zlp_quirk/parameters/hook)
+            fi
+            print_success "Bluetooth ACL ZLP quirk is loaded (hook: $zlp_hook)."
+        else
+            print_warning "USB device 368b:8d81 is present but aic_zlp_quirk is not loaded."
+        fi
+    else
+        print_info "Bluetooth ZLP quirk is installed but inactive (no 368b:8d81 device present)."
+    fi
+
+    echo ""
+    print_info "Loaded AIC modules:"
+    lsmod | grep aic || echo "  (none)"
     
     # Check firmware
     local fw_count=0
@@ -610,6 +727,15 @@ verify_installation() {
     if command -v iwconfig &> /dev/null; then
         iwconfig 2>/dev/null | grep -E "wlan|IEEE" || echo "No wireless interfaces detected (hardware may not be connected)"
     fi
+
+    print_info "Checking for Bluetooth interfaces on combo adapters..."
+    if command -v bluetoothctl &> /dev/null; then
+        bluetoothctl list 2>/dev/null || echo "No Bluetooth interfaces detected (normal for Wi-Fi-only adapters)"
+    elif command -v hciconfig &> /dev/null; then
+        hciconfig 2>/dev/null || echo "No Bluetooth interfaces detected (normal for Wi-Fi-only adapters)"
+    else
+        echo "Bluetooth tools not installed (install BlueZ to manage a combo adapter)"
+    fi
 }
 
 #############################################################################
@@ -624,13 +750,15 @@ show_final_instructions() {
     echo ""
     echo -e "${CYAN}Important Information:${NC}"
     echo ""
-    echo "✓ Driver installed via DKMS"
+    echo "✓ Wi-Fi driver and firmware loader installed via DKMS"
+    echo "✓ Combo adapters use the standard Linux btusb driver"
+    echo "✓ Device-scoped Bluetooth ACL ZLP quirk installed for 368b:8d81"
     echo "✓ Automatic rebuild enabled for kernel updates"
     echo "✓ Firmware installed in /lib/firmware/"
     echo ""
     echo -e "${CYAN}Next Steps:${NC}"
     echo ""
-    echo "1. Connect your AIC8800D80 USB WiFi adapter"
+    echo "1. Connect your AIC8800 USB Wi-Fi or Wi-Fi/Bluetooth adapter"
     echo ""
     echo "2. Check if the adapter is detected:"
     echo "   ${BLUE}lsusb | grep -i aic${NC}"
@@ -639,10 +767,15 @@ show_final_instructions() {
     echo ""
     echo "3. View kernel messages about the driver:"
     echo "   ${BLUE}sudo dmesg | grep aic8800${NC}"
+    echo "   ${BLUE}sudo dmesg | grep -iE 'bluetooth|btusb|hci'${NC}"
     echo ""
     echo "4. Connect to a WiFi network:"
     echo "   ${BLUE}nmcli device wifi list${NC}"
     echo "   ${BLUE}nmcli device wifi connect \"SSID\" password \"PASSWORD\"${NC}"
+    echo ""
+    echo "5. For a combo adapter, check Bluetooth:"
+    echo "   ${BLUE}bluetoothctl list${NC}"
+    echo "   ${BLUE}bluetoothctl scan on${NC}"
     echo ""
     echo -e "${CYAN}Troubleshooting:${NC}"
     echo ""
@@ -650,21 +783,21 @@ show_final_instructions() {
     echo "  ${BLUE}dkms status${NC}"
     echo ""
     echo "• Check loaded modules:"
-    echo "  ${BLUE}lsmod | grep aic8800${NC}"
+    echo "  ${BLUE}lsmod | grep -E 'aic|btusb'${NC}"
+    echo "  ${BLUE}cat /sys/module/aic_zlp_quirk/parameters/{hook,injections}${NC}"
     echo ""
-    echo "• Manually load the module:"
+    echo "• Manually load the Wi-Fi module and firmware loader:"
     echo "  ${BLUE}sudo modprobe aic8800_fdrv${NC}"
     echo ""
     echo "• View detailed logs:"
     echo "  ${BLUE}cat $LOG_FILE${NC}"
     echo ""
     echo -e "${YELLOW}Known Limitations:${NC}"
-    echo "• Bluetooth functionality is not supported"
     echo "• Secure Boot may prevent module loading (disable in BIOS if needed)"
     echo ""
     echo -e "${CYAN}Uninstallation:${NC}"
     echo "  ${BLUE}sudo dkms remove ${DRV_NAME}/${DRV_VERSION} --all${NC}"
-    echo "  ${BLUE}sudo rm -rf /lib/firmware/aic8800D80${NC}"
+    echo "  ${BLUE}sudo rm -rf /lib/firmware/aic8800*${NC}"
     echo ""
 }
 
