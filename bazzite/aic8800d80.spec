@@ -1,4 +1,4 @@
-%global commit 13baa9b0b1692f94233bcf6e752060b408062026
+%global commit 51b7b6e72989afe4d21f52e55b70f5a4d6b21e5b
 %global shortcommit %(echo %{commit} | cut -c1-7)
 %{!?kver:%global kver %(uname -r)}
 
@@ -77,6 +77,10 @@ cp -a fw/aic8800* %{buildroot}/usr/lib/firmware/
 /usr/lib/firmware/aic8800*
 
 %changelog
+* Sat Jul 25 2026 Shen Mintao <shenmintao@gmail.com> - 51b7b6e-1
+- Package the unified installer and ZLP quirk with the legacy MCU1 profiles.
+- Preserve the matched D80 and DC/DW firmware and loader combinations.
+
 * Sat Jul 25 2026 Shen Mintao <shenmintao@gmail.com> - 13baa9b-1
 - Unify Wi-Fi and standard-btusb Bluetooth support in one package.
 - Add the device-scoped 368b:8d81 ACL bulk TX ZLP companion module.
