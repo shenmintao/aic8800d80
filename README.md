@@ -1,6 +1,21 @@
 # AIC8800D80 Linux Driver
 This driver is for the AIC8800D80 chipset, supported by devices such as the Tenda U11 and AX913B.
 
+> [!IMPORTANT]
+> **Choose the branch for your hardware revision before installing.** If the
+> driver log reports `chip_id=7, chip_mcu_id=1` on an AIC8800D80 or
+> AIC8800DC/DW device, use the
+> [`legacy-mcu1`](https://github.com/shenmintao/aic8800d80/tree/legacy-mcu1)
+> branch. It contains the matched legacy firmware and loader profile required
+> to avoid the deterministic firmware upload timeout at `0x170400`. Use
+> `main` when `chip_mcu_id=0` or when the MCU revision is unknown.
+>
+> Hardware revision takes precedence over the Bluetooth feature branch. MCU1
+> devices should remain on `legacy-mcu1`, which initializes Bluetooth for the
+> kernel's standard `btusb` driver. After switching branches, rerun
+> `sudo ./install.sh` and reboot; switching the Git branch alone does not
+> replace the firmware already installed under `/lib/firmware`.
+
 Added support for devices with Vendor ID 368B (tested).
 
 Tested on Linux kernel 6.16 with Ubuntu 25.04 and 6.1.0.27 with Debian 12.
