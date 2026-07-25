@@ -1,4 +1,4 @@
-# AIC8800 Linux Driver
+# AIC8800 Linux Wi-Fi and Bluetooth Driver
 This driver supports AIC8800-family chipsets used by devices such as the Tenda U11, AX913B, and TP-Link Archer TX1U Nano.
 
 > **Legacy MCU revision 1 branch:** You are viewing `legacy-mcu1`. This branch
@@ -12,14 +12,26 @@ This driver supports AIC8800-family chipsets used by devices such as the Tenda U
 > `chip_mcu_id=0` hardware or when the MCU revision is unknown. See the
 > [D80](tests/issue58-mcu1-legacy-fw/README.md) and
 > [DC/DW](tests/issue71-mcu1-v3-profile/README.md) support notes before installing.
+>
+> After switching branches, rerun `sudo ./install.sh` and reboot; switching the
+> Git branch alone does not replace firmware already installed under
+> `/lib/firmware`.
 
 Added support for devices with Vendor ID 368B (tested).
 
 Tested on Linux kernel 6.16 with Ubuntu 25.04 and 6.1.0.27 with Debian 12.
 
-> **Bluetooth support:** This branch initializes the integrated Bluetooth
-> controller for the kernel's standard `btusb` driver. It does not contain or
-> install `aic_btusb`.
+The same driver supports Wi-Fi-only adapters and Wi-Fi/Bluetooth combo
+adapters. On combo devices, `aic_load_fw` uploads the AIC firmware and the
+standard Linux `btusb` driver handles the Bluetooth HCI interface. The obsolete
+custom `aic_btusb` module is not used.
+
+USB device `368b:8d81` also uses the bundled `aic_zlp_quirk` companion module.
+It adds the Bluetooth ACL bulk TX zero-length-packet behavior validated in
+[issue #63](https://github.com/shenmintao/aic8800d80/issues/63), while leaving
+the distribution's original `btusb.ko` installed and bound to the device. The
+quirk is filtered to that VID:PID and fails closed when the required kernel
+probe support is unavailable.
 
 > [!NOTE]
 > **Bluetooth branch retirement:** Do not switch MCU1 hardware to the separate
@@ -44,18 +56,18 @@ Before installing the driver, delete all aic8800-related folders under /lib/firm
 #### Method 2: Manual Installation
 
 #### Copy udev rules:
-Copy the aic.rules file to /lib/udev/rules.d/:
+Copy the aic.rules file to /usr/lib/udev/rules.d/:
 
 ```bash
-sudo cp aic.rules /lib/udev/rules.d/
+sudo cp aic.rules /usr/lib/udev/rules.d/
 ```
 
 #### Copy firmware:
 
-Copy the aic8800D80 folder from ./fw to /lib/firmware/:
+Copy the firmware directories from `./fw` to `/lib/firmware/`:
 
 ```bash
-sudo cp -r ./fw/aic8800D80 /lib/firmware/
+sudo cp -r ./fw/aic8800* /lib/firmware/
 ```
 #### Navigate to the driver directory:
 
@@ -121,4 +133,53 @@ If the device is still not active, check the kernel logs for any errors related 
 ```bash
 sudo dmesg
 ```
+
+### Bluetooth on Combo Adapters
+
+Bluetooth support does not require a separate AIC transport module. After
+`aic_load_fw` initializes a combo adapter, the kernel automatically binds its
+Bluetooth interface to `btusb`. A Wi-Fi-only adapter does not expose that
+interface, so the Bluetooth path remains inactive.
+
+Verify the expected modules and controller with:
+
+```bash
+lsmod | grep -E 'aic_load_fw|aic8800_fdrv|aic_zlp_quirk|btusb'
+lsusb -t
+bluetoothctl list
+```
+
+To scan after a controller appears:
+
+```bash
+bluetoothctl
+power on
+scan on
+```
+
+If Bluetooth is missing or reports HCI timeouts, run the read-only diagnostic
+script and attach its output together with the current boot log:
+
+```bash
+chmod +x diagnose_bt.sh
+sudo ./diagnose_bt.sh
+sudo journalctl -k -b --no-pager
+```
+
+The installer removes active references to the retired `aic_btusb` integration.
+It does not force-load `btusb` or globally change the Bluetooth rfkill state;
+normal kernel device matching and the user's system policy remain in control.
+
+For `368b:8d81`, verify the ZLP hook and its injection counter while Bluetooth
+traffic is active:
+
+```bash
+cat /sys/module/aic_zlp_quirk/parameters/hook
+cat /sys/module/aic_zlp_quirk/parameters/injections
+```
+
+The Wi-Fi-reset recovery behavior tracked in
+[issue #53](https://github.com/shenmintao/aic8800d80/issues/53) remains a known
+limitation: after an airplane-mode or hotspot reset, Bluetooth may require a
+physical unplug/replug of the adapter.
 

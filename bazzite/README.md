@@ -56,7 +56,11 @@ sudo rpm-ostree install "$rpm_path"
 sudo systemctl reboot
 ~~~
 
-After reboot, the Wi-Fi module and firmware loader will be available.
+After reboot, the Wi-Fi module and firmware loader will be available. On combo
+adapters, Bluetooth is handled by the standard `btusb` kernel module after
+firmware initialization. USB device `368b:8d81` also autoloads the packaged
+`aic_zlp_quirk` companion module for its required Bluetooth ACL bulk TX zero
+packet behavior; the distribution's `btusb` module is not replaced.
 
 This RPM is built for the kernel reported by `uname -r`. Rebuild and reinstall
 it after a Bazzite kernel upgrade.

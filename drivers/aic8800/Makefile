@@ -1,8 +1,10 @@
 CONFIG_AIC_LOADFW_SUPPORT := m
 CONFIG_AIC8800_WLAN_SUPPORT := m
+CONFIG_AIC_ZLP_QUIRK := m
 
 obj-$(CONFIG_AIC_LOADFW_SUPPORT)    += aic_load_fw/
 obj-$(CONFIG_AIC8800_WLAN_SUPPORT) += aic8800_fdrv/
+obj-$(CONFIG_AIC_ZLP_QUIRK)        += aic_zlp_quirk/
 
 ########## config option ##########
 export CONFIG_USE_FW_REQUEST = n
@@ -51,6 +53,7 @@ KVER ?= $(shell uname -r)
 KDIR ?= /lib/modules/$(KVER)/build
 PWD   = $(shell pwd)
 MODDESTDIR = /lib/modules/$(KVER)/kernel/drivers/net/wireless/aic8800
+BTMODDESTDIR = /lib/modules/$(KVER)/kernel/drivers/bluetooth/aic8800
 SUBARCH = $(shell uname -m | sed -e s/i.86/i386/ -e s/armv.l/arm/ -e s/aarch64/arm64/ -e s/loongarch64/loongarch/ -e s/loong64/loongarch/ -e s/riscv64/riscv/)
 ARCH ?= $(SUBARCH)
 CROSS_COMPILE ?=
@@ -78,16 +81,20 @@ modules:
 
 install:
 	mkdir -p $(MODDESTDIR)
+	mkdir -p $(BTMODDESTDIR)
 	install -p -m 644 aic_load_fw/aic_load_fw.ko  $(MODDESTDIR)/
 	install -p -m 644 aic8800_fdrv/aic8800_fdrv.ko  $(MODDESTDIR)/
+	install -p -m 644 aic_zlp_quirk/aic_zlp_quirk.ko  $(BTMODDESTDIR)/
 	/sbin/depmod -a ${KVER}
 
 uninstall:
 	rm -rfv $(MODDESTDIR)/aic_load_fw.ko
 	rm -rfv $(MODDESTDIR)/aic8800_fdrv.ko
+	rm -rfv $(BTMODDESTDIR)/aic_zlp_quirk.ko
 	/sbin/depmod -a ${KVER}
 
 clean:
 	cd aic_load_fw/;make clean;cd ..
 	cd aic8800_fdrv/;make clean;cd ..
+	cd aic_zlp_quirk/;make clean;cd ..
 	rm -rf modules.order Module.symvers .modules.order.cmd .Module.symvers.cmd .tmp_versions/
