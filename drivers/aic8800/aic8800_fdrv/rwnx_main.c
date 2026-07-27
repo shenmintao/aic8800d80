@@ -4553,14 +4553,49 @@ void rwnx_cfg80211_mgmt_frame_register(struct wiphy *wiphy,
  *	have changed. The actual parameter values are available in
  *	struct wiphy. If returning an error, no value should be changed.
  */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
-static int rwnx_cfg80211_set_wiphy_params(struct wiphy *wiphy, int radio_idx, u32 changed)
-#else
-static int rwnx_cfg80211_set_wiphy_params(struct wiphy *wiphy, u32 changed)
-#endif
+typedef int (*rwnx_set_wiphy_params_legacy_t)(struct wiphy *wiphy,
+                                               u32 changed);
+typedef int (*rwnx_set_wiphy_params_radio_t)(struct wiphy *wiphy,
+                                              int radio_idx, u32 changed);
+
+#define RWNX_CFG80211_OP_TYPE(_member) \
+    typeof(((struct cfg80211_ops *)0)->_member)
+#define RWNX_CFG80211_OP_MATCH(_member, _type) \
+    __builtin_types_compatible_p(RWNX_CFG80211_OP_TYPE(_member), _type)
+
+typedef char rwnx_set_wiphy_params_signature_must_be_supported[
+    (RWNX_CFG80211_OP_MATCH(set_wiphy_params,
+                            rwnx_set_wiphy_params_legacy_t) ||
+     RWNX_CFG80211_OP_MATCH(set_wiphy_params,
+                            rwnx_set_wiphy_params_radio_t)) ? 1 : -1];
+
+static int rwnx_cfg80211_set_wiphy_params_common(struct wiphy *wiphy,
+                                                  u32 changed)
 {
+    (void)wiphy;
+    (void)changed;
     return 0;
 }
+
+static int rwnx_cfg80211_set_wiphy_params_legacy(struct wiphy *wiphy,
+                                                  u32 changed)
+{
+    return rwnx_cfg80211_set_wiphy_params_common(wiphy, changed);
+}
+
+static int rwnx_cfg80211_set_wiphy_params_radio(struct wiphy *wiphy,
+                                                 int radio_idx, u32 changed)
+{
+    (void)radio_idx;
+    return rwnx_cfg80211_set_wiphy_params_common(wiphy, changed);
+}
+
+#define RWNX_CFG80211_SET_WIPHY_PARAMS_CB \
+    __builtin_choose_expr( \
+        RWNX_CFG80211_OP_MATCH(set_wiphy_params, \
+                               rwnx_set_wiphy_params_radio_t), \
+        rwnx_cfg80211_set_wiphy_params_radio, \
+        rwnx_cfg80211_set_wiphy_params_legacy)
 
 
 /**
@@ -4570,18 +4605,25 @@ static int rwnx_cfg80211_set_wiphy_params(struct wiphy *wiphy, u32 changed)
  *	always be %NULL unless the driver supports per-vif TX power
  *	(as advertised by the nl80211 feature flag.)
  */
-static int rwnx_cfg80211_set_tx_power(struct wiphy *wiphy,
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0)
- struct wireless_dev *wdev,
-#endif
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
-int radio_idx,
-#endif
-                                      enum nl80211_tx_power_setting type, int mbm)
+typedef int (*rwnx_set_tx_power_no_wdev_t)(
+    struct wiphy *wiphy, enum nl80211_tx_power_setting type, int mbm);
+typedef int (*rwnx_set_tx_power_wdev_t)(
+    struct wiphy *wiphy, struct wireless_dev *wdev,
+    enum nl80211_tx_power_setting type, int mbm);
+typedef int (*rwnx_set_tx_power_radio_t)(
+    struct wiphy *wiphy, struct wireless_dev *wdev, int radio_idx,
+    enum nl80211_tx_power_setting type, int mbm);
+
+typedef char rwnx_set_tx_power_signature_must_be_supported[
+    (RWNX_CFG80211_OP_MATCH(set_tx_power, rwnx_set_tx_power_no_wdev_t) ||
+     RWNX_CFG80211_OP_MATCH(set_tx_power, rwnx_set_tx_power_wdev_t) ||
+     RWNX_CFG80211_OP_MATCH(set_tx_power,
+                            rwnx_set_tx_power_radio_t)) ? 1 : -1];
+
+static int rwnx_cfg80211_set_tx_power_common(
+    struct wiphy *wiphy, struct wireless_dev *wdev,
+    enum nl80211_tx_power_setting type, int mbm)
 {
-    #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0)
-    struct wireless_dev *wdev = NULL;
-    #endif
     struct rwnx_hw *rwnx_hw = wiphy_priv(wiphy);
     struct rwnx_vif *vif;
     s8 pwr;
@@ -4607,30 +4649,111 @@ int radio_idx,
     return res;
 }
 
-static int rwnx_cfg80211_get_tx_power(struct wiphy *wiphy,
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0)
- struct wireless_dev *wdev,
-#endif
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
-int radio_idx,
-#endif
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 14, 0)
-unsigned int link_id,
-#endif
-	int *mbm)
+static int rwnx_cfg80211_set_tx_power_no_wdev(
+    struct wiphy *wiphy, enum nl80211_tx_power_setting type, int mbm)
 {
-    #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0)
-    struct wireless_dev *wdev = NULL;
-    #endif
-    //struct rwnx_hw *rwnx_hw = wiphy_priv(wiphy);
-    //struct rwnx_vif *vif;
-    s8 pwr = 0;
-    int res = 0;
-
-	*mbm = get_txpwr_max(pwr);
-
-    return res;
+    return rwnx_cfg80211_set_tx_power_common(wiphy, NULL, type, mbm);
 }
+
+static int rwnx_cfg80211_set_tx_power_wdev(
+    struct wiphy *wiphy, struct wireless_dev *wdev,
+    enum nl80211_tx_power_setting type, int mbm)
+{
+    return rwnx_cfg80211_set_tx_power_common(wiphy, wdev, type, mbm);
+}
+
+static int rwnx_cfg80211_set_tx_power_radio(
+    struct wiphy *wiphy, struct wireless_dev *wdev, int radio_idx,
+    enum nl80211_tx_power_setting type, int mbm)
+{
+    (void)radio_idx;
+    return rwnx_cfg80211_set_tx_power_common(wiphy, wdev, type, mbm);
+}
+
+#define RWNX_CFG80211_SET_TX_POWER_CB \
+    __builtin_choose_expr( \
+        RWNX_CFG80211_OP_MATCH(set_tx_power, rwnx_set_tx_power_radio_t), \
+        rwnx_cfg80211_set_tx_power_radio, \
+        __builtin_choose_expr( \
+            RWNX_CFG80211_OP_MATCH(set_tx_power, rwnx_set_tx_power_wdev_t), \
+            rwnx_cfg80211_set_tx_power_wdev, \
+            rwnx_cfg80211_set_tx_power_no_wdev))
+
+typedef int (*rwnx_get_tx_power_no_wdev_t)(struct wiphy *wiphy, int *dbm);
+typedef int (*rwnx_get_tx_power_wdev_t)(struct wiphy *wiphy,
+                                        struct wireless_dev *wdev, int *dbm);
+typedef int (*rwnx_get_tx_power_link_t)(struct wiphy *wiphy,
+                                        struct wireless_dev *wdev,
+                                        unsigned int link_id, int *dbm);
+typedef int (*rwnx_get_tx_power_radio_link_t)(
+    struct wiphy *wiphy, struct wireless_dev *wdev, int radio_idx,
+    unsigned int link_id, int *dbm);
+
+typedef char rwnx_get_tx_power_signature_must_be_supported[
+    (RWNX_CFG80211_OP_MATCH(get_tx_power, rwnx_get_tx_power_no_wdev_t) ||
+     RWNX_CFG80211_OP_MATCH(get_tx_power, rwnx_get_tx_power_wdev_t) ||
+     RWNX_CFG80211_OP_MATCH(get_tx_power, rwnx_get_tx_power_link_t) ||
+     RWNX_CFG80211_OP_MATCH(get_tx_power,
+                            rwnx_get_tx_power_radio_link_t)) ? 1 : -1];
+
+static int rwnx_cfg80211_get_tx_power_common(struct wiphy *wiphy,
+                                              struct wireless_dev *wdev,
+                                              int *dbm)
+{
+    s8 pwr = 0;
+
+    (void)wiphy;
+    (void)wdev;
+    if (!dbm)
+        return -EINVAL;
+
+    *dbm = get_txpwr_max(pwr);
+    return 0;
+}
+
+static int rwnx_cfg80211_get_tx_power_no_wdev(struct wiphy *wiphy, int *dbm)
+{
+    return rwnx_cfg80211_get_tx_power_common(wiphy, NULL, dbm);
+}
+
+static int rwnx_cfg80211_get_tx_power_wdev(struct wiphy *wiphy,
+                                            struct wireless_dev *wdev,
+                                            int *dbm)
+{
+    return rwnx_cfg80211_get_tx_power_common(wiphy, wdev, dbm);
+}
+
+static int rwnx_cfg80211_get_tx_power_link(struct wiphy *wiphy,
+                                            struct wireless_dev *wdev,
+                                            unsigned int link_id, int *dbm)
+{
+    (void)link_id;
+    return rwnx_cfg80211_get_tx_power_common(wiphy, wdev, dbm);
+}
+
+static int rwnx_cfg80211_get_tx_power_radio_link(
+    struct wiphy *wiphy, struct wireless_dev *wdev, int radio_idx,
+    unsigned int link_id, int *dbm)
+{
+    (void)radio_idx;
+    (void)link_id;
+    return rwnx_cfg80211_get_tx_power_common(wiphy, wdev, dbm);
+}
+
+#define RWNX_CFG80211_GET_TX_POWER_CB \
+    __builtin_choose_expr( \
+        RWNX_CFG80211_OP_MATCH(get_tx_power, \
+                               rwnx_get_tx_power_radio_link_t), \
+        rwnx_cfg80211_get_tx_power_radio_link, \
+        __builtin_choose_expr( \
+            RWNX_CFG80211_OP_MATCH(get_tx_power, \
+                                   rwnx_get_tx_power_link_t), \
+            rwnx_cfg80211_get_tx_power_link, \
+            __builtin_choose_expr( \
+                RWNX_CFG80211_OP_MATCH(get_tx_power, \
+                                       rwnx_get_tx_power_wdev_t), \
+                rwnx_cfg80211_get_tx_power_wdev, \
+                rwnx_cfg80211_get_tx_power_no_wdev)))
 
 /**
  * @set_power_mgmt: set the power save to one of those two modes:
@@ -6544,10 +6667,10 @@ static struct cfg80211_ops rwnx_cfg80211_ops = {
     .set_monitor_channel = rwnx_cfg80211_set_monitor_channel,
     .probe_client = rwnx_cfg80211_probe_client,
 //    .mgmt_frame_register = rwnx_cfg80211_mgmt_frame_register,
-    .set_wiphy_params = rwnx_cfg80211_set_wiphy_params,
+    .set_wiphy_params = RWNX_CFG80211_SET_WIPHY_PARAMS_CB,
     .set_txq_params = rwnx_cfg80211_set_txq_params,
-    .set_tx_power = rwnx_cfg80211_set_tx_power,
-    .get_tx_power = rwnx_cfg80211_get_tx_power,
+    .set_tx_power = RWNX_CFG80211_SET_TX_POWER_CB,
+    .get_tx_power = RWNX_CFG80211_GET_TX_POWER_CB,
     .set_power_mgmt = rwnx_cfg80211_set_power_mgmt,
     .get_station = rwnx_cfg80211_get_station,
     .remain_on_channel = rwnx_cfg80211_remain_on_channel,
