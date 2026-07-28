@@ -5,7 +5,7 @@
 
 Name:           aic8800d80
 Version:        %{shortcommit}
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        AIC8800 USB Wi-Fi, Bluetooth firmware, and ZLP quirk driver
 
 License:        GPL-2.0-only
