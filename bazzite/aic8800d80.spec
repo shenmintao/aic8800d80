@@ -1,10 +1,11 @@
 %global commit 51b7b6e72989afe4d21f52e55b70f5a4d6b21e5b
 %global shortcommit %(echo %{commit} | cut -c1-7)
+%global debug_package %{nil}
 %{!?kver:%global kver %(uname -r)}
 
 Name:           aic8800d80
 Version:        %{shortcommit}
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        AIC8800 USB Wi-Fi, Bluetooth firmware, and ZLP quirk driver
 
 License:        GPL-2.0-only
@@ -17,7 +18,7 @@ BuildRequires:  kernel-devel-uname-r = %{kver}
 
 Requires:       kernel-uname-r = %{kver}
 Requires:       /usr/bin/eject
-Requires:       /usr/sbin/usb_modeswitch
+Requires:       usb_modeswitch
 Requires(post): /usr/sbin/depmod
 Requires(postun): /usr/sbin/depmod
 
@@ -77,6 +78,10 @@ cp -a fw/aic8800* %{buildroot}/usr/lib/firmware/
 /usr/lib/firmware/aic8800*
 
 %changelog
+* Wed Jul 29 2026 Shen Mintao <shenmintao@gmail.com> - 51b7b6e-2
+- Disable automatic debug package generation for Bazzite builds.
+- Require usb_modeswitch by package name for rpm-ostree dependency resolution.
+
 * Sat Jul 25 2026 Shen Mintao <shenmintao@gmail.com> - 51b7b6e-1
 - Package the unified installer and ZLP quirk with the legacy MCU1 profiles.
 - Preserve the matched D80 and DC/DW firmware and loader combinations.
