@@ -1,10 +1,11 @@
 %global commit 13baa9b0b1692f94233bcf6e752060b408062026
 %global shortcommit %(echo %{commit} | cut -c1-7)
+%global debug_package %{nil}
 %{!?kver:%global kver %(uname -r)}
 
 Name:           aic8800d80
 Version:        %{shortcommit}
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        AIC8800 USB Wi-Fi, Bluetooth firmware, and ZLP quirk driver
 
 License:        GPL-2.0-only
@@ -17,7 +18,7 @@ BuildRequires:  kernel-devel-uname-r = %{kver}
 
 Requires:       kernel-uname-r = %{kver}
 Requires:       /usr/bin/eject
-Requires:       /usr/sbin/usb_modeswitch
+Requires:       usb_modeswitch
 Requires(post): /usr/sbin/depmod
 Requires(postun): /usr/sbin/depmod
 
@@ -77,6 +78,10 @@ cp -a fw/aic8800* %{buildroot}/usr/lib/firmware/
 /usr/lib/firmware/aic8800*
 
 %changelog
+* Tue Jul 28 2026 ccyuen1 - 13baa9b-2
+- Disable automatic creation of debuginfo packages to fix issue #77.
+- Require usb_modeswitch as package dependency instead of file dependency to fix issue #77.
+
 * Sat Jul 25 2026 Shen Mintao <shenmintao@gmail.com> - 13baa9b-1
 - Unify Wi-Fi and standard-btusb Bluetooth support in one package.
 - Add the device-scoped 368b:8d81 ACL bulk TX ZLP companion module.
