@@ -34,6 +34,60 @@
 #define IEEE80211_MAX_CHAINS 4
 #endif
 
+/* OpenWrt can backport these helpers without changing LINUX_VERSION_CODE. */
+typedef bool (*rwnx_cfg80211_rx_frame_legacy_t)(struct net_device *dev,
+                                                 const u8 *addr, gfp_t gfp);
+typedef bool (*rwnx_cfg80211_rx_frame_link_t)(struct net_device *dev,
+                                               const u8 *addr, int link_id,
+                                               gfp_t gfp);
+
+#define RWNX_CFG80211_HELPER_MATCH(_helper, _type) \
+    __builtin_types_compatible_p(typeof(&(_helper)), _type)
+
+typedef char rwnx_cfg80211_rx_spurious_frame_signature_must_be_supported[
+    (RWNX_CFG80211_HELPER_MATCH(cfg80211_rx_spurious_frame,
+                                rwnx_cfg80211_rx_frame_legacy_t) ||
+     RWNX_CFG80211_HELPER_MATCH(cfg80211_rx_spurious_frame,
+                                rwnx_cfg80211_rx_frame_link_t)) ? 1 : -1];
+
+typedef char rwnx_cfg80211_rx_unexpected_4addr_frame_signature_must_be_supported[
+    (RWNX_CFG80211_HELPER_MATCH(cfg80211_rx_unexpected_4addr_frame,
+                                rwnx_cfg80211_rx_frame_legacy_t) ||
+     RWNX_CFG80211_HELPER_MATCH(cfg80211_rx_unexpected_4addr_frame,
+                                rwnx_cfg80211_rx_frame_link_t)) ? 1 : -1];
+
+static bool rwnx_cfg80211_rx_spurious_frame_compat(struct net_device *dev,
+                                                    const u8 *addr, gfp_t gfp)
+{
+    union {
+        typeof(&cfg80211_rx_spurious_frame) actual;
+        rwnx_cfg80211_rx_frame_legacy_t legacy;
+        rwnx_cfg80211_rx_frame_link_t link;
+    } helper = { .actual = &cfg80211_rx_spurious_frame };
+
+    if (RWNX_CFG80211_HELPER_MATCH(cfg80211_rx_spurious_frame,
+                                   rwnx_cfg80211_rx_frame_link_t))
+        return helper.link(dev, addr, -1, gfp);
+
+    return helper.legacy(dev, addr, gfp);
+}
+
+static bool rwnx_cfg80211_rx_unexpected_4addr_frame_compat(
+    struct net_device *dev, const u8 *addr, gfp_t gfp)
+{
+    union {
+        typeof(&cfg80211_rx_unexpected_4addr_frame) actual;
+        rwnx_cfg80211_rx_frame_legacy_t legacy;
+        rwnx_cfg80211_rx_frame_link_t link;
+    } helper = { .actual = &cfg80211_rx_unexpected_4addr_frame };
+
+    if (RWNX_CFG80211_HELPER_MATCH(cfg80211_rx_unexpected_4addr_frame,
+                                   rwnx_cfg80211_rx_frame_link_t))
+        return helper.link(dev, addr, -1, gfp);
+
+    return helper.legacy(dev, addr, gfp);
+}
+
 u8 dhcped = 0;
 
 u16 tx_legrates_lut_rate[] = {
@@ -2394,11 +2448,8 @@ check_len_update:
         hdr = (struct ieee80211_hdr *)(skb->data + msdu_offset);
         rwnx_vif = rwnx_rx_get_vif(rwnx_hw, hw_rxhdr->flags_vif_idx);
         if (rwnx_vif) {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
-            cfg80211_rx_spurious_frame(rwnx_vif->ndev, hdr->addr2, -1, GFP_ATOMIC);
-#else
-            cfg80211_rx_spurious_frame(rwnx_vif->ndev, hdr->addr2, GFP_ATOMIC);
-#endif
+            rwnx_cfg80211_rx_spurious_frame_compat(rwnx_vif->ndev,
+                                                    hdr->addr2, GFP_ATOMIC);
         }
         goto end;
     }
@@ -2741,13 +2792,8 @@ check_len_update:
 
                 if (hw_rxhdr->flags_is_4addr && !rwnx_vif->use_4addr) {
 					printk("aicwf: 4addr flag error\n");
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
-                    cfg80211_rx_unexpected_4addr_frame(rwnx_vif->ndev,
-                                                       sta->mac_addr, -1, GFP_ATOMIC);
-#else
-                    cfg80211_rx_unexpected_4addr_frame(rwnx_vif->ndev,
-                                                       sta->mac_addr, GFP_ATOMIC);
-#endif
+                    rwnx_cfg80211_rx_unexpected_4addr_frame_compat(
+                        rwnx_vif->ndev, sta->mac_addr, GFP_ATOMIC);
                 }
             }
 
