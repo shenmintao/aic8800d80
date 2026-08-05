@@ -4420,13 +4420,29 @@ cfg80211_chandef_identical(const struct cfg80211_chan_def *chandef1,
 }
 #endif
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0))
-static int rwnx_cfg80211_set_monitor_channel(struct wiphy *wiphy, struct net_device *dev,
-                                             struct cfg80211_chan_def *chandef)
-#else
-static int rwnx_cfg80211_set_monitor_channel(struct wiphy *wiphy,
-                                             struct cfg80211_chan_def *chandef)
-#endif
+#define RWNX_CFG80211_OP_TYPE(_member) \
+    typeof(((struct cfg80211_ops *)0)->_member)
+#define RWNX_CFG80211_OP_MATCH(_member, _type) \
+    __builtin_types_compatible_p(RWNX_CFG80211_OP_TYPE(_member), _type)
+#define RWNX_CFG80211_OP_ASSERT(_member, _callback) \
+    typedef char rwnx_cfg80211_##_member##_signature_must_match[ \
+        __builtin_types_compatible_p(RWNX_CFG80211_OP_TYPE(_member), \
+                                     typeof(&(_callback))) ? 1 : -1]
+
+typedef int (*rwnx_set_monitor_channel_legacy_t)(
+    struct wiphy *wiphy, struct cfg80211_chan_def *chandef);
+typedef int (*rwnx_set_monitor_channel_dev_t)(
+    struct wiphy *wiphy, struct net_device *dev,
+    struct cfg80211_chan_def *chandef);
+
+typedef char rwnx_set_monitor_channel_signature_must_be_supported[
+    (RWNX_CFG80211_OP_MATCH(set_monitor_channel,
+                            rwnx_set_monitor_channel_legacy_t) ||
+     RWNX_CFG80211_OP_MATCH(set_monitor_channel,
+                            rwnx_set_monitor_channel_dev_t)) ? 1 : -1];
+
+static int rwnx_cfg80211_set_monitor_channel_common(
+    struct wiphy *wiphy, struct cfg80211_chan_def *chandef)
 {
     struct rwnx_hw *rwnx_hw = wiphy_priv(wiphy);
     struct rwnx_vif *rwnx_vif;
@@ -4479,19 +4495,40 @@ static int rwnx_cfg80211_set_monitor_channel(struct wiphy *wiphy,
     return 0;
 }
 
+static int rwnx_cfg80211_set_monitor_channel_legacy(
+    struct wiphy *wiphy, struct cfg80211_chan_def *chandef)
+{
+    return rwnx_cfg80211_set_monitor_channel_common(wiphy, chandef);
+}
+
+static int rwnx_cfg80211_set_monitor_channel_dev(
+    struct wiphy *wiphy, struct net_device *dev,
+    struct cfg80211_chan_def *chandef)
+{
+    (void)dev;
+    return rwnx_cfg80211_set_monitor_channel_common(wiphy, chandef);
+}
+
+#define RWNX_CFG80211_SET_MONITOR_CHANNEL_CB \
+    __builtin_choose_expr( \
+        RWNX_CFG80211_OP_MATCH(set_monitor_channel, \
+                               rwnx_set_monitor_channel_dev_t), \
+        rwnx_cfg80211_set_monitor_channel_dev, \
+        rwnx_cfg80211_set_monitor_channel_legacy)
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0))
 int rwnx_cfg80211_set_monitor_channel_(struct wiphy *wiphy,
                                              struct net_device *dev,
                                              struct cfg80211_chan_def *chandef)
 {
-    return rwnx_cfg80211_set_monitor_channel(wiphy, dev, chandef);
+    (void)dev;
+    return rwnx_cfg80211_set_monitor_channel_common(wiphy, chandef);
 }
 #else
 int rwnx_cfg80211_set_monitor_channel_(struct wiphy *wiphy,
                                              struct cfg80211_chan_def *chandef)
 {
-    return rwnx_cfg80211_set_monitor_channel(wiphy, chandef);
+    return rwnx_cfg80211_set_monitor_channel_common(wiphy, chandef);
 }
 #endif
 
@@ -4557,11 +4594,6 @@ typedef int (*rwnx_set_wiphy_params_legacy_t)(struct wiphy *wiphy,
                                                u32 changed);
 typedef int (*rwnx_set_wiphy_params_radio_t)(struct wiphy *wiphy,
                                               int radio_idx, u32 changed);
-
-#define RWNX_CFG80211_OP_TYPE(_member) \
-    typeof(((struct cfg80211_ops *)0)->_member)
-#define RWNX_CFG80211_OP_MATCH(_member, _type) \
-    __builtin_types_compatible_p(RWNX_CFG80211_OP_TYPE(_member), _type)
 
 typedef char rwnx_set_wiphy_params_signature_must_be_supported[
     (RWNX_CFG80211_OP_MATCH(set_wiphy_params,
@@ -5122,11 +5154,7 @@ static int rwnx_cfg80211_get_channel(struct wiphy *wiphy,
     if (rwnx_vif->vif_index == rwnx_hw->monitor_vif)
     {
         //retrieve channel from firmware
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0))
-        rwnx_cfg80211_set_monitor_channel(wiphy, wdev->netdev, NULL);
-#else
-        rwnx_cfg80211_set_monitor_channel(wiphy, NULL);
-#endif
+        rwnx_cfg80211_set_monitor_channel_common(wiphy, NULL);
     }
 
     //Check if channel context is valid
@@ -5313,17 +5341,28 @@ send_frame:
 /**
  * @start_radar_detection: Start radar detection in the driver.
  */
-static
-int rwnx_cfg80211_start_radar_detection(struct wiphy *wiphy,
-                                        struct net_device *dev,
-                                        struct cfg80211_chan_def *chandef
-                                    #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 15, 0))
-                                        , u32 cac_time_ms
-                                    #endif
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0))
-                                        , int link_id
-#endif
-                                        )
+typedef int (*rwnx_start_radar_detection_legacy_t)(
+    struct wiphy *wiphy, struct net_device *dev,
+    struct cfg80211_chan_def *chandef);
+typedef int (*rwnx_start_radar_detection_cac_t)(
+    struct wiphy *wiphy, struct net_device *dev,
+    struct cfg80211_chan_def *chandef, u32 cac_time_ms);
+typedef int (*rwnx_start_radar_detection_link_t)(
+    struct wiphy *wiphy, struct net_device *dev,
+    struct cfg80211_chan_def *chandef, u32 cac_time_ms, int link_id);
+
+typedef char rwnx_start_radar_detection_signature_must_be_supported[
+    (RWNX_CFG80211_OP_MATCH(start_radar_detection,
+                            rwnx_start_radar_detection_legacy_t) ||
+     RWNX_CFG80211_OP_MATCH(start_radar_detection,
+                            rwnx_start_radar_detection_cac_t) ||
+     RWNX_CFG80211_OP_MATCH(start_radar_detection,
+                            rwnx_start_radar_detection_link_t)) ? 1 : -1];
+
+static int rwnx_cfg80211_start_radar_detection_common(
+    struct wiphy *wiphy, struct net_device *dev,
+    struct cfg80211_chan_def *chandef, u32 cac_time_ms,
+    bool start_cac_timer)
 {
     struct rwnx_hw *rwnx_hw = wiphy_priv(wiphy);
     struct rwnx_vif *rwnx_vif = netdev_priv(dev);
@@ -5331,9 +5370,8 @@ int rwnx_cfg80211_start_radar_detection(struct wiphy *wiphy,
 
 	printk("%s\n", __func__);
 
-    #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 15, 0))
-    rwnx_radar_start_cac(&rwnx_hw->radar, cac_time_ms, rwnx_vif);
-    #endif
+    if (start_cac_timer)
+        rwnx_radar_start_cac(&rwnx_hw->radar, cac_time_ms, rwnx_vif);
     rwnx_send_apm_start_cac_req(rwnx_hw, rwnx_vif, chandef, &cfm);
 
     if (cfm.status == CO_OK) {
@@ -5350,6 +5388,42 @@ int rwnx_cfg80211_start_radar_detection(struct wiphy *wiphy,
 
     return 0;
 }
+
+static int rwnx_cfg80211_start_radar_detection_legacy(
+    struct wiphy *wiphy, struct net_device *dev,
+    struct cfg80211_chan_def *chandef)
+{
+    return rwnx_cfg80211_start_radar_detection_common(
+        wiphy, dev, chandef, 0, false);
+}
+
+static int rwnx_cfg80211_start_radar_detection_cac(
+    struct wiphy *wiphy, struct net_device *dev,
+    struct cfg80211_chan_def *chandef, u32 cac_time_ms)
+{
+    return rwnx_cfg80211_start_radar_detection_common(
+        wiphy, dev, chandef, cac_time_ms, true);
+}
+
+static int rwnx_cfg80211_start_radar_detection_link(
+    struct wiphy *wiphy, struct net_device *dev,
+    struct cfg80211_chan_def *chandef, u32 cac_time_ms, int link_id)
+{
+    (void)link_id;
+    return rwnx_cfg80211_start_radar_detection_common(
+        wiphy, dev, chandef, cac_time_ms, true);
+}
+
+#define RWNX_CFG80211_START_RADAR_DETECTION_CB \
+    __builtin_choose_expr( \
+        RWNX_CFG80211_OP_MATCH(start_radar_detection, \
+                               rwnx_start_radar_detection_link_t), \
+        rwnx_cfg80211_start_radar_detection_link, \
+        __builtin_choose_expr( \
+            RWNX_CFG80211_OP_MATCH(start_radar_detection, \
+                                   rwnx_start_radar_detection_cac_t), \
+            rwnx_cfg80211_start_radar_detection_cac, \
+            rwnx_cfg80211_start_radar_detection_legacy))
 
 /**
  * @update_ft_ies: Provide updated Fast BSS Transition information to the
@@ -6643,6 +6717,59 @@ static int rwnx_cfg80211_leave_mesh(struct wiphy *wiphy, struct net_device *dev)
     return 0;
 }
 
+/*
+ * Keep every direct cfg80211_ops assignment as a hard compile-time check.
+ * OpenWrt can backport cfg80211 APIs without changing LINUX_VERSION_CODE, and
+ * an incompatible callback must remain a build failure even when warnings are
+ * relaxed by an external package.
+ */
+RWNX_CFG80211_OP_ASSERT(add_virtual_intf, rwnx_cfg80211_add_iface);
+RWNX_CFG80211_OP_ASSERT(del_virtual_intf, rwnx_cfg80211_del_iface);
+RWNX_CFG80211_OP_ASSERT(change_virtual_intf, rwnx_cfg80211_change_iface);
+RWNX_CFG80211_OP_ASSERT(start_p2p_device, rwnx_cfgp2p_start_p2p_device);
+RWNX_CFG80211_OP_ASSERT(stop_p2p_device, rwnx_cfgp2p_stop_p2p_device);
+RWNX_CFG80211_OP_ASSERT(scan, rwnx_cfg80211_scan);
+RWNX_CFG80211_OP_ASSERT(connect, rwnx_cfg80211_connect);
+RWNX_CFG80211_OP_ASSERT(disconnect, rwnx_cfg80211_disconnect);
+RWNX_CFG80211_OP_ASSERT(add_key, rwnx_cfg80211_add_key);
+RWNX_CFG80211_OP_ASSERT(get_key, rwnx_cfg80211_get_key);
+RWNX_CFG80211_OP_ASSERT(del_key, rwnx_cfg80211_del_key);
+RWNX_CFG80211_OP_ASSERT(set_default_key, rwnx_cfg80211_set_default_key);
+RWNX_CFG80211_OP_ASSERT(set_default_mgmt_key,
+                        rwnx_cfg80211_set_default_mgmt_key);
+RWNX_CFG80211_OP_ASSERT(add_station, rwnx_cfg80211_add_station);
+RWNX_CFG80211_OP_ASSERT(del_station, rwnx_cfg80211_del_station_compat);
+RWNX_CFG80211_OP_ASSERT(change_station, rwnx_cfg80211_change_station);
+RWNX_CFG80211_OP_ASSERT(mgmt_tx, rwnx_cfg80211_mgmt_tx);
+RWNX_CFG80211_OP_ASSERT(start_ap, rwnx_cfg80211_start_ap);
+RWNX_CFG80211_OP_ASSERT(change_beacon, rwnx_cfg80211_change_beacon);
+RWNX_CFG80211_OP_ASSERT(stop_ap, rwnx_cfg80211_stop_ap);
+RWNX_CFG80211_OP_ASSERT(probe_client, rwnx_cfg80211_probe_client);
+RWNX_CFG80211_OP_ASSERT(set_txq_params, rwnx_cfg80211_set_txq_params);
+RWNX_CFG80211_OP_ASSERT(set_power_mgmt, rwnx_cfg80211_set_power_mgmt);
+RWNX_CFG80211_OP_ASSERT(get_station, rwnx_cfg80211_get_station);
+RWNX_CFG80211_OP_ASSERT(remain_on_channel,
+                        rwnx_cfg80211_remain_on_channel);
+RWNX_CFG80211_OP_ASSERT(cancel_remain_on_channel,
+                        rwnx_cfg80211_cancel_remain_on_channel);
+RWNX_CFG80211_OP_ASSERT(dump_survey, rwnx_cfg80211_dump_survey);
+RWNX_CFG80211_OP_ASSERT(get_channel, rwnx_cfg80211_get_channel);
+RWNX_CFG80211_OP_ASSERT(update_ft_ies, rwnx_cfg80211_update_ft_ies);
+RWNX_CFG80211_OP_ASSERT(set_cqm_rssi_config,
+                        rwnx_cfg80211_set_cqm_rssi_config);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0)
+RWNX_CFG80211_OP_ASSERT(channel_switch, rwnx_cfg80211_channel_switch);
+#endif
+RWNX_CFG80211_OP_ASSERT(change_bss, rwnx_cfg80211_change_bss);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0) || \
+    defined(CONFIG_WPA3_FOR_OLD_KERNEL)
+RWNX_CFG80211_OP_ASSERT(external_auth, rwnx_cfg80211_external_auth);
+#endif
+#ifdef CONFIG_SCHED_SCAN
+RWNX_CFG80211_OP_ASSERT(sched_scan_start, rwnx_cfg80211_sched_scan_start);
+RWNX_CFG80211_OP_ASSERT(sched_scan_stop, rwnx_cfg80211_sched_scan_stop);
+#endif
+
 static struct cfg80211_ops rwnx_cfg80211_ops = {
     .add_virtual_intf = rwnx_cfg80211_add_iface,
     .del_virtual_intf = rwnx_cfg80211_del_iface,
@@ -6664,7 +6791,7 @@ static struct cfg80211_ops rwnx_cfg80211_ops = {
     .start_ap = rwnx_cfg80211_start_ap,
     .change_beacon = rwnx_cfg80211_change_beacon,
     .stop_ap = rwnx_cfg80211_stop_ap,
-    .set_monitor_channel = rwnx_cfg80211_set_monitor_channel,
+    .set_monitor_channel = RWNX_CFG80211_SET_MONITOR_CHANNEL_CB,
     .probe_client = rwnx_cfg80211_probe_client,
 //    .mgmt_frame_register = rwnx_cfg80211_mgmt_frame_register,
     .set_wiphy_params = RWNX_CFG80211_SET_WIPHY_PARAMS_CB,
@@ -6677,7 +6804,7 @@ static struct cfg80211_ops rwnx_cfg80211_ops = {
     .cancel_remain_on_channel = rwnx_cfg80211_cancel_remain_on_channel,
     .dump_survey = rwnx_cfg80211_dump_survey,
     .get_channel = rwnx_cfg80211_get_channel,
-    .start_radar_detection = rwnx_cfg80211_start_radar_detection,
+    .start_radar_detection = RWNX_CFG80211_START_RADAR_DETECTION_CB,
     .update_ft_ies = rwnx_cfg80211_update_ft_ies,
     .set_cqm_rssi_config = rwnx_cfg80211_set_cqm_rssi_config,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0)

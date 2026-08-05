@@ -22,6 +22,52 @@
 #include "rwnx_events.h"
 #include "rwnx_compat.h"
 
+#ifdef CONFIG_RWNX_FULLMAC
+/* OpenWrt can backport cfg80211 helpers without changing LINUX_VERSION_CODE. */
+typedef void (*rwnx_cfg80211_cac_event_no_chandef_t)(
+    struct net_device *netdev, enum nl80211_radar_event event, gfp_t gfp);
+typedef void (*rwnx_cfg80211_cac_event_chandef_t)(
+    struct net_device *netdev, const struct cfg80211_chan_def *chandef,
+    enum nl80211_radar_event event, gfp_t gfp);
+typedef void (*rwnx_cfg80211_cac_event_link_t)(
+    struct net_device *netdev, const struct cfg80211_chan_def *chandef,
+    enum nl80211_radar_event event, gfp_t gfp, unsigned int link_id);
+
+#define RWNX_CFG80211_CAC_EVENT_MATCH(_type) \
+    __builtin_types_compatible_p(typeof(&cfg80211_cac_event), _type)
+
+typedef char rwnx_cfg80211_cac_event_signature_must_be_supported[
+    (RWNX_CFG80211_CAC_EVENT_MATCH(
+         rwnx_cfg80211_cac_event_no_chandef_t) ||
+     RWNX_CFG80211_CAC_EVENT_MATCH(rwnx_cfg80211_cac_event_chandef_t) ||
+     RWNX_CFG80211_CAC_EVENT_MATCH(rwnx_cfg80211_cac_event_link_t)) ? 1 : -1];
+
+static void rwnx_cfg80211_cac_event_compat(
+    struct net_device *netdev, const struct cfg80211_chan_def *chandef,
+    enum nl80211_radar_event event, gfp_t gfp)
+{
+    union {
+        typeof(&cfg80211_cac_event) actual;
+        rwnx_cfg80211_cac_event_no_chandef_t no_chandef;
+        rwnx_cfg80211_cac_event_chandef_t chandef;
+        rwnx_cfg80211_cac_event_link_t link;
+    } helper = { .actual = &cfg80211_cac_event };
+
+    if (RWNX_CFG80211_CAC_EVENT_MATCH(
+            rwnx_cfg80211_cac_event_no_chandef_t)) {
+        helper.no_chandef(netdev, event, gfp);
+        return;
+    }
+
+    if (RWNX_CFG80211_CAC_EVENT_MATCH(rwnx_cfg80211_cac_event_link_t)) {
+        helper.link(netdev, chandef, event, gfp, 0);
+        return;
+    }
+
+    helper.chandef(netdev, chandef, event, gfp);
+}
+#endif
+
 /*
  * tolerated deviation of radar time stamp in usecs on both sides
  * TODO: this might need to be HW-dependent
@@ -1471,15 +1517,8 @@ static void rwnx_radar_cac_work(struct work_struct *ws)
     }
 
     ctxt = &rwnx_hw->chanctx_table[radar->cac_vif->ch_index];
-    cfg80211_cac_event(radar->cac_vif->ndev,
-                    #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
-                       &ctxt->chan_def,
-                    #endif
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
-                       NL80211_RADAR_CAC_FINISHED, GFP_KERNEL, 0);
-#else
-                       NL80211_RADAR_CAC_FINISHED, GFP_KERNEL);
-#endif
+    rwnx_cfg80211_cac_event_compat(radar->cac_vif->ndev, &ctxt->chan_def,
+                                   NL80211_RADAR_CAC_FINISHED, GFP_KERNEL);
     rwnx_send_apm_stop_cac_req(rwnx_hw, radar->cac_vif);
     rwnx_chanctx_unlink(radar->cac_vif);
 
@@ -1613,15 +1652,9 @@ void rwnx_radar_cancel_cac(struct rwnx_radar *radar)
         struct rwnx_chanctx *ctxt;
         ctxt = &rwnx_hw->chanctx_table[radar->cac_vif->ch_index];
         rwnx_send_apm_stop_cac_req(rwnx_hw, radar->cac_vif);
-        cfg80211_cac_event(radar->cac_vif->ndev,
-                        #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
-                           &ctxt->chan_def,
-                        #endif
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
-                           NL80211_RADAR_CAC_FINISHED, GFP_KERNEL, 0);
-#else
-                           NL80211_RADAR_CAC_ABORTED, GFP_KERNEL);
-#endif
+        rwnx_cfg80211_cac_event_compat(radar->cac_vif->ndev,
+                                       &ctxt->chan_def,
+                                       NL80211_RADAR_CAC_ABORTED, GFP_KERNEL);
         rwnx_chanctx_unlink(radar->cac_vif);
     }
 
