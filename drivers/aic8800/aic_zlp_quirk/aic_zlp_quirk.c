@@ -149,7 +149,11 @@ static int usb_submit_urb_pre_handler(struct kprobe *p, struct pt_regs *regs)
 
 	(void)p;
 
+#if defined(CONFIG_ARM)
+	urb = (struct urb *)regs->ARM_r0;
+#else
 	urb = (struct urb *)regs_get_kernel_argument(regs, 0);
+#endif
 	if (is_bluetooth_acl_endpoint(urb))
 		enable_zlp(urb);
 
