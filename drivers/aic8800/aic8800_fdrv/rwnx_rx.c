@@ -2283,6 +2283,11 @@ u8 rwnx_rxdataind_aicwf(struct rwnx_hw *rwnx_hw, void *hostid, void *rx_priv)
     if(hw_rxhdr->flags_upload)
         status |= RX_STAT_FORWARD;
 
+#ifndef CONFIG_RWNX_MON_DATA
+    if (status & RX_STAT_MONITOR)
+        status &= ~RX_STAT_FORWARD;
+#endif
+
     /* Check if we need to delete the buffer */
     if (status & RX_STAT_DELETE) {
         /* Remove the SK buffer from the rxbuf_elems table */
@@ -2345,11 +2350,22 @@ u8 rwnx_rxdataind_aicwf(struct rwnx_hw *rwnx_hw, void *hostid, void *rx_priv)
         } else {
         #ifdef CONFIG_RWNX_MON_DATA
         skb_monitor = skb_copy_expand(skb, rtap_len, 0, GFP_ATOMIC);
-        skb_monitor->data += (msdu_offset + 2); //sdio/usb word allign
+        if (skb_monitor) {
+            skb_monitor->data += (msdu_offset + 2); //sdio/usb word allign
 
-        //Save frame length
-        frm_len = le32_to_cpu(hw_rxhdr->hwvect.len);
+            //Save frame length
+            frm_len = le32_to_cpu(hw_rxhdr->hwvect.len);
+        }
         #endif
+        }
+
+        if (!skb_monitor) {
+            if (status == RX_STAT_MONITOR) {
+                dev_kfree_skb(skb);
+                goto end;
+            }
+
+            goto check_len_update;
         }
 
         //skb_reset_tail_pointer(skb);
