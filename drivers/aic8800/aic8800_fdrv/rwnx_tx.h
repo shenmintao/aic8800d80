@@ -172,7 +172,8 @@ int rwnx_start_mgmt_xmit(struct rwnx_vif *vif, struct rwnx_sta *sta,
                          u64 *cookie);
 #endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0) */
 #ifdef CONFIG_RWNX_MON_XMIT
-int rwnx_start_monitor_if_xmit(struct sk_buff *skb, struct net_device *dev);
+netdev_tx_t rwnx_start_monitor_if_xmit(struct sk_buff *skb,
+                                       struct net_device *dev);
 #endif
 int rwnx_txdatacfm(void *pthis, void *host_id);
 
