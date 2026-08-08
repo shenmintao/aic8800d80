@@ -4857,7 +4857,17 @@ rwnx_cfg80211_remain_on_channel(struct wiphy *wiphy,
                             #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0)
                                 enum nl80211_channel_type channel_type,
                             #endif
-                                unsigned int duration, u64 *cookie)
+                                unsigned int duration, u64 *cookie
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 2, 0)
+                                /*
+                                 * 7.2 added an optional receive address filter for the off-channel
+                                 * period. cfg80211 refuses a non-NULL one unless the driver sets
+                                 * NL80211_EXT_FEATURE_ROC_ADDR_FILTER, which this one does not, so it
+                                 * is always NULL here. mac80211 ignores it in the same way.
+                                 */
+                                , const u8 *rx_addr
+#endif
+                                )
 {
 	return rwnx_cfg80211_remain_on_channel_(wiphy,
                             #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 6, 0)
