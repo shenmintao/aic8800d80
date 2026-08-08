@@ -297,18 +297,6 @@ static void aicwf_usb_rx_complete(struct urb *urb)
         aicwf_usb_rx_buf_put(usb_dev, usb_buf);
         if(urb->status < 0){
             AICWFDBG(LOGDEBUG, "%s urb->status:%d \r\n", __func__, urb->status);
-
-            if(g_rwnx_plat->wait_disconnect_cb == false){
-                g_rwnx_plat->wait_disconnect_cb = true;
-                if(atomic_read(&aicwf_deinit_atomic) > 0){
-                    atomic_set(&aicwf_deinit_atomic, 0);
-                    down(&aicwf_deinit_sem);
-                    AICWFDBG(LOGINFO, "%s need to wait for disconnect callback \r\n", __func__);
-                }else{
-                    g_rwnx_plat->wait_disconnect_cb = false;
-                }
-            }
-
             return;
         }else{
             //schedule_work(&usb_dev->rx_urb_work);
@@ -385,18 +373,6 @@ static void aicwf_usb_rx_complete(struct urb *urb)
         aicwf_usb_rx_buf_put(usb_dev, usb_buf);
 		if(urb->status < 0){
 			AICWFDBG(LOGDEBUG, "%s urb->status:%d \r\n", __func__, urb->status);
-
-			if(g_rwnx_plat->wait_disconnect_cb == false){
-				g_rwnx_plat->wait_disconnect_cb = true;
-				if(atomic_read(&aicwf_deinit_atomic) > 0){
-					atomic_set(&aicwf_deinit_atomic, 0);
-					down(&aicwf_deinit_sem);
-					AICWFDBG(LOGINFO, "%s need to wait for disconnect callback \r\n", __func__);
-				}else{
-					g_rwnx_plat->wait_disconnect_cb = false;
-				}
-			}
-
 			return;
 		}else{
 			//schedule_work(&usb_dev->rx_urb_work);
@@ -1979,10 +1955,6 @@ static void aicwf_usb_bus_stop(struct device *dev)
     if (usb_dev->state == USB_DOWN_ST)
         return;
 
-    if(g_rwnx_plat && g_rwnx_plat->wait_disconnect_cb == true){
-        atomic_set(&aicwf_deinit_atomic, 1);
-        up(&aicwf_deinit_sem);
-    }
     aicwf_usb_state_change(usb_dev, USB_DOWN_ST);
     //aicwf_usb_cancel_all_urbs(usb_dev);//AIDEN
 }
