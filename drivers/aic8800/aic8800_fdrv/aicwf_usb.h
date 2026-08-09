@@ -38,6 +38,7 @@
 #else
 #define USB_PRODUCT_ID_AIC8801          0x8801
 #define USB_PRODUCT_ID_AIC8800DC        0x88dc
+#define USB_PRODUCT_ID_AIC8800DE        0x88de
 #define USB_PRODUCT_ID_AIC8800DW        0x88dd
 #define USB_PRODUCT_ID_AIC8800D81       0x8d81
 #define USB_PRODUCT_ID_AIC8800D41       0x8d41
