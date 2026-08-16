@@ -2,8 +2,8 @@
 # Sends vendor-specific SCSI CDB to trigger mode switch from
 # USB Mass Storage to WiFi+BT mode.
 #
-# The 16-byte CDB is: FD 00 00 00 00 00 00 00 00 00 00 00 00 00 00 F2
-# Wrapped in a standard 31-byte SCSI CBW (Command Block Wrapper).
+# The two 16-byte CDBs end in F3 and F2 respectively. Each is wrapped in a
+# standard 31-byte SCSI CBW (Command Block Wrapper), and must be sent in order.
 #
 # Install as: /etc/usb_modeswitch.d/1111:1111
 # (The filename must contain a colon on Linux; this file is named
@@ -13,4 +13,6 @@ DefaultVendor=0x1111
 DefaultProduct=0x1111
 TargetVendor=0xa69c
 TargetProduct=0x8d80
-MessageContent="555342438765432100000000000010fd0000000000000000000000000000f2"
+MessageContent="555342438765432100000000000010fd0000000000000000000000000000f3"
+MessageContent2="555342438765432100000000000010fd0000000000000000000000000000f2"
+NeedResponse=1
