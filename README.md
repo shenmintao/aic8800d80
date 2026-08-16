@@ -47,6 +47,26 @@ I did not develop this software, The code is sourced from the Tenda U11 driver. 
 ### Attention
 Before installing the driver, delete all aic8800-related folders under /lib/firmware. Using an incorrect firmware version may cause the system to freeze.
 
+#### Pandora 88M80 mode switching
+
+Pandora 88M80 adapters that initially appear as USB device `1111:1111` are
+automatically switched to `a69c:8d80` by sending the required `F3` then `F2`
+commands. Existing users must rerun `sudo ./install.sh` to replace the installed
+usb_modeswitch configuration, then unplug the adapter completely and plug it
+back in.
+
+If automatic switching does not occur, try the same sequence manually:
+
+```bash
+sudo usb_modeswitch -v 1111 -p 1111 \
+  -M "555342438765432100000000000010fd0000000000000000000000000000f3" \
+  -2 "555342438765432100000000000010fd0000000000000000000000000000f2"
+```
+
+This only addresses switching from `1111:1111` to `a69c:8d80`. If the device
+has reached `a69c:8d80` but firmware startup still fails, see
+[issue #79](https://github.com/shenmintao/aic8800d80/issues/79).
+
 ### Installation Steps
 
 #### Method 1: [Quick Installation](INSTALL_SCRIPT.md) (Recommended)
