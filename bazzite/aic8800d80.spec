@@ -1,11 +1,11 @@
-%global commit 13baa9b0b1692f94233bcf6e752060b408062026
+%global commit e93a7d2b6b9634acefc2aae2891e787fb48fdb01
 %global shortcommit %(echo %{commit} | cut -c1-7)
 %global debug_package %{nil}
 %{!?kver:%global kver %(uname -r)}
 
 Name:           aic8800d80
 Version:        %{shortcommit}
-Release:        2%{?dist}
+Release:        1%{?dist}
 Summary:        AIC8800 USB Wi-Fi, Bluetooth firmware, and ZLP quirk driver
 
 License:        GPL-2.0-only
@@ -78,6 +78,10 @@ cp -a fw/aic8800* %{buildroot}/usr/lib/firmware/
 /usr/lib/firmware/aic8800*
 
 %changelog
+* Fri Aug 21 2026 Heyde Moura <moura.heyde@gmail.com> - e93a7d2-1
+- Build the current main branch, which carries the Linux 7.2 cfg80211 and
+  strncpy() fixes needed to compile on Bazzite 44.
+
 * Tue Jul 28 2026 ccyuen1 - 13baa9b-2
 - Disable automatic creation of debuginfo packages to fix issue #77.
 - Require usb_modeswitch as package dependency instead of file dependency to fix issue #77.
