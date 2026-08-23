@@ -7,6 +7,7 @@ loader="$repo_root/drivers/aic8800/aic_load_fw/aicbluetooth.c"
 profile="$repo_root/drivers/aic8800/aic_load_fw/aic_compat_8800d80.c"
 zlp_quirk="$repo_root/drivers/aic8800/aic_zlp_quirk/aic_zlp_quirk.c"
 driver_makefile="$repo_root/drivers/aic8800/Makefile"
+udev_rules="$repo_root/aic.rules"
 
 required_files='aic_userconfig_8800d80.txt
 fmacfw_8800d80_u02.bin
@@ -37,6 +38,13 @@ grep -q 'CONFIG_USE_FW_REQUEST = y' "$driver_makefile"
 grep -q 'USB_DEVICE(0x368b, 0x8d81)' "$zlp_quirk"
 if grep -q 'USB_DEVICE(0xa69c, 0x8d81)' "$zlp_quirk"; then
     echo "a69c:8d81 must not use the incompatible Bluetooth ZLP quirk" >&2
+    exit 1
+fi
+
+grep -q 'ENV{UDISKS_IGNORE}="1"' "$udev_rules"
+grep -q 'ENV{DEVTYPE}=="disk".*RUN+="/usr/bin/eject /dev/%k"' "$udev_rules"
+if grep 'RUN+="/usr/bin/eject /dev/%k"' "$udev_rules" | grep -qv 'ENV{DEVTYPE}=="disk"'; then
+    echo "AIC mode switching must eject the whole disk only" >&2
     exit 1
 fi
 
