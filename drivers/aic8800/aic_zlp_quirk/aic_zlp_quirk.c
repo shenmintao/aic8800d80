@@ -10,10 +10,14 @@
 #include <linux/ptrace.h>
 #include <linux/usb.h>
 
-#define AIC_USB_VENDOR_ID	0x368b
-#define AIC_USB_PRODUCT_ID	0x8d81
 #define USB_BT_SUBCLASS		0x01
 #define USB_BT_PROTOCOL		0x01
+
+static const struct usb_device_id aic_zlp_device_ids[] = {
+	{ USB_DEVICE(0x368b, 0x8d81) },
+	{ }
+};
+MODULE_DEVICE_TABLE(usb, aic_zlp_device_ids);
 
 static atomic64_t injection_count = ATOMIC64_INIT(0);
 static const char *hook_name = "none";
@@ -60,6 +64,7 @@ static enum aic_zlp_hook active_hook;
 static bool is_aic_bulk_out(const struct urb *urb)
 {
 	const struct usb_device *udev;
+	const struct usb_device_id *id;
 
 	if (!urb)
 		return false;
@@ -68,8 +73,12 @@ static bool is_aic_bulk_out(const struct urb *urb)
 	if (!udev)
 		return false;
 
-	if (le16_to_cpu(udev->descriptor.idVendor) != AIC_USB_VENDOR_ID ||
-	    le16_to_cpu(udev->descriptor.idProduct) != AIC_USB_PRODUCT_ID)
+	for (id = aic_zlp_device_ids; id->match_flags; id++) {
+		if (le16_to_cpu(udev->descriptor.idVendor) == id->idVendor &&
+		    le16_to_cpu(udev->descriptor.idProduct) == id->idProduct)
+			break;
+	}
+	if (!id->match_flags)
 		return false;
 
 	return usb_pipetype(urb->pipe) == PIPE_BULK &&
@@ -230,4 +239,3 @@ MODULE_DESCRIPTION("AIC 8800D80 standard btusb ACL bulk TX ZLP quirk");
 MODULE_LICENSE("GPL");
 MODULE_VERSION("1.0");
 MODULE_SOFTDEP("pre: btusb");
-MODULE_ALIAS("usb:v368Bp8D81d*dc*dsc*dp*ic*isc*ip*in*");

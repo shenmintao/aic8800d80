@@ -609,7 +609,8 @@ static int rwnx_plat_bin_fw_upload(struct rwnx_plat *rwnx_plat, u8* fw_addr,
 #define MD5(x) x[0],x[1],x[2],x[3],x[4],x[5],x[6],x[7],x[8],x[9],x[10],x[11],x[12],x[13],x[14],x[15]
 #define MD5PINRT "file md5:%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x\r\n"
 
-static int rwnx_load_firmware(u32 **fw_buf, const char *name, struct device *device)
+static int rwnx_load_firmware(u32 **fw_buf, const char *name,
+                              struct rwnx_hw *rwnx_hw)
 {
 
 #ifdef CONFIG_USE_FW_REQUEST
@@ -620,15 +621,54 @@ static int rwnx_load_firmware(u32 **fw_buf, const char *name, struct device *dev
 	unsigned char decrypt[16];
 	int size = 0;
 	int ret = 0;
+	char fw_name[FW_PATH_MAX_LEN];
+	const char *subdir = NULL;
 
-	AICWFDBG(LOGINFO, "%s: request firmware = %s \n", __func__ ,name);
+	if (aic_fw_path[0]) {
+		ret = snprintf(fw_name, sizeof(fw_name), "%s/%s",
+			       aic_fw_path, name);
+	} else if (rwnx_hw && rwnx_hw->usbdev) {
+			switch (rwnx_hw->usbdev->chipid) {
+			case PRODUCT_ID_AIC8801:
+				subdir = "aic8800";
+				break;
+			case PRODUCT_ID_AIC8800DC:
+			case PRODUCT_ID_AIC8800DW:
+				subdir = "aic8800DC";
+				break;
+			case PRODUCT_ID_AIC8800D81:
+				subdir = chip_mcu_id ? "aic8800D80/mcu1" :
+						       "aic8800D80/mcu0";
+				break;
+			case PRODUCT_ID_AIC8800D81X2:
+			case PRODUCT_ID_AIC8800D89X2:
+				subdir = "aic8800D80X2";
+				break;
+			case PRODUCT_ID_AIC8800D80N:
+				subdir = "aic8800D80N";
+				break;
+			case PRODUCT_ID_AIC8800DLN:
+				subdir = "aic8800DLN";
+				break;
+			default:
+				break;
+			}
+		ret = subdir ? snprintf(fw_name, sizeof(fw_name), "%s/%s",
+					subdir, name) :
+			       snprintf(fw_name, sizeof(fw_name), "%s", name);
+	} else {
+		ret = snprintf(fw_name, sizeof(fw_name), "%s", name);
+	}
+	if (ret < 0 || ret >= (int)sizeof(fw_name))
+		return -ENAMETOOLONG;
 
-	ret = request_firmware(&fw, name, NULL);
+	AICWFDBG(LOGINFO, "%s: request firmware = %s\n", __func__, fw_name);
+
+	ret = request_firmware(&fw, fw_name, rwnx_hw ? rwnx_hw->dev : NULL);
 
 	if (ret < 0) {
-		AICWFDBG(LOGERROR, "Load %s fail\n", name);
-		release_firmware(fw);
-		return -1;
+		AICWFDBG(LOGERROR, "Load %s fail: %d\n", fw_name, ret);
+		return ret;
 	}
 
 	size = fw->size;
@@ -640,8 +680,11 @@ static int rwnx_load_firmware(u32 **fw_buf, const char *name, struct device *dev
 		return -1;
 	}
 
-	buffer = vmalloc(size);
-	memset(buffer, 0, size);
+	buffer = vzalloc(size);
+	if (!buffer) {
+		release_firmware(fw);
+		return -ENOMEM;
+	}
 	memcpy(buffer, dst, size);
 
 	*fw_buf = buffer;
@@ -785,7 +828,7 @@ int rwnx_request_firmware_common(struct rwnx_hw *rwnx_hw, u32** buffer, const ch
 
     AICWFDBG(LOGINFO, "### Load file %s\n", filename);
 
-    size = rwnx_load_firmware(buffer, filename, NULL);
+    size = rwnx_load_firmware(buffer, filename, rwnx_hw);
 
     return size;
 }
@@ -1668,9 +1711,6 @@ static int rwnx_plat_patch_load(struct rwnx_hw *rwnx_hw)
 
     if(rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800DC ||
         rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800DW){
-#ifndef ANDROID_PLATFORM
-        sprintf(aic_fw_path, "%s/%s", aic_fw_path, "aic8800DC");
-#endif
         AICWFDBG(LOGINFO, "testmode=%d\n", testmode);
         if (chip_sub_id == 0) {
             if (testmode == FW_NORMAL_MODE) {
@@ -1807,9 +1847,6 @@ static int rwnx_plat_patch_load(struct rwnx_hw *rwnx_hw)
             }
         }
     } else if(rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800D80N) {
-#ifndef ANDROID_PLATFORM
-        sprintf(aic_fw_path, "%s/%s", aic_fw_path, "aic8800D80N");
-#endif
         if (testmode == FW_NORMAL_MODE) {
             ret = aicwf_plat_patch_load_8800d80n(rwnx_hw);
             if (ret) {
@@ -1837,9 +1874,6 @@ static int rwnx_plat_patch_load(struct rwnx_hw *rwnx_hw)
         }
     }
     else if(rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800DLN) {
-#ifndef ANDROID_PLATFORM
-        sprintf(aic_fw_path, "%s/%s", aic_fw_path, "aic8800DLN");
-#endif
         if (testmode == FW_NORMAL_MODE) {
             aicwf_patch_config_8800dln(rwnx_hw);
         }

@@ -6,8 +6,6 @@
 #define FW_USERCONFIG_NAME_8800D80         "aic_userconfig_8800d80.txt"
 #define FW_POWERLIMIT_NAME_8800D80         "aic_powerlimit_8800d80.txt"
 
-extern char aic_fw_path[200];
-
 int rwnx_request_firmware_common(struct rwnx_hw *rwnx_hw,
 	u32** buffer, const char *filename);
 void rwnx_plat_userconfig_parsing(char *buffer, int size);
@@ -38,10 +36,6 @@ int	rwnx_plat_userconfig_load_8800d80(struct rwnx_hw *rwnx_hw){
     int size;
     u32 *dst=NULL;
     char *filename = FW_USERCONFIG_NAME_8800D80;
-
-#ifndef ANDROID_PLATFORM
-            sprintf(aic_fw_path, "%s/%s", aic_fw_path, "aic8800D80");
-#endif
 
     AICWFDBG(LOGINFO, "userconfig file path:%s \r\n", filename);
 

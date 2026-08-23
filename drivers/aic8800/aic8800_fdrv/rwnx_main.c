@@ -16,6 +16,7 @@
 #include <net/cfg80211.h>
 #include <net/ip.h>
 #include <linux/etherdevice.h>
+#include <linux/ethtool.h>
 #include <linux/netdevice.h>
 #include <net/netlink.h>
 #include <linux/wireless.h>
@@ -1818,11 +1819,31 @@ static const struct net_device_ops rwnx_netdev_monitor_ops = {
     .ndo_set_mac_address    = rwnx_set_mac_address,
 };
 
+static void rwnx_get_drvinfo(struct net_device *dev,
+                             struct ethtool_drvinfo *info)
+{
+    struct rwnx_vif *rwnx_vif = netdev_priv(dev);
+    struct rwnx_hw *rwnx_hw = rwnx_vif->rwnx_hw;
+
+    strscpy(info->driver, KBUILD_MODNAME, sizeof(info->driver));
+    strscpy(info->version, RWNX_VERS_MOD, sizeof(info->version));
+    strscpy(info->fw_version, rwnx_hw->firmware_version,
+            sizeof(info->fw_version));
+    strscpy(info->bus_info, dev_name(rwnx_hw->dev),
+            sizeof(info->bus_info));
+}
+
+static const struct ethtool_ops rwnx_ethtool_ops = {
+    .get_drvinfo = rwnx_get_drvinfo,
+    .get_link = ethtool_op_get_link,
+};
+
 static void rwnx_netdev_setup(struct net_device *dev)
 {
     ether_setup(dev);
     dev->priv_flags &= ~IFF_TX_SKB_SHARING;
     dev->netdev_ops = &rwnx_netdev_ops;
+    dev->ethtool_ops = &rwnx_ethtool_ops;
 #if LINUX_VERSION_CODE <  KERNEL_VERSION(4, 12, 0)
     dev->destructor = free_netdev;
 #else
@@ -1950,7 +1971,7 @@ static struct rwnx_vif *rwnx_interface_add(struct rwnx_hw *rwnx_hw,
         vif->ap.generation = 0;
         vif->ap.mesh_pm = NL80211_MESH_POWER_ACTIVE;
         vif->ap.next_mesh_pm = NL80211_MESH_POWER_ACTIVE;
-        // no break
+        fallthrough;
     case NL80211_IFTYPE_AP:
         INIT_LIST_HEAD(&vif->ap.sta_list);
         memset(&vif->ap.bcn, 0, sizeof(vif->ap.bcn));
@@ -2679,7 +2700,7 @@ static int rwnx_cfg80211_change_iface(struct wiphy *wiphy,
         INIT_LIST_HEAD(&vif->ap.proxy_list);
         vif->ap.create_path = false;
         vif->ap.generation = 0;
-        // no break
+        fallthrough;
     case NL80211_IFTYPE_AP:
     case NL80211_IFTYPE_P2P_GO:
         INIT_LIST_HEAD(&vif->ap.sta_list);
@@ -5097,6 +5118,7 @@ static int rwnx_cfg80211_mgmt_tx(struct wiphy *wiphy, struct wireless_dev *wdev,
     switch (RWNX_VIF_TYPE(rwnx_vif)) {
         case NL80211_IFTYPE_AP_VLAN:
             rwnx_vif = rwnx_vif->ap_vlan.master;
+            fallthrough;
         case NL80211_IFTYPE_AP:
         case NL80211_IFTYPE_P2P_GO:
         case NL80211_IFTYPE_MESH_POINT:
@@ -5934,6 +5956,7 @@ int rwnx_fill_station_info(struct rwnx_sta *sta, struct rwnx_vif *vif,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 0)
 	case FORMATMOD_HE_MU:
 		sinfo->rxrate.he_ru_alloc = rx_vect1->he.ru_size;
+		fallthrough;
 	case FORMATMOD_HE_SU:
 	case FORMATMOD_HE_ER:
 		sinfo->rxrate.flags = RATE_INFO_FLAGS_HE_MCS;
@@ -8931,7 +8954,7 @@ int rwnx_cfg80211_init(struct rwnx_plat *rwnx_plat, void **platform_data)
     struct rwnx_vif *vif;
     int i;
     u8 dflt_mac[ETH_ALEN] = { 0x88, 0x00, 0x33, 0x77, 0x10, 0x99};
-    struct mm_get_fw_version_cfm fw_version;
+    struct mm_get_fw_version_cfm fw_version = {};
     u8_l mac_addr_efuse[ETH_ALEN];
     u8 mac_addr[ETH_ALEN];
 #ifndef USE_5G
@@ -9113,8 +9136,18 @@ if((g_rwnx_plat->usbdev->chipid == PRODUCT_ID_AIC8801) ||
 	rwnx_hw->band_5g_support = set_start_cfm.is_5g_support;
 
         ret = rwnx_send_get_fw_version_req(rwnx_hw, &fw_version);
-        memcpy(wiphy->fw_version, fw_version.fw_version, fw_version.fw_version_len>32? 32 : fw_version.fw_version_len>32);
-    	AICWFDBG(LOGINFO, "Firmware Version: %s\r\n", fw_version.fw_version);
+        if (ret) {
+            AICWFDBG(LOGERROR, "Failed to read firmware version: %d\n", ret);
+        } else {
+            size_t fw_version_len = min_t(size_t, fw_version.fw_version_len,
+                                          sizeof(rwnx_hw->firmware_version) - 1);
+
+            memcpy(rwnx_hw->firmware_version, fw_version.fw_version,
+                   fw_version_len);
+            rwnx_hw->firmware_version[fw_version_len] = '\0';
+            AICWFDBG(LOGINFO, "Firmware Version: %s\r\n",
+                     rwnx_hw->firmware_version);
+        }
 
 	wiphy->bands[NL80211_BAND_2GHZ] = &rwnx_band_2GHz;
 	for(i = 0; i < wiphy->bands[NL80211_BAND_2GHZ]->n_channels; i++) {

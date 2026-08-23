@@ -1,21 +1,11 @@
 # AIC8800 Linux Wi-Fi and Bluetooth Driver
 This driver supports AIC8800-family chipsets used by devices such as the Tenda U11, AX913B, and TP-Link Archer TX1U Nano.
 
-> **Legacy MCU revision 1 branch:** You are viewing `legacy-mcu1`. This branch
-> is only for AIC8800D80 or AIC8800DC/DW devices that report
-> `chip_id=7, chip_mcu_id=1`. It provides complete matched V3 firmware and
-> loader profiles for the D80 upload-limit failure validated in
-> [issue #58](https://github.com/shenmintao/aic8800d80/issues/58) and the DC/DW
-> V5 main-application timeout validated in
-> [issue #71](https://github.com/shenmintao/aic8800d80/issues/71). Use
-> [`main`](https://github.com/shenmintao/aic8800d80/tree/main) for newer
-> `chip_mcu_id=0` hardware or when the MCU revision is unknown. See the
-> [D80](tests/issue58-mcu1-legacy-fw/README.md) and
-> [DC/DW](tests/issue71-mcu1-v3-profile/README.md) support notes before installing.
->
-> After switching branches, rerun `sudo ./install.sh` and reboot; switching the
-> Git branch alone does not replace firmware already installed under
-> `/lib/firmware`.
+> **Automatic AIC8800D80 firmware selection:** MCU0 and MCU1 firmware are
+> installed together. The loader reads `chip_mcu_id` before requesting any D80
+> binary and selects `aic8800D80/mcu0` or `aic8800D80/mcu1` automatically.
+> MCU1 keeps the validated Radxa SDK V3 patch profile from issue #58; MCU0 keeps
+> the current profile. Manual branch selection is no longer required for D80.
 
 Added support for devices with Vendor ID 368B (tested).
 
@@ -34,18 +24,16 @@ quirk is filtered to that VID:PID and fails closed when the required kernel
 probe support is unavailable.
 
 > [!NOTE]
-> **Maintained branches:** This repository now maintains only `main` and
-> `legacy-mcu1`. You are viewing the branch for `chip_mcu_id=1`; do not switch
-> this hardware to the former separate `bluetooth` branch, which is retired.
-> Wi-Fi, the kernel's standard `btusb` Bluetooth path, and the device-scoped
-> `368b:8d81` ZLP support are integrated here. The ZLP module remains inactive
-> on other VID:PID combinations.
+> Wi-Fi, the kernel's standard `btusb` Bluetooth path, and device-scoped ZLP
+> support are integrated. The ZLP module remains inactive on other VID:PID
+> combinations.
 
 ### Disclaimer
 I did not develop this software, The code is sourced from the Tenda U11 driver. I only made some modifications to the code to adapt it to newer kernel versions. Apart from compilation issues, I am unable to address other problems.
 
 ### Attention
-Before installing the driver, delete all aic8800-related folders under /lib/firmware. Using an incorrect firmware version may cause the system to freeze.
+Use `install.sh` to replace older firmware layouts. Do not manually mix files
+from `mcu0` and `mcu1`.
 
 #### Pandora 88M80 mode switching
 

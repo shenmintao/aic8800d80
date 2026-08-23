@@ -1,7 +1,8 @@
-fw/aic8800D80/*.txt text eol=lf
-fw/aic8800D80/*.bin binary
-fw/aic8800DC/*.txt text eol=lf
-fw/aic8800DC/*.bin binary
+*.sh text eol=lf
+Makefile text eol=lf
+*.conf text eol=lf
+fw/**/*.txt text eol=lf
+fw/**/*.bin binary
 /.gitattributes text eol=lf
 drivers/aic8800/aic_zlp_quirk/*.c text eol=lf
 drivers/aic8800/aic_zlp_quirk/Makefile text eol=lf
