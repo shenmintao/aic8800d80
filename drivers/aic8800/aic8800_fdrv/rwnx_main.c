@@ -562,6 +562,24 @@ module_param(temp_control, int, 0660);
 
 int testmode = 0;
 char aic_fw_path[200];
+static char d80_firmware_profile[16] = "auto";
+module_param_string(d80_firmware_profile, d80_firmware_profile,
+		    sizeof(d80_firmware_profile), 0660);
+MODULE_PARM_DESC(d80_firmware_profile,
+	"AIC8800D80 firmware profile: auto, current, or legacy");
+
+const char *rwnx_d80_firmware_subdir(void)
+{
+	if (!strcmp(d80_firmware_profile, "current"))
+		return "aic8800D80/mcu0";
+	if (!strcmp(d80_firmware_profile, "legacy"))
+		return "aic8800D80/mcu1";
+	if (strcmp(d80_firmware_profile, "auto"))
+		pr_warn_once("aic8800_fdrv: invalid d80_firmware_profile=%s; using auto\n",
+			     d80_firmware_profile);
+
+	return "aic8800D80/mcu0";
+}
 
 void rwnx_skb_align_8bytes(struct sk_buff *skb){
 #ifdef CONFIG_ALIGN_8BYTES

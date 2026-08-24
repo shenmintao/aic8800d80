@@ -637,8 +637,7 @@ static int rwnx_load_firmware(u32 **fw_buf, const char *name,
 				subdir = "aic8800DC";
 				break;
 			case PRODUCT_ID_AIC8800D81:
-				subdir = chip_mcu_id ? "aic8800D80/mcu1" :
-						       "aic8800D80/mcu0";
+				subdir = rwnx_d80_firmware_subdir();
 				break;
 			case PRODUCT_ID_AIC8800D81X2:
 			case PRODUCT_ID_AIC8800D89X2:

@@ -167,10 +167,11 @@ int aicwf_patch_config_8800d80(struct aic_usb_dev *usb_dev)
     struct dbg_mem_read_cfm rd_patch_addr_cfm;
     int ret = 0;
     int cnt = 0;
+    bool legacy_firmware = aic_d80_uses_legacy_firmware();
     //adap test
     int adap_patch_cnt = 0;
 
-    if (chip_mcu_id) {
+    if (legacy_firmware) {
         patch_tbl = patch_tbl_d80_mcu1;
         patch_cnt = ARRAY_SIZE(patch_tbl_d80_mcu1);
         AICWFDBG(LOGINFO, "Using MCU1 SDK V3 patch profile\n");
@@ -207,7 +208,7 @@ int aicwf_patch_config_8800d80(struct aic_usb_dev *usb_dev)
     AICWFDBG(LOGERROR, "%x=%x\n", rd_patch_addr_cfm.memaddr, rd_patch_addr_cfm.memdata);
     aic_patch_str_base = rd_patch_addr_cfm.memdata;
 
-    if (!chip_mcu_id) {
+    if (!legacy_firmware) {
         if (chip_id == CHIP_REV_U01) {
             rd_version_addr = RAM_FMAC_FW_ADDR_8800D80 + 0x01C;
         } else {
@@ -367,8 +368,8 @@ int system_config_8800d80(struct aic_usb_dev *usb_dev){
         }
 		chip_id = (u8)(rd_mem_addr_cfm.memdata >> 16);
 		printk("chip_id=%x, chip_mcu_id = %d\n", chip_id, chip_mcu_id);
-		printk("AIC8800D80: selecting MCU%u firmware profile\n",
-		       chip_mcu_id ? 1 : 0);
+		printk("AIC8800D80: selecting firmware profile %s\n",
+		       aic_d80_firmware_subdir());
 		if (chip_mcu_id == 1) {
 			ret = rwnx_send_dbg_mem_read_req(usb_dev, cache_mem_addr, &rd_mem_addr_cfm);
 			if (ret) {

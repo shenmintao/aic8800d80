@@ -5,6 +5,8 @@ repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 fw_root="$repo_root/fw/aic8800D80"
 loader="$repo_root/drivers/aic8800/aic_load_fw/aicbluetooth.c"
 profile="$repo_root/drivers/aic8800/aic_load_fw/aic_compat_8800d80.c"
+fdrv_main="$repo_root/drivers/aic8800/aic8800_fdrv/rwnx_main.c"
+fdrv_platform="$repo_root/drivers/aic8800/aic8800_fdrv/rwnx_platform.c"
 zlp_quirk="$repo_root/drivers/aic8800/aic_zlp_quirk/aic_zlp_quirk.c"
 driver_makefile="$repo_root/drivers/aic8800/Makefile"
 udev_rules="$repo_root/aic.rules"
@@ -31,8 +33,14 @@ for file in fmacfw_8800d80_u02.bin fw_patch_8800d80_u02.bin; do
     }
 done
 
-grep -q 'chip_mcu_id ? "aic8800D80/mcu1"' "$loader"
+grep -q 'module_param_string(d80_firmware_profile' "$loader"
+grep -q 'aic_d80_firmware_subdir()' "$loader"
+grep -q 'return "aic8800D80/mcu0"' "$loader"
+grep -q 'module_param_string(d80_firmware_profile' "$fdrv_main"
+grep -q 'return "aic8800D80/mcu0"' "$fdrv_main"
+grep -q 'rwnx_d80_firmware_subdir()' "$fdrv_platform"
 grep -q 'patch_tbl_d80_mcu1' "$profile"
+grep -q 'aic_d80_uses_legacy_firmware()' "$profile"
 grep -q 'Using MCU0 current patch profile' "$profile"
 grep -q 'CONFIG_USE_FW_REQUEST = y' "$driver_makefile"
 grep -q 'USB_DEVICE(0x368b, 0x8d81)' "$zlp_quirk"

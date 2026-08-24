@@ -1,11 +1,12 @@
 # AIC8800 Linux Wi-Fi and Bluetooth Driver
 This driver supports AIC8800-family chipsets used by devices such as the Tenda U11, AX913B, and TP-Link Archer TX1U Nano.
 
-> **Automatic AIC8800D80 firmware selection:** MCU0 and MCU1 firmware are
-> installed together. The loader reads `chip_mcu_id` before requesting any D80
-> binary and selects `aic8800D80/mcu0` or `aic8800D80/mcu1` automatically.
-> MCU1 keeps the validated Radxa SDK V3 patch profile from issue #58; MCU0 keeps
-> the current profile. Manual branch selection is no longer required for D80.
+> **AIC8800D80 firmware profiles:** current and legacy firmware are installed
+> together. Current firmware is the default because `chip_mcu_id` alone does
+> not identify adapters with a smaller firmware upload window. Devices that
+> reproduce the issue #58 upload failure can explicitly set
+> `d80_firmware_profile=legacy` for both `aic_load_fw` and `aic8800_fdrv` to
+> use the validated Radxa SDK V3 profile consistently.
 
 Added support for devices with Vendor ID 368B (tested).
 

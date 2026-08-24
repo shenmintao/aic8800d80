@@ -82,5 +82,7 @@ void aicbt_parse_config(struct aic_usb_dev *usbdev, const char *filename);
 #endif
 int aicbt_patch_info_unpack(struct aicbt_patch_info_t *patch_info, struct aicbt_patch_table *head_t);
 int aicbt_patch_table_load(struct aic_usb_dev *usbdev, struct aicbt_patch_table *_head);
+const char *aic_d80_firmware_subdir(void);
+bool aic_d80_uses_legacy_firmware(void);
 
 #endif
