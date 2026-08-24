@@ -476,7 +476,7 @@ BUILT_MODULE_NAME[1]="aic_load_fw"
 BUILT_MODULE_LOCATION[1]="drivers/aic8800/aic_load_fw"
 DEST_MODULE_LOCATION[1]="/updates/dkms"
 
-# Quirk ZLP para Bluetooth ACL bulk TX (somente 368b:8d81)
+# Quirk ZLP para Bluetooth ACL bulk TX (validated 368b:8d81 only)
 BUILT_MODULE_NAME[2]="aic_zlp_quirk"
 BUILT_MODULE_LOCATION[2]="drivers/aic8800/aic_zlp_quirk"
 DEST_MODULE_LOCATION[2]="/updates/dkms"

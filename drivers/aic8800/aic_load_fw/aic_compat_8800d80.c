@@ -39,14 +39,36 @@ typedef struct {
 #define AIC_PATCH_OFST(mem) ((size_t) &((aic_patch_t *)0)->mem)
 #define AIC_PATCH_ADDR(mem) ((u32) (aic_patch_str_base + AIC_PATCH_OFST(mem)))
 
-/*
- * Issue #58 legacy-loader test.
- *
- * Keep this table aligned with the SDK V3 D80 firmware imported from Radxa
- * commit 254d47e6a131dbed5ba32131972f4719f3e1c7fe.  Newer loader patches use
- * different RX aggregation settings and a user_ext_flags field that is not
- * part of this firmware generation.
- */
+#define USER_PWROFST_COVER_CALIB_FLAG   (0x01U << 0)
+#define USER_CHAN_MAX_TXPWR_EN_FLAG     (0x01U << 1)
+#define USER_TX_USE_ANA_F_FLAG          (0x01U << 2)
+#define USER_APM_PRBRSP_OFFLOAD_DISABLE_FLAG    (0x01U << 3)
+#define USER_HE_MU_EDCA_UPDATE_DISABLE_FLAG     (0x01U << 4)
+#define USER_LOFT_CALIB_DISABLE_FLAG    (0x01U << 6)
+#define USER_CAPA_CALIB_DISABLE_FLAG    (0x01U << 7)
+#define USER_PWR_CALIB_DISABLE_FLAG     (0x01U << 8)
+#define USER_IPA_CALIB_DISABLE_FLAG     (0x01U << 13)
+
+#define USER_EXT_FLAGS_DEFAULT_D80      (USER_PWROFST_COVER_CALIB_FLAG)
+
+#define CFG_USER_PWROFST_COVER_CALIB_EN     (1)
+#if (defined(CONFIG_POWER_LIMIT))
+#define CFG_USER_CHAN_MAX_TXPWR_EN          (1)
+#else
+#define CFG_USER_CHAN_MAX_TXPWR_EN          (0)
+#endif
+#define CFG_USER_TX_USE_ANA_F_EN            (0)
+#if (defined(CONFIG_PRBREQ_REPORT))
+#define CFG_USER_APM_PRBRSP_OFFLOAD_DISABLE (1)
+#else
+#define CFG_USER_APM_PRBRSP_OFFLOAD_DISABLE (0)
+#endif
+#define CFG_USER_HE_MU_EDCA_UPDATE_DISABLE  (0)
+#define CFG_USER_LOFT_CALIB_DISABLE_DISABLE (0)
+#define CFG_USER_CAPA_CALIB_DISABLE_DISABLE (0)
+#define CFG_USER_PWR_CALIB_DISABLE_DISABLE  (0)
+#define CFG_USER_IPA_CALIB_DISABLE_DISABLE  (0)
+
 u32 patch_tbl_d80[][2] =
 {
     #ifdef USE_5G
@@ -54,7 +76,64 @@ u32 patch_tbl_d80[][2] =
     #else
     {0x00b4, 0xf3010000},
     #endif
-    {0x0170, 0x00000002},//rx aggr counter
+#ifdef CONFIG_PLATFORM_HI
+    {0x0170, 0x00010001},//rx aggr counter
+#else
+    {0x0170, 0x0001000A},//rx aggr counter
+#endif
+
+    {0x0188,
+        (USER_EXT_FLAGS_DEFAULT_D80 |
+            #if CFG_USER_CHAN_MAX_TXPWR_EN
+            USER_CHAN_MAX_TXPWR_EN_FLAG |
+            #endif
+            #if CFG_USER_TX_USE_ANA_F_EN
+            USER_TX_USE_ANA_F_FLAG |
+            #endif
+            #if CFG_USER_APM_PRBRSP_OFFLOAD_DISABLE
+            USER_APM_PRBRSP_OFFLOAD_DISABLE_FLAG |
+            #endif
+            #if CFG_USER_HE_MU_EDCA_UPDATE_DISABLE
+            USER_HE_MU_EDCA_UPDATE_DISABLE_FLAG |
+            #endif
+            #if CFG_USER_LOFT_CALIB_DISABLE_DISABLE
+            USER_LOFT_CALIB_DISABLE_FLAG |
+            #endif
+            #if CFG_USER_CAPA_CALIB_DISABLE_DISABLE
+            USER_CAPA_CALIB_DISABLE_FLAG |
+            #endif
+            #if CFG_USER_PWR_CALIB_DISABLE_DISABLE
+            USER_PWR_CALIB_DISABLE_FLAG |
+            #endif
+            #if CFG_USER_IPA_CALIB_DISABLE_DISABLE
+            USER_IPA_CALIB_DISABLE_FLAG |
+            #endif
+        0) & ~(
+            #if !CFG_USER_PWROFST_COVER_CALIB_EN
+            USER_PWROFST_COVER_CALIB_FLAG |
+            #endif
+        0)
+    }, // user_ext_flags
+
+#ifdef CONFIG_RADAR_OR_IR_DETECT
+	{0x0019c,0x00000900},
+#endif
+#ifdef CONFIG_WOWLAN
+    {0x019c,0x01000000},
+#ifdef ANDROID_PLATFORM
+    {0x01A0, 0x01000001},
+#endif
+#endif
+};
+
+/* Radxa SDK V3 firmware used by D80 MCU1 has an older patch ABI. */
+static u32 patch_tbl_d80_mcu1[][2] = {
+#ifdef USE_5G
+    {0x00b4, 0xf3010001},
+#else
+    {0x00b4, 0xf3010000},
+#endif
+    {0x0170, 0x00000002},
 };
 
 //adap test
@@ -80,14 +159,27 @@ int aicwf_patch_config_8800d80(struct aic_usb_dev *usb_dev)
     u32 rd_patch_addr;
     u32 aic_patch_addr;
     u32 config_base, aic_patch_str_base;
+    u32 patch_buff_addr, patch_buff_base, rd_version_addr, rd_version_val;
     uint32_t start_addr = 0x001D7000;
     u32 patch_addr = start_addr;
-    u32 patch_cnt = sizeof(patch_tbl_d80) / 4 / 2;
+    u32 (*patch_tbl)[2];
+    u32 patch_cnt;
     struct dbg_mem_read_cfm rd_patch_addr_cfm;
     int ret = 0;
     int cnt = 0;
+    bool legacy_firmware = aic_d80_uses_legacy_firmware();
     //adap test
     int adap_patch_cnt = 0;
+
+    if (legacy_firmware) {
+        patch_tbl = patch_tbl_d80_mcu1;
+        patch_cnt = ARRAY_SIZE(patch_tbl_d80_mcu1);
+        AICWFDBG(LOGINFO, "Using MCU1 SDK V3 patch profile\n");
+    } else {
+        patch_tbl = patch_tbl_d80;
+        patch_cnt = ARRAY_SIZE(patch_tbl_d80);
+        AICWFDBG(LOGINFO, "Using MCU0 current patch profile\n");
+    }
 
     if (adap_test) {
         AICWFDBG(LOGINFO, "%s adap test \r\n", __func__);
@@ -116,6 +208,36 @@ int aicwf_patch_config_8800d80(struct aic_usb_dev *usb_dev)
     AICWFDBG(LOGERROR, "%x=%x\n", rd_patch_addr_cfm.memaddr, rd_patch_addr_cfm.memdata);
     aic_patch_str_base = rd_patch_addr_cfm.memdata;
 
+    if (!legacy_firmware) {
+        if (chip_id == CHIP_REV_U01) {
+            rd_version_addr = RAM_FMAC_FW_ADDR_8800D80 + 0x01C;
+        } else {
+            rd_version_addr = RAM_FMAC_FW_ADDR_8800D80_U02 + 0x01C;
+        }
+        if ((ret = rwnx_send_dbg_mem_read_req(usb_dev, rd_version_addr,
+                                              &rd_patch_addr_cfm))) {
+            AICWFDBG(LOGERROR, "version val[0x%x] rd fail: %d\n",
+                     rd_version_addr, ret);
+            return ret;
+        }
+        rd_version_val = rd_patch_addr_cfm.memdata;
+        AICWFDBG(LOGINFO, "rd_version_val=%08X\n", rd_version_val);
+        usb_dev->fw_version_uint = rd_version_val;
+        if (rd_version_val > 0x06090100) {
+            patch_buff_addr = rd_patch_addr + 12;
+            ret = rwnx_send_dbg_mem_read_req(usb_dev, patch_buff_addr,
+                                             &rd_patch_addr_cfm);
+            if (ret) {
+                AICWFDBG(LOGERROR, "patch buf rd fail\n");
+                return ret;
+            }
+            AICWFDBG(LOGINFO, "%x=%x\n", rd_patch_addr_cfm.memaddr,
+                     rd_patch_addr_cfm.memdata);
+            patch_buff_base = rd_patch_addr_cfm.memdata;
+            patch_addr = start_addr = patch_buff_base;
+        }
+    }
+
     if ((ret = rwnx_send_dbg_mem_write_req(usb_dev, AIC_PATCH_ADDR(magic_num), AIC_PATCH_MAGIG_NUM))) {
         AICWFDBG(LOGERROR, "maigic_num[0x%x] write fail: %d\n", AIC_PATCH_ADDR(magic_num), ret);
         return ret;
@@ -137,11 +259,11 @@ int aicwf_patch_config_8800d80(struct aic_usb_dev *usb_dev)
     }
 
     for (cnt = 0; cnt < patch_cnt; cnt++) {
-        if ((ret = rwnx_send_dbg_mem_write_req(usb_dev, start_addr+8*cnt, patch_tbl_d80[cnt][0]+config_base))) {
+        if ((ret = rwnx_send_dbg_mem_write_req(usb_dev, start_addr+8*cnt, patch_tbl[cnt][0]+config_base))) {
             AICWFDBG(LOGERROR, "%x write fail\n", start_addr+8*cnt);
             return ret;
         }
-        if ((ret = rwnx_send_dbg_mem_write_req(usb_dev, start_addr+8*cnt+4, patch_tbl_d80[cnt][1]))) {
+        if ((ret = rwnx_send_dbg_mem_write_req(usb_dev, start_addr+8*cnt+4, patch_tbl[cnt][1]))) {
             AICWFDBG(LOGERROR, "%x write fail\n", start_addr+8*cnt+4);
             return ret;
         }
@@ -246,7 +368,8 @@ int system_config_8800d80(struct aic_usb_dev *usb_dev){
         }
 		chip_id = (u8)(rd_mem_addr_cfm.memdata >> 16);
 		printk("chip_id=%x, chip_mcu_id = %d\n", chip_id, chip_mcu_id);
-		printk("AIC8800D80 legacy: using Radxa SDK V3 loader profile\n");
+		printk("AIC8800D80: selecting firmware profile %s\n",
+		       aic_d80_firmware_subdir());
 		if (chip_mcu_id == 1) {
 			ret = rwnx_send_dbg_mem_read_req(usb_dev, cache_mem_addr, &rd_mem_addr_cfm);
 			if (ret) {

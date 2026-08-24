@@ -143,13 +143,40 @@ enum aicbsp_cpmode_type {
 #define AIC_HW_INFO 0x21
 
 #define FW_PATH_MAX 200
+#ifndef CONFIG_USE_FW_REQUEST
 #if defined(CONFIG_PLATFORM_UBUNTU)
 static const char* aic_default_fw_path = "/lib/firmware";
 #else
 static const char* aic_default_fw_path = "/vendor/etc/firmware";
 #endif
+#endif
 char aic_fw_path[FW_PATH_MAX];
 module_param_string(aic_fw_path, aic_fw_path, FW_PATH_MAX, 0660);
+static char d80_firmware_profile[16] = "auto";
+module_param_string(d80_firmware_profile, d80_firmware_profile,
+		    sizeof(d80_firmware_profile), 0660);
+MODULE_PARM_DESC(d80_firmware_profile,
+	"AIC8800D80 firmware profile: auto, current, or legacy");
+extern u8 chip_mcu_id;
+
+const char *aic_d80_firmware_subdir(void)
+{
+	if (!strcmp(d80_firmware_profile, "current"))
+		return "aic8800D80/mcu0";
+	if (!strcmp(d80_firmware_profile, "legacy"))
+		return "aic8800D80/mcu1";
+	if (strcmp(d80_firmware_profile, "auto"))
+		pr_warn_once("aic_load_fw: invalid d80_firmware_profile=%s; using auto\n",
+			     d80_firmware_profile);
+
+	return "aic8800D80/mcu0";
+}
+
+bool aic_d80_uses_legacy_firmware(void)
+{
+	return !strcmp(aic_d80_firmware_subdir(), "aic8800D80/mcu1");
+}
+
 #ifdef CONFIG_M2D_OTA_AUTO_SUPPORT
 char saved_sdk_ver[64];
 module_param_string(saved_sdk_ver, saved_sdk_ver,64, 0660);
@@ -260,16 +287,50 @@ static int aic_load_firmware(u32 ** fw_buf, const char *name, struct device *dev
 	unsigned char decrypt[16];
 	int size = 0;
 	int ret = 0;
+	char fw_name[FW_PATH_MAX];
+	const char *subdir = NULL;
+#if defined(CONFIG_PLATFORM_UBUNTU)
+	struct aicwf_bus *bus_if = dev_get_drvdata(device);
+	struct aic_usb_dev *usb_dev = bus_if->bus_priv.usb;
+#endif
 
-	printk("%s: request firmware = %s \n", __func__ ,name);
+	if (aic_fw_path[0]) {
+		ret = snprintf(fw_name, sizeof(fw_name), "%s/%s",
+			       aic_fw_path, name);
+	} else {
+#if defined(CONFIG_PLATFORM_UBUNTU)
+		switch (usb_dev->chipid) {
+		case PRODUCT_ID_AIC8800:
+			subdir = "aic8800";
+			break;
+		case PRODUCT_ID_AIC8800D80:
+		case PRODUCT_ID_AIC8800D81:
+			subdir = aic_d80_firmware_subdir();
+			break;
+		case PRODUCT_ID_AIC8800D80X2:
+		case PRODUCT_ID_AIC8800D81X2:
+		case PRODUCT_ID_AIC8800D89X2:
+		case PRODUCT_ID_AIC8800D40X2:
+			subdir = "aic8800D80X2";
+			break;
+		default:
+			break;
+		}
+#endif
+		ret = subdir ? snprintf(fw_name, sizeof(fw_name), "%s/%s",
+					subdir, name) :
+			       snprintf(fw_name, sizeof(fw_name), "%s", name);
+	}
+	if (ret < 0 || ret >= (int)sizeof(fw_name))
+		return -ENAMETOOLONG;
 
+	printk("%s: request firmware = %s\n", __func__, fw_name);
 
-	ret = request_firmware(&fw, name, NULL);
+	ret = request_firmware(&fw, fw_name, device);
 	
 	if (ret < 0) {
-		printk("Load %s fail\n", name);
-		release_firmware(fw);
-		return -1;
+		printk("Load %s fail: %d\n", fw_name, ret);
+		return ret;
 	}
 	
 	size = fw->size;
@@ -282,8 +343,11 @@ static int aic_load_firmware(u32 ** fw_buf, const char *name, struct device *dev
 	}
 
 
-	buffer = vmalloc(size);
-	memset(buffer, 0, size);
+	buffer = vzalloc(size);
+	if (!buffer) {
+		release_firmware(fw);
+		return -ENOMEM;
+	}
 	memcpy(buffer, dst, size);
 	
 	*fw_buf = buffer;
@@ -371,8 +435,7 @@ static int aic_load_firmware(u32 ** fw_buf, const char *name, struct device *dev
 }
 
     /* start to read from firmware file */
-    buffer = vmalloc(size);
-    memset(buffer, 0, size);
+    buffer = vzalloc(size);
     if(!buffer){
             *fw_buf=NULL;
             __putname(path);
@@ -866,11 +929,17 @@ int8_t rwnx_atoi(char *value){
 }
 
 void get_fw_path(char* fw_path){
+#ifdef CONFIG_USE_FW_REQUEST
+	/* request_firmware() resolves an empty path below /lib/firmware. */
+	if (aic_fw_path[0])
+		strscpy(fw_path, aic_fw_path, FW_PATH_MAX);
+#else
 	if (strlen(aic_fw_path) > 0) {
 		memcpy(fw_path, aic_fw_path, strlen(aic_fw_path));
 	}else{
 		memcpy(fw_path, aic_default_fw_path, strlen(aic_default_fw_path));
 	}
+#endif
 } 
 
 void set_testmode(int val){

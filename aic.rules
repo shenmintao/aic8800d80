@@ -1,14 +1,16 @@
 # AIC8800 USB mass-storage mode switch rules
-KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="5721",  SYMLINK+="aicudisk", RUN+="/usr/bin/eject /dev/%k"
-KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="5722",  SYMLINK+="aicudisk", RUN+="/usr/bin/eject /dev/%k"
-KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="5723",  SYMLINK+="tendaudisk", RUN+="/usr/bin/eject /dev/%k"
-KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="5724",  SYMLINK+="ugreenax900", RUN+="/usr/bin/eject /dev/%k"
-KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="5725",  SYMLINK+="tendaudiskv2", RUN+="/usr/bin/eject /dev/%k"
-KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="5726",  SYMLINK+="tendaudiskv3", RUN+="/usr/bin/eject /dev/%k"
-KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="5727",  SYMLINK+="tendaudiskv4", RUN+="/usr/bin/eject /dev/%k"
-KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="572a",  SYMLINK+="tendaudiskv5", RUN+="/usr/bin/eject /dev/%k"
-KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="572c",  SYMLINK+="cudydiskv2", RUN+="/usr/bin/eject /dev/%k"
-KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="572f",  SYMLINK+="aicudisk572f", RUN+="/usr/bin/eject /dev/%k"
+ACTION=="add|change", SUBSYSTEM=="block", KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="572[1-7acf]", ENV{UDISKS_IGNORE}="1"
+
+ACTION=="add", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="5721", SYMLINK+="aicudisk", RUN+="/usr/bin/eject /dev/%k"
+ACTION=="add", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="5722", SYMLINK+="aicudisk", RUN+="/usr/bin/eject /dev/%k"
+ACTION=="add", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="5723", SYMLINK+="tendaudisk", RUN+="/usr/bin/eject /dev/%k"
+ACTION=="add", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="5724", SYMLINK+="ugreenax900", RUN+="/usr/bin/eject /dev/%k"
+ACTION=="add", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="5725", SYMLINK+="tendaudiskv2", RUN+="/usr/bin/eject /dev/%k"
+ACTION=="add", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="5726", SYMLINK+="tendaudiskv3", RUN+="/usr/bin/eject /dev/%k"
+ACTION=="add", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="5727", SYMLINK+="tendaudiskv4", RUN+="/usr/bin/eject /dev/%k"
+ACTION=="add", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="572a", SYMLINK+="tendaudiskv5", RUN+="/usr/bin/eject /dev/%k"
+ACTION=="add", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="572c", SYMLINK+="cudydiskv2", RUN+="/usr/bin/eject /dev/%k"
+ACTION=="add", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="572f", SYMLINK+="aicudisk572f", RUN+="/usr/bin/eject /dev/%k"
 
 # AIC8800D80 "Pandora" clone: switch 1111:1111 to its operational USB ID.
 ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="1111", ATTR{idProduct}=="1111", RUN+="/bin/sh -c 'if [ -x /usr/sbin/usb_modeswitch ]; then exec /usr/sbin/usb_modeswitch -c /etc/usb_modeswitch.d/1111:1111; elif [ -x /usr/bin/usb_modeswitch ]; then exec /usr/bin/usb_modeswitch -c /etc/usb_modeswitch.d/1111:1111; fi'"

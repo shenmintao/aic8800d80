@@ -761,6 +761,7 @@ struct sta_tx_flowctrl {
 struct rwnx_hw {
     struct rwnx_mod_params *mod_params;
     struct device *dev;
+    char firmware_version[64];
 #ifdef AICWF_SDIO_SUPPORT
     struct aic_sdio_dev *sdiodev;
 #endif
