@@ -1638,7 +1638,7 @@ free:
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0))
 int rwnx_start_mgmt_xmit(struct rwnx_vif *vif, struct rwnx_sta *sta,
                          struct cfg80211_mgmt_tx_params *params, bool offchan,
-                         u64 *cookie)
+                         u64 *cookie, bool use_given_cookie)
 #else
 int rwnx_start_mgmt_xmit(struct rwnx_vif *vif, struct rwnx_sta *sta,
                          struct ieee80211_channel *channel, bool offchan,
@@ -1703,7 +1703,18 @@ int rwnx_start_mgmt_xmit(struct rwnx_vif *vif, struct rwnx_sta *sta,
         return -ENOMEM;
     }
 
-    *cookie = (unsigned long)skb;
+    /*
+     * use_given_cookie is true only for the direct cfg80211 .mgmt_tx call
+     * path on 7.3+, where *cookie already holds the value cfg80211
+     * pre-assigned and must be echoed back via cfg80211_mgmt_tx_status()
+     * later -- see rwnx_cfg80211_mgmt_tx(). TDLS's internal reuse of this
+     * function (use_given_cookie == false) never goes through that cfg80211
+     * op, so it still gets an invented, locally-unique cookie exactly as
+     * before this fix, and on every kernel older than 7.3 every caller
+     * passes use_given_cookie == false, also leaving this unchanged.
+     */
+    if (!use_given_cookie)
+        *cookie = (unsigned long)skb;
 
     /*
      * Move skb->data pointer in order to reserve room for rwnx_txhdr
@@ -1773,6 +1784,7 @@ int rwnx_start_mgmt_xmit(struct rwnx_vif *vif, struct rwnx_sta *sta,
     sw_txhdr->rwnx_sta = sta;
     sw_txhdr->rwnx_vif = vif;
     sw_txhdr->skb = skb;
+    sw_txhdr->cookie = *cookie;
     sw_txhdr->headroom = headroom;
     sw_txhdr->map_len = skb->len - offsetof(struct rwnx_txhdr, hw_hdr);
 #ifdef CONFIG_RWNX_AMSDUS_TX
@@ -2389,7 +2401,7 @@ int rwnx_txdatacfm(void *pthis, void *host_id)
 #endif
         /* Confirm transmission to CFG80211 */
         cfg80211_mgmt_tx_status(&sw_txhdr->rwnx_vif->wdev,
-                                (unsigned long)skb,
+                                sw_txhdr->cookie,
                                 (skb->data + sw_txhdr->headroom),
                                 sw_txhdr->frame_len,
                                 rwnx_txst.acknowledged,
