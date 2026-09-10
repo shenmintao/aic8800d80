@@ -116,7 +116,7 @@ rwnx_prep_tdls_direct(struct rwnx_hw *rwnx_hw, struct rwnx_vif *rwnx_vif,
     switch (action_code) {
     case WLAN_PUB_ACTION_TDLS_DISCOVER_RES:
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 1, 0)
-        skb_put(skb, 1 + sizeof(mgmt->u.action.tdls_discover_resp));
+        skb_put(skb, 2 + sizeof(mgmt->u.action.tdls_discover_resp));
         mgmt->u.action.category = WLAN_CATEGORY_PUBLIC;
         mgmt->u.action.action_code = WLAN_PUB_ACTION_TDLS_DISCOVER_RES;
         mgmt->u.action.tdls_discover_resp.dialog_token = dialog_token;
