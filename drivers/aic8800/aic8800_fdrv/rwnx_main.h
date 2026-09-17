@@ -91,7 +91,7 @@ void aicwf_p2p_alive_timeout(struct timer_list *t);
 int rwnx_send_check_p2p(struct cfg80211_scan_request *param);
 void apm_staloss_work_process(struct work_struct *work);
 void apm_probe_sta_work_process(struct work_struct *work);
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0))
+#if (AICWF_CFG80211_VERSION_CODE >= KERNEL_VERSION(6, 13, 0))
 int rwnx_cfg80211_set_monitor_channel_(struct wiphy *wiphy,
                                              struct net_device *dev,
                                              struct cfg80211_chan_def *chandef);
