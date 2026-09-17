@@ -825,7 +825,9 @@ static inline int rwnx_rx_scanu_result_ind(struct rwnx_hw *rwnx_hw,
 #endif
 
     }
+#ifdef CONFIG_USE_WIRELESS_EXT
 putbss:
+#endif
     if (bss != NULL)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 9, 0)
 	cfg80211_put_bss(bss);

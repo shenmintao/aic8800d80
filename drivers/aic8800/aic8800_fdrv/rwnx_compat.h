@@ -23,6 +23,11 @@
 #define _RWNX_COMPAT_H_
 #include <linux/version.h>
 
+/* Keep wireless API checks separate from timer, USB and other kernel APIs. */
+#ifndef AICWF_CFG80211_VERSION_CODE
+#define AICWF_CFG80211_VERSION_CODE LINUX_VERSION_CODE
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0)
 #error "Minimum kernel version supported is 3.10"
 #endif
