@@ -1832,19 +1832,10 @@ void set_vendor_extension_ie(char *command){
 
 }
 #endif//CONFIG_SET_VENDOR_EXTENSION_IE
-#ifdef AICWF_CFG80211_SET_MONITOR_CHANNEL_HAS_DEV
 int rwnx_cfg80211_set_monitor_channel_(struct wiphy *wiphy, struct net_device *dev,
                                              struct cfg80211_chan_def *chandef);
-#else
-int rwnx_cfg80211_set_monitor_channel_(struct wiphy *wiphy,
-                                             struct cfg80211_chan_def *chandef);
-#endif
 int rwnx_atoi2(char *value, int c_len);
-#ifdef AICWF_CFG80211_SET_MONITOR_CHANNEL_HAS_DEV
 void set_mon_chan(struct rwnx_vif *vif, struct net_device *dev, char *parameter)
-#else
-void set_mon_chan(struct rwnx_vif *vif, char *parameter)
-#endif
 {
     struct cfg80211_chan_def *chandef = NULL;
     int freq = 0;
@@ -1867,11 +1858,7 @@ void set_mon_chan(struct rwnx_vif *vif, char *parameter)
     chandef->center_freq1 = chandef->chan->center_freq;
     chandef->center_freq2 = 0;
 
-#ifdef AICWF_CFG80211_SET_MONITOR_CHANNEL_HAS_DEV
     rwnx_cfg80211_set_monitor_channel_(vif->rwnx_hw->wiphy, dev, chandef);
-#else
-    rwnx_cfg80211_set_monitor_channel_(vif->rwnx_hw->wiphy, chandef);
-#endif
 
     vfree(chandef->chan);
     vfree(chandef);
@@ -2136,11 +2123,7 @@ int android_priv_cmd(struct net_device *net, struct ifreq *ifr, int cmd)
 	    char *set_parameter;
         skip = strlen(CMD_SET_MON_FREQ) + 1;
 		set_parameter = command + skip;
-#ifdef AICWF_CFG80211_SET_MONITOR_CHANNEL_HAS_DEV
 	    set_mon_chan(vif, net, set_parameter);
-#else
-	    set_mon_chan(vif, set_parameter);
-#endif
 		ret = 0;
 		goto exit;
     }

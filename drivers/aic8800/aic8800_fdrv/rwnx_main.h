@@ -91,14 +91,9 @@ void aicwf_p2p_alive_timeout(struct timer_list *t);
 int rwnx_send_check_p2p(struct cfg80211_scan_request *param);
 void apm_staloss_work_process(struct work_struct *work);
 void apm_probe_sta_work_process(struct work_struct *work);
-#ifdef AICWF_CFG80211_SET_MONITOR_CHANNEL_HAS_DEV
 int rwnx_cfg80211_set_monitor_channel_(struct wiphy *wiphy,
                                              struct net_device *dev,
                                              struct cfg80211_chan_def *chandef);
-#else
-int rwnx_cfg80211_set_monitor_channel_(struct wiphy *wiphy,
-                                             struct cfg80211_chan_def *chandef);
-#endif
 int rwnx_cfg80211_probe_client(struct wiphy *wiphy, struct net_device *dev,
             const u8 *peer, u64 *cookie);
 void rwnx_cfg80211_mgmt_frame_register(struct wiphy *wiphy,

@@ -29,26 +29,143 @@
 #endif
 
 /*
- * cfg80211_ops.set_monitor_channel() gained a "struct net_device *dev"
- * parameter. The change went into mainline 6.13, but it was also
- * backported to the 6.12 stable series starting with 6.12.101, so a
- * plain ">= 6.13.0" test misses 6.12.101 and later. Those kernels then
- * compile against the old prototype, which is fatal with
- * -Wincompatible-pointer-types:
+ * cfg80211_ops callbacks change signature between kernels, and a plain
+ * LINUX_VERSION_CODE test is not enough: distributions and OpenWrt backport
+ * individual API changes into stable series without moving the version, so a
+ * numeric check picks the wrong prototype and the build dies with a
+ * -Wincompatible-pointer-types error. Asking the compiler which prototype the
+ * headers in front of it actually declare is immune to that.
  *
- *   rwnx_main.c: error: initialization of
- *     'int (*)(struct wiphy *, struct net_device *, struct cfg80211_chan_def *)'
- *     from incompatible pointer type
- *     'int (*)(struct wiphy *, struct cfg80211_chan_def *)'
+ * The helpers below read the real type of a cfg80211_ops member and let the
+ * compiler decide, at compile time, which callback variant to install. They
+ * are deliberately generic so every reshaped callback uses one mechanism
+ * instead of growing yet another version test.
  *
- * Debian 13 (6.12.107) is one such kernel. The 6.12.101 threshold
- * covers both the backport and mainline, and leaves 6.11 and earlier
- * 6.12.x on the old prototype. Keep the check in one place so every
- * consumer stays in sync.
+ * Note these are compiler builtins, not preprocessor values: they are meant
+ * for __builtin_choose_expr() and array-size checks, never for #if.
  */
-#if AICWF_CFG80211_VERSION_CODE >= KERNEL_VERSION(6, 12, 101)
-#define AICWF_CFG80211_SET_MONITOR_CHANNEL_HAS_DEV
-#endif
+#define AICWF_CFG80211_OP_FIELD(_member) \
+    typeof(((struct cfg80211_ops *)0)->_member)
+
+#define AICWF_CFG80211_OP_IS(_member, _shape) \
+    __builtin_types_compatible_p(AICWF_CFG80211_OP_FIELD(_member), _shape)
+
+/*
+ * AICWF_CFG80211_OP_REQUIRE() pins the accepted shapes of a callback into a
+ * compile-time assertion. The generated array is size 1 when the running
+ * headers declare one of the expected forms and -1 otherwise, so a future
+ * kernel that reshapes the callback fails loudly with an explicit message
+ * instead of a cryptic initializer warning. Pass the accepted shapes as a
+ * list of AICWF_CFG80211_OP_IS() terms joined by ||.
+ */
+#define AICWF_CFG80211_OP_REQUIRE(_member, _accepted_shapes) \
+    typedef char aicwf_cfg80211_##_member##_shape_must_be_supported[ \
+        (_accepted_shapes) ? 1 : -1]
+
+/*
+ * set_monitor_channel() grew a "struct net_device *dev" argument. The change
+ * reached mainline in 6.13 and was backported to the stable series starting
+ * with 6.12.101, so 6.11 and earlier 6.12.x still use the two argument form.
+ * The compiler tells us which one this kernel declares.
+ */
+typedef int (*aicwf_set_monitor_channel_2_t)(
+    struct wiphy *wiphy, struct cfg80211_chan_def *chandef);
+typedef int (*aicwf_set_monitor_channel_3_t)(
+    struct wiphy *wiphy, struct net_device *dev,
+    struct cfg80211_chan_def *chandef);
+
+AICWF_CFG80211_OP_REQUIRE(
+    set_monitor_channel,
+    AICWF_CFG80211_OP_IS(set_monitor_channel, aicwf_set_monitor_channel_2_t)
+        || AICWF_CFG80211_OP_IS(set_monitor_channel, aicwf_set_monitor_channel_3_t));
+
+#define AICWF_CFG80211_SET_MONITOR_CHANNEL_TAKES_DEV \
+    AICWF_CFG80211_OP_IS(set_monitor_channel, aicwf_set_monitor_channel_3_t)
+
+/*
+ * Free cfg80211 helpers (functions, not cfg80211_ops members) change shape
+ * the same way callbacks do. AICWF_CFG80211_HELPER_IS() reads the declared
+ * type of the helper itself, and AICWF_CFG80211_HELPER_REQUIRE() pins its
+ * accepted shapes into a compile-time assertion.
+ */
+#define AICWF_CFG80211_HELPER_IS(_helper, _shape) \
+    __builtin_types_compatible_p(typeof(&_helper), _shape)
+
+#define AICWF_CFG80211_HELPER_REQUIRE(_helper, _accepted_shapes) \
+    typedef char aicwf_cfg80211_##_helper##_shape_must_be_supported[ \
+        (_accepted_shapes) ? 1 : -1]
+
+/*
+ * The remaining cfg80211_ops callbacks below are not reshaped by the driver
+ * yet, but they have changed between kernels before and some are backported
+ * independently of LINUX_VERSION_CODE. These assertions do not select a
+ * variant: they only turn a silent -Wincompatible-pointer-types failure on a
+ * future kernel into an explicit, greppable diagnostic. Adding the missing
+ * variant is then a small, well-defined change.
+ */
+
+/* set_wiphy_params() grew an int radio_idx argument for MLO. */
+typedef int (*aicwf_set_wiphy_params_2_t)(struct wiphy *wiphy, u32 changed);
+typedef int (*aicwf_set_wiphy_params_3_t)(
+    struct wiphy *wiphy, int radio_idx, u32 changed);
+
+AICWF_CFG80211_OP_REQUIRE(
+    set_wiphy_params,
+    AICWF_CFG80211_OP_IS(set_wiphy_params, aicwf_set_wiphy_params_2_t)
+        || AICWF_CFG80211_OP_IS(set_wiphy_params, aicwf_set_wiphy_params_3_t));
+
+/* start_radar_detection() gained cac_time_ms, then MLO's int link_id. */
+typedef int (*aicwf_start_radar_detection_3_t)(
+    struct wiphy *wiphy, struct net_device *dev,
+    struct cfg80211_chan_def *chandef);
+typedef int (*aicwf_start_radar_detection_4_t)(
+    struct wiphy *wiphy, struct net_device *dev,
+    struct cfg80211_chan_def *chandef, u32 cac_time_ms);
+typedef int (*aicwf_start_radar_detection_5_t)(
+    struct wiphy *wiphy, struct net_device *dev,
+    struct cfg80211_chan_def *chandef, u32 cac_time_ms, int link_id);
+
+AICWF_CFG80211_OP_REQUIRE(
+    start_radar_detection,
+    AICWF_CFG80211_OP_IS(start_radar_detection, aicwf_start_radar_detection_3_t)
+        || AICWF_CFG80211_OP_IS(start_radar_detection, aicwf_start_radar_detection_4_t)
+        || AICWF_CFG80211_OP_IS(start_radar_detection, aicwf_start_radar_detection_5_t));
+
+/* set_tx_power()/get_tx_power() gained the same int radio_idx argument. */
+typedef int (*aicwf_set_tx_power_4_t)(
+    struct wiphy *wiphy, struct wireless_dev *wdev,
+    enum nl80211_tx_power_setting type, int mbm);
+typedef int (*aicwf_set_tx_power_5_t)(
+    struct wiphy *wiphy, int radio_idx, struct wireless_dev *wdev,
+    enum nl80211_tx_power_setting type, int mbm);
+
+AICWF_CFG80211_OP_REQUIRE(
+    set_tx_power,
+    AICWF_CFG80211_OP_IS(set_tx_power, aicwf_set_tx_power_4_t)
+        || AICWF_CFG80211_OP_IS(set_tx_power, aicwf_set_tx_power_5_t));
+
+typedef int (*aicwf_get_tx_power_3_t)(
+    struct wiphy *wiphy, struct wireless_dev *wdev, int *dbm);
+typedef int (*aicwf_get_tx_power_4_t)(
+    struct wiphy *wiphy, int radio_idx, struct wireless_dev *wdev, int *dbm);
+
+AICWF_CFG80211_OP_REQUIRE(
+    get_tx_power,
+    AICWF_CFG80211_OP_IS(get_tx_power, aicwf_get_tx_power_3_t)
+        || AICWF_CFG80211_OP_IS(get_tx_power, aicwf_get_tx_power_4_t));
+
+/* cfg80211_cac_event() gained a trailing unsigned int link_id argument. */
+typedef void (*aicwf_cfg80211_cac_event_4_t)(
+    struct net_device *netdev, const struct cfg80211_chan_def *chandef,
+    enum nl80211_radar_event event, gfp_t gfp);
+typedef void (*aicwf_cfg80211_cac_event_5_t)(
+    struct net_device *netdev, const struct cfg80211_chan_def *chandef,
+    enum nl80211_radar_event event, gfp_t gfp, unsigned int link_id);
+
+AICWF_CFG80211_HELPER_REQUIRE(
+    cfg80211_cac_event,
+    AICWF_CFG80211_HELPER_IS(cfg80211_cac_event, aicwf_cfg80211_cac_event_4_t)
+        || AICWF_CFG80211_HELPER_IS(cfg80211_cac_event, aicwf_cfg80211_cac_event_5_t));
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0)
 #error "Minimum kernel version supported is 3.10"

@@ -4420,13 +4420,14 @@ cfg80211_chandef_identical(const struct cfg80211_chan_def *chandef1,
 }
 #endif
 
-#ifdef AICWF_CFG80211_SET_MONITOR_CHANNEL_HAS_DEV
-static int rwnx_cfg80211_set_monitor_channel(struct wiphy *wiphy, struct net_device *dev,
-                                             struct cfg80211_chan_def *chandef)
-#else
-static int rwnx_cfg80211_set_monitor_channel(struct wiphy *wiphy,
-                                             struct cfg80211_chan_def *chandef)
-#endif
+/*
+ * cfg80211_ops.set_monitor_channel() changed shape across kernels without a
+ * clean version boundary, so the callback is installed through
+ * AICWF_CFG80211_SET_MONITOR_CHANNEL_CB in the ops table below. The shared
+ * body lives here and the thin wrappers only adapt the prototype.
+ */
+static int rwnx_cfg80211_set_monitor_channel_common(struct wiphy *wiphy,
+                                                    struct cfg80211_chan_def *chandef)
 {
     struct rwnx_hw *rwnx_hw = wiphy_priv(wiphy);
     struct rwnx_vif *rwnx_vif;
@@ -4480,20 +4481,37 @@ static int rwnx_cfg80211_set_monitor_channel(struct wiphy *wiphy,
 }
 
 
-#ifdef AICWF_CFG80211_SET_MONITOR_CHANNEL_HAS_DEV
+static int rwnx_cfg80211_set_monitor_channel_two(struct wiphy *wiphy,
+                                                 struct cfg80211_chan_def *chandef)
+{
+    return rwnx_cfg80211_set_monitor_channel_common(wiphy, chandef);
+}
+
+static int rwnx_cfg80211_set_monitor_channel_three(struct wiphy *wiphy,
+                                                   struct net_device *dev,
+                                                   struct cfg80211_chan_def *chandef)
+{
+    (void)dev;
+    return rwnx_cfg80211_set_monitor_channel_common(wiphy, chandef);
+}
+
+/*
+ * The compiler picks the wrapper whose prototype matches the headers, so the
+ * ops table stays correct even when the API is backported without a version
+ * bump.
+ */
+#define AICWF_CFG80211_SET_MONITOR_CHANNEL_CB \
+    __builtin_choose_expr(AICWF_CFG80211_SET_MONITOR_CHANNEL_TAKES_DEV, \
+                          rwnx_cfg80211_set_monitor_channel_three, \
+                          rwnx_cfg80211_set_monitor_channel_two)
+
 int rwnx_cfg80211_set_monitor_channel_(struct wiphy *wiphy,
                                              struct net_device *dev,
                                              struct cfg80211_chan_def *chandef)
 {
-    return rwnx_cfg80211_set_monitor_channel(wiphy, dev, chandef);
+    (void)dev;
+    return rwnx_cfg80211_set_monitor_channel_common(wiphy, chandef);
 }
-#else
-int rwnx_cfg80211_set_monitor_channel_(struct wiphy *wiphy,
-                                             struct cfg80211_chan_def *chandef)
-{
-    return rwnx_cfg80211_set_monitor_channel(wiphy, chandef);
-}
-#endif
 
 
 /**
@@ -5009,11 +5027,7 @@ static int rwnx_cfg80211_get_channel(struct wiphy *wiphy,
     if (rwnx_vif->vif_index == rwnx_hw->monitor_vif)
     {
         //retrieve channel from firmware
-#ifdef AICWF_CFG80211_SET_MONITOR_CHANNEL_HAS_DEV
-        rwnx_cfg80211_set_monitor_channel(wiphy, wdev->netdev, NULL);
-#else
-        rwnx_cfg80211_set_monitor_channel(wiphy, NULL);
-#endif
+        rwnx_cfg80211_set_monitor_channel_common(wiphy, NULL);
     }
 
     //Check if channel context is valid
@@ -6551,7 +6565,7 @@ static struct cfg80211_ops rwnx_cfg80211_ops = {
     .start_ap = rwnx_cfg80211_start_ap,
     .change_beacon = rwnx_cfg80211_change_beacon,
     .stop_ap = rwnx_cfg80211_stop_ap,
-    .set_monitor_channel = rwnx_cfg80211_set_monitor_channel,
+    .set_monitor_channel = AICWF_CFG80211_SET_MONITOR_CHANNEL_CB,
     .probe_client = rwnx_cfg80211_probe_client,
 //    .mgmt_frame_register = rwnx_cfg80211_mgmt_frame_register,
     .set_wiphy_params = rwnx_cfg80211_set_wiphy_params,
