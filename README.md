@@ -67,6 +67,10 @@ has reached `a69c:8d80` but firmware startup still fails, see
 
 ### Installation Steps
 
+For OpenWrt SDK/buildroot builds, see [OpenWrt build notes](OPENWRT.md).
+OpenWrt can use a newer cfg80211 backport than its target kernel; these builds
+must pass the wireless stack version separately.
+
 #### Method 1: [Quick Installation](INSTALL_SCRIPT.md) (Recommended)
 
 #### Method 2: Manual Installation
