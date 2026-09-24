@@ -28,6 +28,28 @@
 #define AICWF_CFG80211_VERSION_CODE LINUX_VERSION_CODE
 #endif
 
+/*
+ * cfg80211_ops.set_monitor_channel() gained a "struct net_device *dev"
+ * parameter. The change went into mainline 6.13, but it was also
+ * backported to the 6.12 stable series starting with 6.12.101, so a
+ * plain ">= 6.13.0" test misses 6.12.101 and later. Those kernels then
+ * compile against the old prototype, which is fatal with
+ * -Wincompatible-pointer-types:
+ *
+ *   rwnx_main.c: error: initialization of
+ *     'int (*)(struct wiphy *, struct net_device *, struct cfg80211_chan_def *)'
+ *     from incompatible pointer type
+ *     'int (*)(struct wiphy *, struct cfg80211_chan_def *)'
+ *
+ * Debian 13 (6.12.107) is one such kernel. The 6.12.101 threshold
+ * covers both the backport and mainline, and leaves 6.11 and earlier
+ * 6.12.x on the old prototype. Keep the check in one place so every
+ * consumer stays in sync.
+ */
+#if AICWF_CFG80211_VERSION_CODE >= KERNEL_VERSION(6, 12, 101)
+#define AICWF_CFG80211_SET_MONITOR_CHANNEL_HAS_DEV
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0)
 #error "Minimum kernel version supported is 3.10"
 #endif
