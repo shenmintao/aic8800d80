@@ -1,4 +1,4 @@
-%global commit e93a7d2b6b9634acefc2aae2891e787fb48fdb01
+%global commit 3e9a02549bc98d350bff1e0fb0501f841f9d8e55
 %global shortcommit %(echo %{commit} | cut -c1-7)
 %global debug_package %{nil}
 %{!?kver:%global kver %(uname -r)}
@@ -78,6 +78,12 @@ cp -a fw/aic8800* %{buildroot}/usr/lib/firmware/
 /usr/lib/firmware/aic8800*
 
 %changelog
+* Thu Sep 24 2026 Shen Mintao <shenmintao@gmail.com> - 3e9a025-1
+- Build the current main branch, which adds the Linux 7.1+ TDLS discovery
+  response length fix, the SUN60IW2P1 USB transfer settings, OpenWrt
+  cfg80211 backport version handling and the 6.12 stable
+  set_monitor_channel() fix.
+
 * Fri Aug 21 2026 Heyde Moura <moura.heyde@gmail.com> - e93a7d2-1
 - Build the current main branch, which carries the Linux 7.2 cfg80211 and
   strncpy() fixes needed to compile on Bazzite 44.
