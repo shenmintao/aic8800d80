@@ -3940,7 +3940,21 @@ void apm_probe_sta_work_process(struct work_struct *work)
 	   spin_unlock_bh(&rwnx_vif->rwnx_hw->cb_lock);
 
        printk("sta %pM found = %d\n", mac, found);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0)
+#if AICWF_CFG80211_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+       /*
+        * 7.3 added an MLO link_id parameter between cookie and acked. This
+        * driver has no MLO support, and -1 is the documented value for
+        * "non-MLO" (see the cfg80211_probe_status() kerneldoc). The cookie
+        * source also changes here: sta_probe.cookie is the value cfg80211
+        * pre-assigned via probe_peer(), which now must be echoed back
+        * instead of the driver's own probe_id counter -- see
+        * rwnx_cfg80211_probe_client().
+        */
+       if(found)
+               cfg80211_probe_status(rwnx_vif->ndev, mac, (u64)rwnx_vif->sta_probe.cookie, -1, 1, 0, false, GFP_ATOMIC);
+       else
+               cfg80211_probe_status(rwnx_vif->ndev, mac, (u64)rwnx_vif->sta_probe.cookie, -1, 0, 0, false, GFP_ATOMIC);
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0)
        if(found)
                cfg80211_probe_status(rwnx_vif->ndev, mac, (u64)rwnx_vif->sta_probe.probe_id, 1, 0, false, GFP_ATOMIC);
        else
@@ -4497,11 +4511,20 @@ int rwnx_cfg80211_set_monitor_channel_(struct wiphy *wiphy,
 
 
 /**
- * @probe_client: probe an associated client, must return a cookie that it
- *	later passes to cfg80211_probe_status().
+ * @probe_peer: probe an associated client. Before 7.3 the driver returns a
+ *	cookie of its own and passes the same value to cfg80211_probe_status()
+ *	later; from 7.3 the cookie is assigned by cfg80211, passed in, and must
+ *	be echoed back unchanged. Renamed from @probe_client upstream; kept as
+ *	rwnx_cfg80211_probe_client() here since only the cfg80211_ops field
+ *	name changed, not this driver's own naming.
  */
+#if AICWF_CFG80211_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+int rwnx_cfg80211_probe_client(struct wiphy *wiphy, struct net_device *dev,
+            const u8 *peer, u64 cookie)
+#else
 int rwnx_cfg80211_probe_client(struct wiphy *wiphy, struct net_device *dev,
             const u8 *peer, u64 *cookie)
+#endif
 {
     //struct rwnx_hw *rwnx_hw = wiphy_priv(wiphy);
     struct rwnx_vif *vif = netdev_priv(dev);
@@ -4525,9 +4548,21 @@ int rwnx_cfg80211_probe_client(struct wiphy *wiphy, struct net_device *dev,
 
 
     memcpy(vif->sta_probe.sta_mac_addr, peer, 6);
-    queue_work(vif->sta_probe.apmprobesta_wq, &vif->sta_probe.apmprobestaWork);
 
+#if AICWF_CFG80211_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+    /*
+     * 7.3 made this an input parameter: cfg80211 pre-assigns the cookie
+     * before calling us instead of us inventing one and returning it. Save
+     * it before queueing the work: the worker may run on another CPU as
+     * soon as it is queued, and it echoes this value back via
+     * cfg80211_probe_status() once the probe completes.
+     */
+    vif->sta_probe.cookie = cookie;
+#else
     *cookie = vif->sta_probe.probe_id;
+#endif
+
+    queue_work(vif->sta_probe.apmprobesta_wq, &vif->sta_probe.apmprobestaWork);
 
     return 0;
 }
@@ -4728,6 +4763,7 @@ rwnx_cfg80211_remain_on_channel_(struct wiphy *wiphy,
     struct wireless_dev *wdev = &rwnx_vif->wdev;
 #endif
     struct rwnx_roc_elem *roc_elem;
+    u64 roc_cookie;
     struct mm_add_if_cfm add_if_cfm;
     struct mm_remain_on_channel_cfm roc_cfm;
     int error;
@@ -4819,6 +4855,34 @@ rwnx_cfg80211_remain_on_channel_(struct wiphy *wiphy,
     /* Initialize the OFFCHAN TX queue to allow off-channel transmissions */
     rwnx_txq_offchan_init(rwnx_vif);
 
+    /*
+     * Decide the cookie before the element is published and the request
+     * sent: the RX path can deliver the channel-switch indication and
+     * call cfg80211_ready_on_channel() with roc_elem->cookie before this
+     * thread resumes, so it must already be the final value by then.
+     * Taking one snapshot here also keeps that value and the one reported
+     * back to the caller below identical: rwnx_send_roc() sleeps, and the
+     * RoC expiry handler increments roc_cookie_cnt, so re-reading the
+     * counter afterwards could return a different value than the one
+     * already reported to cfg80211.
+     */
+#if AICWF_CFG80211_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+    /*
+     * mgmt_roc_flag is false only for the direct cfg80211
+     * .remain_on_channel call path (see rwnx_cfg80211_remain_on_channel()
+     * below), where on 7.3+ *cookie already holds the value cfg80211
+     * pre-assigned and must be honored rather than overwritten. The
+     * purely-internal RoC this function also serves (started from
+     * inside mgmt_tx, mgmt_roc_flag true) never goes through that
+     * cfg80211 op, so there is no pre-assigned value to honor there --
+     * keep inventing one, exactly as on every older kernel.
+     */
+    roc_cookie = mgmt_roc_flag ? (u64)(rwnx_hw->roc_cookie_cnt) : *cookie;
+#else
+    roc_cookie = (u64)(rwnx_hw->roc_cookie_cnt);
+#endif
+    roc_elem->cookie = roc_cookie;
+
     /* Forward the information to the FMAC */
     rwnx_hw->roc_elem = roc_elem;
     error = rwnx_send_roc(rwnx_hw, rwnx_vif, chan, duration, &roc_cfm);
@@ -4827,7 +4891,12 @@ rwnx_cfg80211_remain_on_channel_(struct wiphy *wiphy,
     if (error == 0) {
 
         /* Set the cookie value */
-        *cookie = (u64)(rwnx_hw->roc_cookie_cnt);
+#if AICWF_CFG80211_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+        if (mgmt_roc_flag)
+            *cookie = roc_cookie;
+#else
+        *cookie = roc_cookie;
+#endif
         if(roc_cfm.status) {
             // failed to roc
             rwnx_hw->roc_elem = NULL;
@@ -4857,18 +4926,42 @@ rwnx_cfg80211_remain_on_channel(struct wiphy *wiphy,
                             #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0)
                                 enum nl80211_channel_type channel_type,
                             #endif
-                                unsigned int duration, u64 *cookie
-#if AICWF_CFG80211_VERSION_CODE >= KERNEL_VERSION(7, 2, 0)
+                                unsigned int duration,
+#if AICWF_CFG80211_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+                                /*
+                                 * 7.3 made this cookie an input parameter: cfg80211
+                                 * pre-assigns it before calling us instead of us
+                                 * inventing one and returning it. See
+                                 * rwnx_cfg80211_remain_on_channel_(). rx_addr is
+                                 * unused for the reason given in the 7.2 arm below:
+                                 * it is always NULL for this driver.
+                                 */
+                                u64 cookie, const u8 *rx_addr
+#elif AICWF_CFG80211_VERSION_CODE >= KERNEL_VERSION(7, 2, 0)
                                 /*
                                  * 7.2 added an optional receive address filter for the off-channel
                                  * period. cfg80211 refuses a non-NULL one unless the driver sets
                                  * NL80211_EXT_FEATURE_ROC_ADDR_FILTER, which this one does not, so it
                                  * is always NULL here. mac80211 ignores it in the same way.
                                  */
-                                , const u8 *rx_addr
+                                u64 *cookie, const u8 *rx_addr
+#else
+                                u64 *cookie
 #endif
                                 )
 {
+#if AICWF_CFG80211_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+    /*
+     * 7.3 passes the cookie by value, while the shared helper still takes a
+     * pointer because its internal caller invents one. Only the argument
+     * differs, so pick it here and leave the call itself alone.
+     */
+    u64 local_cookie = cookie;
+    u64 *cookie_ptr = &local_cookie;
+#else
+    u64 *cookie_ptr = cookie;
+#endif
+
 	return rwnx_cfg80211_remain_on_channel_(wiphy,
                             #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 6, 0)
                                 wdev,
@@ -4879,7 +4972,7 @@ rwnx_cfg80211_remain_on_channel(struct wiphy *wiphy,
                             #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0)
                                 channel_type,
                             #endif
-                                duration, cookie, false);
+                                duration, cookie_ptr, false);
 }
 
 /**
@@ -5057,7 +5150,17 @@ struct ieee80211_channel *rwnx_cfg80211_get_channel(struct wiphy *wiphy)
 /**
  * @mgmt_tx: Transmit a management frame.
  */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0))
+#if (AICWF_CFG80211_VERSION_CODE >= KERNEL_VERSION(7, 3, 0))
+static int rwnx_cfg80211_mgmt_tx(struct wiphy *wiphy, struct wireless_dev *wdev,
+                                 struct cfg80211_mgmt_tx_params *params,
+                                 /*
+                                  * 7.3 made this cookie an input parameter: cfg80211
+                                  * pre-assigns it before calling us instead of us
+                                  * inventing one and returning it. See
+                                  * rwnx_start_mgmt_xmit().
+                                  */
+                                 u64 cookie)
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0))
 static int rwnx_cfg80211_mgmt_tx(struct wiphy *wiphy, struct wireless_dev *wdev,
                                  struct cfg80211_mgmt_tx_params *params,
                                  u64 *cookie)
@@ -5072,7 +5175,7 @@ static int rwnx_cfg80211_mgmt_tx(struct wiphy *wiphy, struct wireless_dev *wdev,
                                  bool dont_wait_for_ack,
                             #endif
                                  u64 *cookie)
-#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0) */
+#endif /* AICWF_CFG80211_VERSION_CODE >= 7.3 / LINUX_VERSION_CODE >= 3.14 */
 {
     struct rwnx_hw *rwnx_hw = wiphy_priv(wiphy);
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 6, 0))
@@ -5159,7 +5262,8 @@ static int rwnx_cfg80211_mgmt_tx(struct wiphy *wiphy, struct wireless_dev *wdev,
             return -EINVAL;
         }
     } else {
-        u64 cookie;
+        /* The internal RoC's own cookie; deliberately not the mgmt_tx one. */
+        u64 roc_cookie;
         int error;
 
 		AICWFDBG(LOGINFO, "mgmt rx remain on chan\n");
@@ -5167,13 +5271,13 @@ static int rwnx_cfg80211_mgmt_tx(struct wiphy *wiphy, struct wireless_dev *wdev,
         /* Start a ROC procedure for 30ms */
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0))
         error = rwnx_cfg80211_remain_on_channel_(wiphy, wdev, channel,
-                                                30, &cookie, true);
+                                                30, &roc_cookie, true);
 #elif (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0)) && (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 6, 0))
         error = rwnx_cfg80211_remain_on_channel_(wiphy, wdev, channel, NL80211_CHAN_NO_HT,
-                                                30, &cookie, true);
+                                                30, &roc_cookie, true);
 #else
         error = rwnx_cfg80211_remain_on_channel_(wiphy, dev, channel, NL80211_CHAN_NO_HT,
-                                                30, &cookie, true);
+                                                30, &roc_cookie, true);
 #endif
 
         if (error) {
@@ -5190,11 +5294,16 @@ static int rwnx_cfg80211_mgmt_tx(struct wiphy *wiphy, struct wireless_dev *wdev,
     #endif
 
 send_frame:
-    #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0))
-    return rwnx_start_mgmt_xmit(rwnx_vif, rwnx_sta, params, offchan, cookie);
+    #if (AICWF_CFG80211_VERSION_CODE >= KERNEL_VERSION(7, 3, 0))
+    {
+        u64 local_cookie = cookie;
+        return rwnx_start_mgmt_xmit(rwnx_vif, rwnx_sta, params, offchan, &local_cookie, true);
+    }
+    #elif (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0))
+    return rwnx_start_mgmt_xmit(rwnx_vif, rwnx_sta, params, offchan, cookie, false);
     #else
-    return rwnx_start_mgmt_xmit(rwnx_vif, rwnx_sta, channel, offchan, wait, buf, len, no_cck, dont_wait_for_ack, cookie);
-    #endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0) */
+    return rwnx_start_mgmt_xmit(rwnx_vif, rwnx_sta, channel, offchan, wait, buf, len, no_cck, dont_wait_for_ack, cookie, false);
+    #endif /* AICWF_CFG80211_VERSION_CODE >= 7.3 / LINUX_VERSION_CODE >= 3.14 */
 }
 
 /**
@@ -6552,7 +6661,11 @@ static struct cfg80211_ops rwnx_cfg80211_ops = {
     .change_beacon = rwnx_cfg80211_change_beacon,
     .stop_ap = rwnx_cfg80211_stop_ap,
     .set_monitor_channel = rwnx_cfg80211_set_monitor_channel,
+#if AICWF_CFG80211_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+    .probe_peer = rwnx_cfg80211_probe_client,
+#else
     .probe_client = rwnx_cfg80211_probe_client,
+#endif
 //    .mgmt_frame_register = rwnx_cfg80211_mgmt_frame_register,
     .set_wiphy_params = rwnx_cfg80211_set_wiphy_params,
     .set_txq_params = rwnx_cfg80211_set_txq_params,
