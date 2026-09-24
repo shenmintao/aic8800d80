@@ -1,10 +1,14 @@
 %global commit 3e9a02549bc98d350bff1e0fb0501f841f9d8e55
 %global shortcommit %(echo %{commit} | cut -c1-7)
+%global snapdate 20260924
 %global debug_package %{nil}
 %{!?kver:%global kver %(uname -r)}
 
 Name:           aic8800d80
-Version:        %{shortcommit}
+# Versions before 2026-09-24 were bare commit hashes, which rpm does not
+# order by commit history. Epoch 1 sorts every snapshot version after them.
+Epoch:          1
+Version:        1.0.0^%{snapdate}git%{shortcommit}
 Release:        1%{?dist}
 Summary:        AIC8800 USB Wi-Fi, Bluetooth firmware, and ZLP quirk driver
 
@@ -78,6 +82,11 @@ cp -a fw/aic8800* %{buildroot}/usr/lib/firmware/
 /usr/lib/firmware/aic8800*
 
 %changelog
+* Thu Sep 24 2026 Shen Mintao <shenmintao@gmail.com> - 1:1.0.0^20260924git3e9a025-1
+- Version snapshots as 1.0.0^<date>git<commit> with Epoch 1. The previous
+  commit-hash versions do not sort in commit order, so rpm could treat a
+  newer snapshot as an older package.
+
 * Thu Sep 24 2026 Shen Mintao <shenmintao@gmail.com> - 3e9a025-1
 - Build the current main branch, which adds the Linux 7.1+ TDLS discovery
   response length fix, the SUN60IW2P1 USB transfer settings, OpenWrt
