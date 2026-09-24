@@ -1518,18 +1518,30 @@ static int rwnx_close(struct net_device *dev)
 
     RWNX_DBG(RWNX_FN_ENTRY_STR);
 
-	test_counter = waiting_counter;
-	while(atomic_read(&rwnx_vif->drv_conn_state) == (int)RWNX_DRV_STATUS_DISCONNECTING||
-		atomic_read(&rwnx_vif->drv_conn_state) == (int)RWNX_DRV_STATUS_CONNECTING){
-		AICWFDBG(LOGDEBUG, "%s wifi is connecting or disconnecting, waiting 200ms for state to stable\r\n", __func__);
-		msleep(200);
-		test_counter--;
-		if(test_counter == 0){
-			AICWFDBG(LOGERROR, "%s connecting or disconnecting, not finish\r\n", __func__);
-			WARN_ON(1);
-			break;
-		}
-	}
+    /*
+     * A CONNECTING/DISCONNECTING state is only left when the firmware answers
+     * the pending request. If the bus is already down the answer can never
+     * arrive: rwnx_send_msg() silently drops the message and returns 0
+     * (rwnx_msg_tx.c), so the wait below would always run its full timeout and
+     * fire the spurious WARN_ON() during USB teardown. Skip the wait when the
+     * bus is down, using the same condition the vif_started path uses below.
+     */
+    if (bus_if &&
+        (usbdev == NULL || (usbdev->bus_if->state != BUS_DOWN_ST &&
+                            usbdev->state != USB_DOWN_ST))) {
+        test_counter = waiting_counter;
+        while(atomic_read(&rwnx_vif->drv_conn_state) == (int)RWNX_DRV_STATUS_DISCONNECTING||
+            atomic_read(&rwnx_vif->drv_conn_state) == (int)RWNX_DRV_STATUS_CONNECTING){
+            AICWFDBG(LOGDEBUG, "%s wifi is connecting or disconnecting, waiting 200ms for state to stable\r\n", __func__);
+            msleep(200);
+            test_counter--;
+            if(test_counter == 0){
+                AICWFDBG(LOGERROR, "%s connecting or disconnecting, not finish\r\n", __func__);
+                WARN_ON(1);
+                break;
+            }
+        }
+    }
 
 #if defined(AICWF_USB_SUPPORT) || defined(AICWF_SDIO_SUPPORT)
     if (rwnx_hw->scanning){
@@ -1587,13 +1599,18 @@ static int rwnx_close(struct net_device *dev)
 			test_counter = waiting_counter;
 			if(atomic_read(&rwnx_vif->drv_conn_state) == (int)RWNX_DRV_STATUS_CONNECTED){
 				rwnx_set_conn_state(rwnx_vif, &rwnx_vif->drv_conn_state, RWNX_DRV_STATUS_DISCONNECTING);
-				rwnx_send_sm_disconnect_req(rwnx_hw, rwnx_vif, 3);
-				while (atomic_read(&rwnx_vif->drv_conn_state) == (int)RWNX_DRV_STATUS_DISCONNECTING) {
-					AICWFDBG(LOGDEBUG, "%s wifi is disconnecting, waiting 100ms for state to stable\r\n", __func__);
-					msleep(100);
-					test_counter--;
-					if (test_counter ==0)
-						break;
+				/* Same reasoning as above: with the bus down the disconnect
+				 * confirmation cannot arrive, so do not wait for it. */
+				if (usbdev->bus_if->state != BUS_DOWN_ST &&
+				    usbdev->state != USB_DOWN_ST) {
+					rwnx_send_sm_disconnect_req(rwnx_hw, rwnx_vif, 3);
+					while (atomic_read(&rwnx_vif->drv_conn_state) == (int)RWNX_DRV_STATUS_DISCONNECTING) {
+						AICWFDBG(LOGDEBUG, "%s wifi is disconnecting, waiting 100ms for state to stable\r\n", __func__);
+						msleep(100);
+						test_counter--;
+						if (test_counter ==0)
+							break;
+					}
 				}
 			}
 		}
