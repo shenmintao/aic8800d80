@@ -1,11 +1,11 @@
-%global commit 51b7b6e72989afe4d21f52e55b70f5a4d6b21e5b
+%global commit c8327eab5be246d4b517afdba034775f00afa988
 %global shortcommit %(echo %{commit} | cut -c1-7)
 %global debug_package %{nil}
 %{!?kver:%global kver %(uname -r)}
 
 Name:           aic8800d80
 Version:        %{shortcommit}
-Release:        2%{?dist}
+Release:        1%{?dist}
 Summary:        AIC8800 USB Wi-Fi, Bluetooth firmware, and ZLP quirk driver
 
 License:        GPL-2.0-only
@@ -78,6 +78,12 @@ cp -a fw/aic8800* %{buildroot}/usr/lib/firmware/
 /usr/lib/firmware/aic8800*
 
 %changelog
+* Thu Sep 24 2026 Shen Mintao <shenmintao@gmail.com> - c8327ea-1
+- Build the current legacy-mcu1 branch, which carries the Linux 7.2
+  cfg80211 and strncpy() fixes needed to compile on Bazzite 44.
+- Include the monitor packet injection path and the 6.12 stable
+  set_monitor_channel() fix synchronized from main.
+
 * Wed Jul 29 2026 Shen Mintao <shenmintao@gmail.com> - 51b7b6e-2
 - Disable automatic debug package generation for Bazzite builds.
 - Require usb_modeswitch by package name for rpm-ostree dependency resolution.
