@@ -3759,7 +3759,7 @@ void system_config_8800dc(struct rwnx_hw *rwnx_hw){
     }
     chip_sub_id = (u8)(rd_mem_addr_cfm.memdata);
     //printk("%x=%x\n", rd_mem_addr_cfm.memaddr, rd_mem_addr_cfm.memdata);
-	AICWFDBG(LOGINFO, "chip_id=%x, chip_sub_id=%x\n", chip_id, chip_sub_id);
+	AICWFDBG(LOGINFO, "chip_id=%x, chip_mcu_id=%x, chip_sub_id=%x\n", chip_id, chip_mcu_id, chip_sub_id);
 
 
 	//Crystal provided by CPU (start)
