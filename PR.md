@@ -65,4 +65,4 @@ read and the Windows capture;
 chip self-boots `zh Aug 08 2022 … gcf79227`; firmware dir unchanged from
 branch contents.
 
-Refs: #101 · companion issue (README criterion & cross-branch notes): _link pending_
+Refs: #101 · companion issue: [#103](https://github.com/shenmintao/aic8800d80/issues/103) (README branch-criterion problem & cross-branch notes)
