@@ -2367,6 +2367,10 @@ static int aicwf_usb_chipmatch(struct aic_usb_dev *usb_dev, u16_l vid, u16_l pid
         }
         AICWFDBG(LOGINFO, "%s USE AIC8800D89X2\r\n", __func__);
         return 0;
+    } else if (pid == USB_PRODUCT_ID_TP_AIC8800DC) {
+        usb_dev->chipid = PRODUCT_ID_AIC8800DC;
+        AICWFDBG(LOGINFO, "%s USE AIC8800DC (TP-Link 0x0147)\r\n", __func__);
+        return 0;
     } else if ((pid == USB_PRODUCT_ID_AIC8800D80N) ||
                (pid == USB_PRODUCT_ID_AIC8800D80LN) ||
                (pid == USB_PRODUCT_ID_AIC8800D80WN) ||
@@ -2680,6 +2684,7 @@ static struct usb_device_id aicwf_usb_id_table[] = {
     {USB_DEVICE(USB_VENDOR_ID_AIC_V2, USB_PRODUCT_ID_AIC8800M80_CUS8)},
     {USB_DEVICE(USB_VENDOR_ID_AIC_V2, USB_PRODUCT_ID_AIC8800D80_UGREEN)},
     {USB_DEVICE(USB_VENDOR_ID_TP, USB_PRODUCT_ID_MERCURY)},
+    {USB_DEVICE(USB_VENDOR_ID_TP, USB_PRODUCT_ID_TP_AIC8800DC)},
     {USB_DEVICE_AND_INTERFACE_INFO(USB_VENDOR_ID_TP, USB_PRODUCT_ID_TP, 0xff, 0xff, 0xff)},
 #endif
     {}
