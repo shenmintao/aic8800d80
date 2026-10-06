@@ -1946,9 +1946,15 @@ void aicwf_usb_cancel_all_urbs(struct aic_usb_dev *usb_dev){
 static void aicwf_usb_bus_stop(struct device *dev)
 {
     struct aicwf_bus *bus_if = dev_get_drvdata(dev);
-    struct aic_usb_dev *usb_dev = bus_if->bus_priv.usb;
+    struct aic_usb_dev *usb_dev;
 
 	AICWFDBG(LOGINFO, "%s\r\n", __func__);
+    /* 正常时序下 aicwf_bus_init() 已 set_drvdata、且 aicwf_bus_deinit()
+     * 调到本函数时 drvdata 尚未清空（清空在 deinit 末尾），故此处应非空；
+     * 判空为纵深防御：覆盖 probe 早期失败（set_drvdata 之前）等异常来源。 */
+    if (bus_if == NULL)
+        return;
+    usb_dev = bus_if->bus_priv.usb;
     if (usb_dev == NULL)
         return;
 
