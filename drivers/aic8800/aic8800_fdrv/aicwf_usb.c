@@ -1409,6 +1409,11 @@ static int aicwf_usb_bus_txmsg(struct device *dev, u8 *buf, u32 len)
 {
     int ret = 0;
     struct aicwf_bus *bus_if = dev_get_drvdata(dev);
+    /* Defense in depth (review #103): with the parent commit's ordering the
+     * cmd thread is quiesced before drvdata is cleared, so this should be
+     * unreachable — guard anyway against a future/premature caller. */
+    if (bus_if == NULL)
+        return -ENODEV;
     struct aic_usb_dev *usb_dev = bus_if->bus_priv.usb;
 
     if (usb_dev->state != USB_UP_ST)
@@ -1667,6 +1672,10 @@ static int aicwf_usb_bus_txdata(struct device *dev, struct sk_buff *pkt)
     uint prio;
     int ret = -EBADE;
     struct aicwf_bus *bus_if = dev_get_drvdata(dev);
+    /* Defense in depth (review #103): usb_bustx_thread is joined before
+     * drvdata is cleared; guard any other/premature caller. */
+    if (bus_if == NULL)
+        return -ENODEV;
     struct aic_usb_dev *usbdev = bus_if->bus_priv.usb;
 
     //printk("%s\n", __func__);
@@ -1703,6 +1712,10 @@ static int aicwf_usb_bus_txdata(struct device *dev, struct sk_buff *skb)
     int ret = 0;
     unsigned long flags;
     struct aicwf_bus *bus_if = dev_get_drvdata(dev);
+    /* Defense in depth (review #103): usb_bustx_thread is joined before
+     * drvdata is cleared; guard any other/premature caller. */
+    if (bus_if == NULL)
+        return -ENODEV;
     struct aic_usb_dev *usb_dev = bus_if->bus_priv.usb;
     struct rwnx_txhdr *txhdr = (struct rwnx_txhdr *)skb->data;
     struct rwnx_hw *rwnx_hw = usb_dev->rwnx_hw;
