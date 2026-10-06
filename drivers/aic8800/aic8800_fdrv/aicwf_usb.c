@@ -1946,9 +1946,14 @@ void aicwf_usb_cancel_all_urbs(struct aic_usb_dev *usb_dev){
 static void aicwf_usb_bus_stop(struct device *dev)
 {
     struct aicwf_bus *bus_if = dev_get_drvdata(dev);
-    struct aic_usb_dev *usb_dev = bus_if->bus_priv.usb;
+    struct aic_usb_dev *usb_dev;
 
 	AICWFDBG(LOGINFO, "%s\r\n", __func__);
+    /* aicwf_bus_deinit() 会摘掉 drvdata 后再调到本函数（二次 deinit 同理），
+     * 这里必须判 NULL，否则就是 probe 失败回退路径上的 NULL 解引用 oops。 */
+    if (bus_if == NULL)
+        return;
+    usb_dev = bus_if->bus_priv.usb;
     if (usb_dev == NULL)
         return;
 

@@ -210,7 +210,27 @@ void aicwf_bus_deinit(struct device *dev)
 	AICWFDBG(LOGINFO, "%s Enter\r\n", __func__);
 
     bus_if = dev_get_drvdata(dev);
+    /* 立刻摘掉 drvdata，让重复调用必然命中 NULL。
+     * 本函数在探测失败路径上会被调用**两次**：
+     *   aicwf_bus_init() 的 `fail:`（本文件 :212）先调一次，
+     *   随后 aicwf_usb_probe() 的 `out_free_bus:`（aicwf_usb.c:2534）再调一次，
+     *   然后才 kfree(bus_if)；而 dev_set_drvdata(dev, bus_if) 在 :2484 置入后
+     *   从未被清空 —— 第二次调用因此对"已完整拆过一遍"的对象重复执行
+     *   bus_stop / cancel_all_urbs / rwnx_platform_deinit / rx_deinit /
+     *   cmd_mgr_deinit。
+     * 在"扫描超时→掉线→重探"的反复重枚举循环里，这条路径会被反复命中。
+     * out_free_bus 用的是自己的局部 bus_if 做 kfree，不依赖 drvdata。 */
+    if (!bus_if) {
+        AICWFDBG(LOGINFO, "%s: already deinitialized, skip\n", __func__);
+        return;
+    }
     aicwf_bus_stop(bus_if);
+    /* 摘 drvdata 必须排在 aicwf_bus_stop() 之后：
+     * ops->stop(bus->dev) 进入 aicwf_usb_bus_stop() 后会自己再
+     * dev_get_drvdata() 一次；若在此前清空，它拿到 NULL 直接解引用
+     * bus_if->bus_priv.usb → oops（实测 RIP: aicwf_usb_bus_stop+0x11，
+     * 出现在 probe 固件加载失败的回退路径）。 */
+    dev_set_drvdata(dev, NULL);
 
 #ifdef AICWF_USB_SUPPORT
     usb = bus_if->bus_priv.usb;
