@@ -24,6 +24,7 @@
 #define USB_PRODUCT_ID_TP               0x014e
 #define USB_PRODUCT_ID_MERCURY          0x014b
 #define USB_PRODUCT_ID_FAST             0x014f
+#define USB_PRODUCT_ID_TP_AIC8800DC     0x0147
 
 #define USB_PRODUCT_ID_TENDA_U11        0x001f
 #define USB_PRODUCT_ID_TENDA_U11_PRO    0x0020
