@@ -19,6 +19,15 @@ This driver supports AIC8800-family chipsets used by devices such as the Tenda U
 
 Added support for devices with Vendor ID 368B (tested).
 
+> [!NOTE]
+> **Tested `2357:0147` hardware (this branch):** TP-Link AIC8800DC USB WiFi,
+> `chip_id=7`, `chip_sub_id=1`, `chip_mcu_id=1` (MCU revision of *this unit*,
+> readback `0x40500000 = 0x09078818`; firmware `zh Aug 08 2022 … gcf79227`).
+> The USB-ID entry itself is MCU-revision-agnostic (routing to the DC path;
+> mcu gating happens at runtime), but **other units sold under the same
+> VID/PID may be a different MCU revision** — check the driver log against
+> the branch-selection note above.
+
 Tested on Linux kernel 6.16 with Ubuntu 25.04 and 6.1.0.27 with Debian 12.
 
 The same driver supports Wi-Fi-only adapters and Wi-Fi/Bluetooth combo
