@@ -2427,8 +2427,8 @@ check_len_update:
 
 #ifndef CONFIG_SUPPORT_4ADDR
 		if (hw_rxhdr->flags_is_4addr) {
-					dev_err(rwnx_hw->dev, "4addr Frame received (%d), skb->len:%u\n", hw_rxhdr->flags_vif_idx, skb->len);
-					print_hex_dump(KERN_ERR,"4addr ",DUMP_PREFIX_NONE, 16, 1, skb->data, skb->len, false);
+					dev_dbg(rwnx_hw->dev, "4addr Frame received (%d), skb->len:%u\n", hw_rxhdr->flags_vif_idx, skb->len);
+					print_hex_dump_debug("4addr ", DUMP_PREFIX_NONE, 16, 1, skb->data, skb->len, false);
 					dev_kfree_skb(skb);
 					goto end;
 		}
