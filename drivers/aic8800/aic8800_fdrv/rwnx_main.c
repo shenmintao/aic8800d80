@@ -2947,8 +2947,10 @@ static int rwnx_cfg80211_scan(struct wiphy *wiphy,
 	}
 
     rwnx_hw->scan_request = request;
-    if ((error = rwnx_send_scanu_req(rwnx_hw, rwnx_vif, request)))
+    if ((error = rwnx_send_scanu_req(rwnx_hw, rwnx_vif, request))) {
+        rwnx_hw->scan_request = NULL;
         return error;
+    }
 
     return 0;
 }
