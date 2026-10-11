@@ -148,6 +148,7 @@ struct aic_usb_dev {
     struct rwnx_hw *rwnx_hw;
     struct aicwf_bus *bus_if;
     struct usb_device *udev;
+    struct usb_interface *intf;
     struct device *dev;
     struct aicwf_rx_priv* rx_priv;
     enum aicwf_usb_state state;

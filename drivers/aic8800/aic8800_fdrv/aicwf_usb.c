@@ -2444,6 +2444,7 @@ static int aicwf_usb_probe(struct usb_interface *intf, const struct usb_device_i
 
 
     usb_dev->udev = usb;
+    usb_dev->intf = intf;
     usb_dev->dev = &usb->dev;
     usb_set_intfdata(intf, usb_dev);
 
