@@ -20,6 +20,13 @@ Added support for devices with Vendor ID 368B (tested).
 
 Tested on Linux kernel 6.16 with Ubuntu 25.04 and 6.1.0.27 with Debian 12.
 
+In [issue #110](https://github.com/shenmintao/aic8800d80/issues/110), a user
+reports Wi-Fi and Bluetooth audio working on one generic AX902 adapter
+(`chip_id=7, chip_mcu_id=1`) with Debian 13 and kernel
+`6.12.111+deb13-amd64`, including after reboot and USB reconnection. That
+configuration uses the matched `legacy-mcu1` driver and firmware with the
+kernel's standard `btusb`; it is not a guarantee for other hardware revisions.
+
 > [!NOTE]
 > **Maintained branches:** This repository now maintains two hardware branches:
 > `main` for `chip_mcu_id=0` or an unknown MCU revision, and `legacy-mcu1` for
