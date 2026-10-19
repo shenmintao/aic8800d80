@@ -9,7 +9,7 @@
 # FIX: Corrected DKMS module configuration for aic8800_fdrv
 #############################################################################
 
-set -e  # Exit on error
+set -eE  # Exit on error and run the ERR trap inside functions
 
 # Color definitions
 readonly RED='\033[0;31m'
@@ -152,7 +152,8 @@ check_secure_boot() {
         echo "  2. Sign the module manually (advanced)"
         echo "  3. Continue installation anyway (module may fail to load)"
         echo ""
-        read -p "Continue installation? (y/N): " choice
+        local choice
+        read -r -p "Continue installation? (y/N): " choice || choice="n"
         if [[ ! "$choice" =~ ^[Yy]$ ]]; then
             print_info "Installation cancelled by user."
             exit 0
@@ -268,15 +269,15 @@ install_dependencies() {
             ;;
             
         pacman)
-            print_info "Syncing package database..."
-            run_logged "Package database sync" pacman -Sy --noconfirm
-
             local -a packages=(dkms base-devel mokutil util-linux usb_modeswitch)
             if [ "$install_kernel_headers" = true ]; then
                 packages+=(linux-headers)
             fi
             print_info "Installing: ${packages[*]}..."
-            run_logged "Dependency installation" pacman -S --needed --noconfirm "${packages[@]}"
+            if ! run_logged "Dependency installation" pacman -S --needed --noconfirm "${packages[@]}"; then
+                print_error "Check the pacman errors above. If the package database is stale, run 'sudo pacman -Syu', reboot if the kernel was updated, then rerun this installer."
+                return 1
+            fi
             ;;
             
         zypper)
@@ -390,6 +391,22 @@ install_firmware() {
         exit 1
     fi
 
+    # Validate the source before changing any installed firmware or config.
+    local -a fw_dirs=()
+    local fw_dir
+    for fw_dir in "$fw_base"/aic8800*; do
+        [ -d "$fw_dir" ] || continue
+        if [ -z "$(find "$fw_dir" -type f -name '*.bin' -print -quit)" ]; then
+            print_error "No firmware binaries found in $fw_dir; existing firmware has not been changed."
+            exit 1
+        fi
+        fw_dirs+=("$fw_dir")
+    done
+    if [ "${#fw_dirs[@]}" -eq 0 ]; then
+        print_error "No firmware directories found in $fw_base; existing firmware has not been changed."
+        exit 1
+    fi
+
     cleanup_legacy_bluetooth_config
 
     # Remove old firmware versions
@@ -400,7 +417,7 @@ install_firmware() {
 
     # Copy all firmware variants
     print_info "Installing firmware for all chip variants..."
-    for fw_dir in "$fw_base"/aic8800*; do
+    for fw_dir in "${fw_dirs[@]}"; do
         if [ -d "$fw_dir" ]; then
             local fw_name=$(basename "$fw_dir")
             local fw_dest="/lib/firmware/$fw_name"
@@ -713,7 +730,7 @@ verify_installation() {
     local fw_count=0
     for fw_dir in /lib/firmware/aic8800*; do
         if [ -d "$fw_dir" ]; then
-            ((fw_count++))
+            fw_count=$((fw_count + 1))
         fi
     done
     if [ $fw_count -gt 0 ]; then
