@@ -29,6 +29,12 @@ git clone https://github.com/shenmintao/aic8800d80.git && cd aic8800d80 && chmod
 sudo ./install.sh
 ```
 
+On Arch Linux and derivatives, the installer uses the existing pacman package
+database. It does not refresh that database or upgrade the system. If pacman
+cannot download dependencies because the database is stale, run
+`sudo pacman -Syu` yourself, reboot if the kernel was updated, and rerun the
+installer with headers matching the running kernel.
+
 > For more information, please refer to the [README.md](README.md) file.
 
 <br>
