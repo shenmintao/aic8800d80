@@ -210,6 +210,15 @@ void aicwf_bus_deinit(struct device *dev)
 	AICWFDBG(LOGINFO, "%s Enter\r\n", __func__);
 
     bus_if = dev_get_drvdata(dev);
+    /* 入口判空：本函数在探测失败路径上会被调用**两次**
+     *   aicwf_bus_init() 的 `fail:` 先调一次，随后 aicwf_usb_probe() 的
+     *   `out_free_bus:` 再调一次（用局部 bus_if 做 kfree，不依赖 drvdata）。
+     * 第二次进入时 drvdata 已在**上一次调用的末尾**被清空 → 必然命中本判空。
+     * 若不清空，第二次会对已完整拆解的对象重复执行整套 teardown。 */
+    if (!bus_if) {
+        AICWFDBG(LOGINFO, "%s: already deinitialized, skip\n", __func__);
+        return;
+    }
     aicwf_bus_stop(bus_if);
 
 #ifdef AICWF_USB_SUPPORT
@@ -259,6 +268,20 @@ void aicwf_bus_deinit(struct device *dev)
 #ifdef CONFIG_TX_TASKLET//AIDEN tasklet
 	tasklet_kill(&usb->xmit_tasklet);
 #endif
+
+    /* 清空 drvdata：全部拆解完成之后、对象由调用方释放之前。
+     * （评审 shenmintao/aic8800d80#103 指出的顺序问题：此前清空点位于
+     * bus_stop 之后、URB/platform/rx/cmd 拆解与 TX 线程 join 之前。）
+     *   1) 顺序双 deinit：第二次调用靠上方入口判空在本行之后必然 skip；
+     *   2) 过早清空会伤害仍在运行的读者——TX 链
+     *      usb_bustx_thread → aicwf_bus_txdata(usbdev->bus_if) →
+     *      ops->txdata = aicwf_usb_bus_txdata()（usb.c 在该处重读
+     *      dev_get_drvdata）仅靠 state 检查做 check-then-act、无锁，
+     *      且该线程直到上方 kthread_stop(bustx_thread) 才被 join——
+     *      必须先 join 再清；
+     *   3) cmd/rx/platform 拆解与 rwnx_close() 等读者在本行之前全程
+     *      看到非空 drvdata，行为与未打补丁树一致。 */
+    dev_set_drvdata(dev, NULL);
 
 	AICWFDBG(LOGINFO, "%s Exit \n", __func__);
 }

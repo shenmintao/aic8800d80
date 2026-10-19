@@ -1666,9 +1666,16 @@ static int rwnx_close(struct net_device *dev)
         rwnx_ipc_tx_drain(rwnx_hw);
         #else
         #if defined(AICWF_USB_SUPPORT)
-        if (usbdev->bus_if->state != BUS_DOWN_ST && usbdev->state != USB_DOWN_ST)
+        /* 002 在 deinit 时摘 drvdata，disconnect→close 时序下本函数读到
+         * usbdev=NULL：实测断开在此裸解引用 usbdev->bus_if 崩溃
+         * （rwnx_close 偏移处 reloc=rwnx_send_reset，CR2=0x8）。
+         * 上游 usbdev 为悬挂非空、此条件求值为假而侥幸跳过——本判空
+         * 对两种情形给出同一语义：bus 已断 → 跳过 reset/重配。 */
+        if (usbdev != NULL && usbdev->bus_if != NULL &&
+                usbdev->bus_if->state != BUS_DOWN_ST && usbdev->state != USB_DOWN_ST)
         #else
-        if (sdiodev->bus_if->state != BUS_DOWN_ST)
+        if (sdiodev != NULL && sdiodev->bus_if != NULL &&
+                sdiodev->bus_if->state != BUS_DOWN_ST)
         #endif
         {
             rwnx_send_reset(rwnx_hw);
