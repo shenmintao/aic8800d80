@@ -49,8 +49,10 @@ it to the host kernel version or redefine `LINUX_VERSION_CODE`.
 ## Compatibility scope
 
 The override selects the wireless API changes since Linux 6.12, including
-monitor-channel callbacks, radio/link arguments, radar notifications and
-newer cfg80211 callbacks. Timer, USB, memory-management and module namespace
+radio/link arguments, radar notifications and newer cfg80211 callbacks.
+The monitor-channel callback is selected from the actual cfg80211 header type
+so distribution backports also work without changing the version override.
+Timer, USB, memory-management and module namespace
 checks continue to use the target kernel version. Older target kernels with
 newer backports may need additional wireless API adaptations.
 

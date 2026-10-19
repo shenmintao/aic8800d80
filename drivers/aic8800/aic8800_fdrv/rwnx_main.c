@@ -4451,13 +4451,8 @@ cfg80211_chandef_identical(const struct cfg80211_chan_def *chandef1,
 }
 #endif
 
-#ifdef AICWF_CFG80211_SET_MONITOR_CHANNEL_HAS_DEV
-static int rwnx_cfg80211_set_monitor_channel(struct wiphy *wiphy, struct net_device *dev,
-                                             struct cfg80211_chan_def *chandef)
-#else
 static int rwnx_cfg80211_set_monitor_channel(struct wiphy *wiphy,
                                              struct cfg80211_chan_def *chandef)
-#endif
 {
     struct rwnx_hw *rwnx_hw = wiphy_priv(wiphy);
     struct rwnx_vif *rwnx_vif;
@@ -4511,21 +4506,19 @@ static int rwnx_cfg80211_set_monitor_channel(struct wiphy *wiphy,
 }
 
 
-#ifdef AICWF_CFG80211_SET_MONITOR_CHANNEL_HAS_DEV
-int rwnx_cfg80211_set_monitor_channel_(struct wiphy *wiphy,
-                                             struct net_device *dev,
-                                             struct cfg80211_chan_def *chandef)
+/* Newer cfg80211 stacks pass dev; the firmware still has one monitor vif. */
+static int rwnx_cfg80211_set_monitor_channel_with_dev(struct wiphy *wiphy,
+                                                    struct net_device *dev,
+                                                    struct cfg80211_chan_def *chandef)
 {
-    return rwnx_cfg80211_set_monitor_channel(wiphy, dev, chandef);
+    return rwnx_cfg80211_set_monitor_channel(wiphy, chandef);
 }
-#else
+
 int rwnx_cfg80211_set_monitor_channel_(struct wiphy *wiphy,
                                              struct cfg80211_chan_def *chandef)
 {
     return rwnx_cfg80211_set_monitor_channel(wiphy, chandef);
 }
-#endif
-
 
 /**
  * @probe_peer: probe an associated client. Before 7.3 the driver returns a
@@ -5119,11 +5112,7 @@ static int rwnx_cfg80211_get_channel(struct wiphy *wiphy,
     if (rwnx_vif->vif_index == rwnx_hw->monitor_vif)
     {
         //retrieve channel from firmware
-#ifdef AICWF_CFG80211_SET_MONITOR_CHANNEL_HAS_DEV
-        rwnx_cfg80211_set_monitor_channel(wiphy, wdev->netdev, NULL);
-#else
         rwnx_cfg80211_set_monitor_channel(wiphy, NULL);
-#endif
     }
 
     //Check if channel context is valid
@@ -6677,7 +6666,14 @@ static struct cfg80211_ops rwnx_cfg80211_ops = {
     .start_ap = rwnx_cfg80211_start_ap,
     .change_beacon = rwnx_cfg80211_change_beacon,
     .stop_ap = rwnx_cfg80211_stop_ap,
-    .set_monitor_channel = rwnx_cfg80211_set_monitor_channel,
+    /* Select the actual header ABI, including distro/stable backports such
+     * as Ubuntu 6.8.0-147 and Linux 6.12.101. No function-pointer casts. */
+    .set_monitor_channel = __builtin_choose_expr(
+        __builtin_types_compatible_p(
+            typeof(((struct cfg80211_ops *)0)->set_monitor_channel),
+            typeof(&rwnx_cfg80211_set_monitor_channel_with_dev)),
+        rwnx_cfg80211_set_monitor_channel_with_dev,
+        rwnx_cfg80211_set_monitor_channel),
 #if AICWF_CFG80211_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
     .probe_peer = rwnx_cfg80211_probe_client,
 #else
