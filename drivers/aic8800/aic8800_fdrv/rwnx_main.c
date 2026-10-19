@@ -1666,11 +1666,9 @@ static int rwnx_close(struct net_device *dev)
         rwnx_ipc_tx_drain(rwnx_hw);
         #else
         #if defined(AICWF_USB_SUPPORT)
-        /* 002 在 deinit 时摘 drvdata，disconnect→close 时序下本函数读到
-         * usbdev=NULL：实测断开在此裸解引用 usbdev->bus_if 崩溃
-         * （rwnx_close 偏移处 reloc=rwnx_send_reset，CR2=0x8）。
-         * 上游 usbdev 为悬挂非空、此条件求值为假而侥幸跳过——本判空
-         * 对两种情形给出同一语义：bus 已断 → 跳过 reset/重配。 */
+        /* Skip firmware reset if no bus is attached or the device is down.
+         * Normal USB unregister calls close during platform teardown,
+         * before drvdata is cleared; also guard other close paths. */
         if (usbdev != NULL && usbdev->bus_if != NULL &&
                 usbdev->bus_if->state != BUS_DOWN_ST && usbdev->state != USB_DOWN_ST)
         #else
