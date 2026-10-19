@@ -17,7 +17,7 @@ module without replacing the distribution's `btusb.ko`.
 - Wi-Fi-only and Wi-Fi/Bluetooth combo adapter support from the same branch
 - Comprehensive error handling
 - Colored output and logging
-- Compatible with Ubuntu, Debian, Fedora, and derivatives (DKMS supported `dkms.conf`)
+- Compatible with Ubuntu, Debian, Fedora, Arch Linux, and derivatives (DKMS supported `dkms.conf`)
 
 ## Usage
 
