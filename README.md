@@ -87,8 +87,8 @@ must pass the wireless stack version separately.
 
 For Arch-based distributions (Arch, CachyOS, …), see
 [Arch Linux / CachyOS install notes](INSTALL_ARCH.md) — including the AUR/DKMS
-path, the `/etc/usb_modeswitch.d/1111:1111` file the AUR package does not ship,
-and the `depmod` step needed after DKMS installation.
+path, matching kernel headers, mode-switch configuration, and module-index
+troubleshooting.
 
 #### Method 1: [Quick Installation](INSTALL_SCRIPT.md) (Recommended)
 
