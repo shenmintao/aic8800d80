@@ -8924,6 +8924,17 @@ static int start_from_bootrom(struct rwnx_hw *rwnx_hw)
 
 int rwnx_ic_system_init(struct rwnx_hw *rwnx_hw){
 
+	/* A USB reset leaves the DC and DW powered, and the firmware loaded afresh can hang at its first start. After a
+	 * reset for a stall, reboot the chip first: it leaves the bus, and the next probe starts it clean. */
+#ifdef AICWF_USB_SUPPORT
+	if (aicwf_reboot_chip_on_probe(rwnx_hw->usbdev->udev) &&
+	    (rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800DC || rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800DW) &&
+	    !rwnx_send_reboot(rwnx_hw)) {
+		printk(KERN_CRIT "aic8800: rebooted the chip after the reset\n");
+		return -1;
+	}
+#endif
+
 	if(rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8801){
 		system_config(rwnx_hw);
 	}else if(rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800DC ||
