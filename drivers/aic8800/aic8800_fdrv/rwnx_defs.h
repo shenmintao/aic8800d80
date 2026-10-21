@@ -335,6 +335,12 @@ struct apm_probe_sta {
        u8 sta_mac_addr[6];
        u8 vif_idx;
        u64 probe_id;
+       /*
+        * 7.3+ only: the cookie cfg80211_ops::probe_peer() was called with,
+        * echoed back via cfg80211_probe_status() once the probe completes.
+        * See rwnx_cfg80211_probe_client().
+        */
+       u64 cookie;
        struct work_struct apmprobestaWork;
        struct workqueue_struct *apmprobesta_wq;
 };
@@ -675,6 +681,16 @@ struct rwnx_roc_elem {
     bool mgmt_roc;
     /* Indicate if we have switch on the RoC channel */
     bool on_chan;
+    /*
+     * The cookie reported to cfg80211 for this RoC, via
+     * cfg80211_ready_on_channel() / cfg80211_remain_on_channel_expired().
+     * On 7.3+, for a RoC started directly by cfg80211_ops::remain_on_channel(),
+     * this is the cookie cfg80211 pre-assigned; on every older kernel, and
+     * always for the purely-internal RoC started from inside mgmt_tx, it is
+     * rwnx_hw->roc_cookie_cnt at RoC-start time. See
+     * rwnx_cfg80211_remain_on_channel_().
+     */
+    u64 cookie;
 };
 
 /* Structure containing channel survey information received from MAC */

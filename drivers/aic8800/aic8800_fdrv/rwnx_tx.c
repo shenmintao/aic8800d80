@@ -1325,6 +1325,7 @@ int intf_tx(struct rwnx_hw *priv,struct msg_buf *msg)
 	sw_txhdr->rwnx_sta	= sta;
 	sw_txhdr->rwnx_vif	= rwnx_vif;
 	sw_txhdr->skb		= skb;
+	sw_txhdr->cookie	= (unsigned long)skb;
 	sw_txhdr->headroom	= headroom;
 	sw_txhdr->map_len	= skb->len - offsetof(struct rwnx_txhdr, hw_hdr);
 
@@ -1541,6 +1542,7 @@ netdev_tx_t rwnx_start_xmit(struct sk_buff *skb, struct net_device *dev)
     sw_txhdr->rwnx_sta  = sta;
     sw_txhdr->rwnx_vif  = rwnx_vif;
     sw_txhdr->skb       = skb;
+    sw_txhdr->cookie    = (unsigned long)skb;
     sw_txhdr->headroom  = headroom;
     sw_txhdr->map_len   = skb->len - offsetof(struct rwnx_txhdr, hw_hdr);
 
@@ -1630,7 +1632,12 @@ free:
  * @params: Mgmt frame parameters
  * @offchan: Indicate whether the frame must be send via the offchan TXQ.
  *           (is is redundant with params->offchan ?)
- * @cookie: updated with a unique value to identify the frame with upper layer
+ * @cookie: on return, the value cfg80211_mgmt_tx_status() will report for
+ *          this frame: invented here (the skb pointer) unless
+ *          @use_given_cookie is set, in which case *@cookie is kept.
+ * @use_given_cookie: *@cookie already holds the cookie cfg80211 assigned
+ *          (7.3+, the direct .mgmt_tx path only); honour it instead of
+ *          inventing one. Every other caller passes false.
  *
  */
 
@@ -1638,7 +1645,7 @@ free:
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0))
 int rwnx_start_mgmt_xmit(struct rwnx_vif *vif, struct rwnx_sta *sta,
                          struct cfg80211_mgmt_tx_params *params, bool offchan,
-                         u64 *cookie)
+                         u64 *cookie, bool use_given_cookie)
 #else
 int rwnx_start_mgmt_xmit(struct rwnx_vif *vif, struct rwnx_sta *sta,
                          struct ieee80211_channel *channel, bool offchan,
@@ -1649,7 +1656,7 @@ int rwnx_start_mgmt_xmit(struct rwnx_vif *vif, struct rwnx_sta *sta,
                     #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 3, 0))
                          bool dont_wait_for_ack,
                     #endif
-                         u64 *cookie)
+                         u64 *cookie, bool use_given_cookie)
 #endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0) */
 {
     struct rwnx_hw *rwnx_hw = vif->rwnx_hw;
@@ -1703,7 +1710,18 @@ int rwnx_start_mgmt_xmit(struct rwnx_vif *vif, struct rwnx_sta *sta,
         return -ENOMEM;
     }
 
-    *cookie = (unsigned long)skb;
+    /*
+     * use_given_cookie is true only for the direct cfg80211 .mgmt_tx call
+     * path on 7.3+, where *cookie already holds the value cfg80211
+     * pre-assigned and must be echoed back via cfg80211_mgmt_tx_status()
+     * later -- see rwnx_cfg80211_mgmt_tx(). TDLS's internal reuse of this
+     * function (use_given_cookie == false) never goes through that cfg80211
+     * op, so it still gets an invented, locally-unique cookie exactly as
+     * before this fix, and on every kernel older than 7.3 every caller
+     * passes use_given_cookie == false, also leaving this unchanged.
+     */
+    if (!use_given_cookie)
+        *cookie = (unsigned long)skb;
 
     /*
      * Move skb->data pointer in order to reserve room for rwnx_txhdr
@@ -1773,6 +1791,7 @@ int rwnx_start_mgmt_xmit(struct rwnx_vif *vif, struct rwnx_sta *sta,
     sw_txhdr->rwnx_sta = sta;
     sw_txhdr->rwnx_vif = vif;
     sw_txhdr->skb = skb;
+    sw_txhdr->cookie = *cookie;
     sw_txhdr->headroom = headroom;
     sw_txhdr->map_len = skb->len - offsetof(struct rwnx_txhdr, hw_hdr);
 #ifdef CONFIG_RWNX_AMSDUS_TX
@@ -1924,6 +1943,7 @@ void rwnx_probersp_work(struct work_struct *work)
 	sw_txhdr->rwnx_sta = sta;
 	sw_txhdr->rwnx_vif = rwnx_vif;
 	sw_txhdr->skb = skb;
+	sw_txhdr->cookie = (unsigned long)skb;
 	sw_txhdr->headroom = headroom;
 	sw_txhdr->map_len = skb->len - offsetof(struct rwnx_txhdr, hw_hdr);
 #ifdef CONFIG_RWNX_AMSDUS_TX
@@ -2278,6 +2298,15 @@ netdev_tx_t rwnx_start_monitor_if_xmit(struct sk_buff *skb, struct net_device *d
     sw_txhdr->rwnx_sta = sta;
     sw_txhdr->rwnx_vif = vif;
     sw_txhdr->skb = skb_mgmt;
+    /*
+     * Injected frames are flagged TXU_CNTRL_MGMT below and complete through
+     * the same path as management frames, which reports sw_txhdr->cookie to
+     * cfg80211_mgmt_tx_status(). There is no cfg80211-assigned cookie for an
+     * injected frame, so this is the skb-derived value that path reported
+     * before the field existed. Not gated on 7.3: this path runs on every
+     * kernel with CONFIG_RWNX_MON_XMIT.
+     */
+    sw_txhdr->cookie = (unsigned long)skb_mgmt;
     sw_txhdr->headroom = headroom;
     sw_txhdr->map_len = skb_mgmt->len - offsetof(struct rwnx_txhdr, hw_hdr);
     sw_txhdr->raw_frame = 1;
@@ -2389,7 +2418,7 @@ int rwnx_txdatacfm(void *pthis, void *host_id)
 #endif
         /* Confirm transmission to CFG80211 */
         cfg80211_mgmt_tx_status(&sw_txhdr->rwnx_vif->wdev,
-                                (unsigned long)skb,
+                                sw_txhdr->cookie,
                                 (skb->data + sw_txhdr->headroom),
                                 sw_txhdr->frame_len,
                                 rwnx_txst.acknowledged,
