@@ -39,19 +39,60 @@ static void cmd_dump(const struct rwnx_cmd *cmd)
            cmd->reqid, cmd->reqid != (lmac_msg_id_t)-1 ? RWNX_ID2STR(cmd->reqid) : "none");
 }
 
+#ifdef AICWF_USB_SUPPORT
+/* Kept per USB port (bus and path) rather than per device: each reset brings a new usb_device. */
+struct aicwf_port {
+    int busnum;
+    char devpath[16];
+    unsigned long last_reset;
+};
+static struct aicwf_port aicwf_ports[8];
+static DEFINE_SPINLOCK(aicwf_ports_lock);
+
+/* The port's entry, claimed if it has none; NULL when every entry is taken. */
+static struct aicwf_port *aicwf_port_of(struct usb_device *udev)
+{
+    struct aicwf_port *unused = NULL;
+    int i;
+
+    lockdep_assert_held(&aicwf_ports_lock);
+    for (i = 0; i < ARRAY_SIZE(aicwf_ports); i++) {
+        struct aicwf_port *port = &aicwf_ports[i];
+
+        if (port->busnum == udev->bus->busnum && !strcmp(port->devpath, udev->devpath))
+            return port;
+        if (!unused && !port->busnum)
+            unused = port;
+    }
+    if (unused) {
+        unused->busnum = udev->bus->busnum;
+        strscpy(unused->devpath, udev->devpath, sizeof(unused->devpath));
+    }
+    return unused;
+}
+#endif
+
 #define RESET_INTERVAL	(30 * HZ)
 
 /* The firmware stopped answering: reset the USB device, so the driver probes again and loads the firmware afresh.
- * At most once per RESET_INTERVAL; the commands refused meanwhile ask again. */
+ * At most once per RESET_INTERVAL on each port; the commands refused meanwhile ask again. */
 static void cmd_mgr_reset_device(struct rwnx_cmd_mgr *cmd_mgr)
 {
 #ifdef AICWF_USB_SUPPORT
     struct aic_usb_dev *usbdev = container_of(cmd_mgr, struct aic_usb_dev, cmd_mgr);
-    static unsigned long last;
+    struct aicwf_port *port;
 
-    if (!usbdev->intf || (last && time_before(jiffies, last + RESET_INTERVAL)))
+    if (!usbdev->intf)
         return;
-    last = jiffies;
+    spin_lock_bh(&aicwf_ports_lock);
+    port = aicwf_port_of(usbdev->udev);
+    if (port && port->last_reset && time_before(jiffies, port->last_reset + RESET_INTERVAL)) {
+        spin_unlock_bh(&aicwf_ports_lock);
+        return;
+    }
+    if (port)
+        port->last_reset = jiffies;
+    spin_unlock_bh(&aicwf_ports_lock);
     printk(KERN_CRIT "aic8800: firmware not answering: resetting the device to load it afresh\n");
     usb_queue_reset_device(usbdev->intf);
 #endif
