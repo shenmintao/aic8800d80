@@ -9281,7 +9281,8 @@ if((g_rwnx_plat->usbdev->chipid == PRODUCT_ID_AIC8801) ||
         WIPHY_FLAG_HAS_CHANNEL_SWITCH |
         #endif
         WIPHY_FLAG_4ADDR_STATION |
-        WIPHY_FLAG_4ADDR_AP;
+        WIPHY_FLAG_4ADDR_AP |
+        WIPHY_FLAG_NETNS_OK;
 
     #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0)
     wiphy->max_num_csa_counters = BCN_MAX_CSA_CPT;
