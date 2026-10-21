@@ -45,6 +45,7 @@ struct aicwf_port {
     int busnum;
     char devpath[16];
     unsigned long last_reset;
+    bool reboot_on_probe;
 };
 static struct aicwf_port aicwf_ports[8];
 static DEFINE_SPINLOCK(aicwf_ports_lock);
@@ -70,6 +71,22 @@ static struct aicwf_port *aicwf_port_of(struct usb_device *udev)
     }
     return unused;
 }
+
+/* True once after cmd_mgr_reset_device() reset the device at udev's port. */
+bool aicwf_reboot_chip_on_probe(struct usb_device *udev)
+{
+    struct aicwf_port *port;
+    bool reboot = false;
+
+    spin_lock_bh(&aicwf_ports_lock);
+    port = aicwf_port_of(udev);
+    if (port) {
+        reboot = port->reboot_on_probe;
+        port->reboot_on_probe = false;
+    }
+    spin_unlock_bh(&aicwf_ports_lock);
+    return reboot;
+}
 #endif
 
 #define RESET_INTERVAL	(30 * HZ)
@@ -90,8 +107,10 @@ static void cmd_mgr_reset_device(struct rwnx_cmd_mgr *cmd_mgr)
         spin_unlock_bh(&aicwf_ports_lock);
         return;
     }
-    if (port)
+    if (port) {
         port->last_reset = jiffies;
+        port->reboot_on_probe = true;
+    }
     spin_unlock_bh(&aicwf_ports_lock);
     printk(KERN_CRIT "aic8800: firmware not answering: resetting the device to load it afresh\n");
     usb_queue_reset_device(usbdev->intf);

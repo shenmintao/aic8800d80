@@ -118,4 +118,9 @@ int cmd_mgr_queue_force_defer(struct rwnx_cmd_mgr *cmd_mgr, struct rwnx_cmd *cmd
 void aicwf_set_cmd_tx(void *dev, struct lmac_msg *msg, uint len);
 void cmd_mgr_task_process(struct work_struct *work);
 
+#ifdef AICWF_USB_SUPPORT
+struct usb_device;
+bool aicwf_reboot_chip_on_probe(struct usb_device *udev);
+#endif
+
 #endif /* _RWNX_CMDS_H_ */
