@@ -3716,6 +3716,7 @@ int rwnx_send_sm_connect_req(struct rwnx_hw *rwnx_hw,
 {
     struct sm_connect_req *req;
     int i;
+    int err;
     u32_l flags = 0;
     bool gval = false;
     bool pval = false;
@@ -3838,7 +3839,10 @@ int rwnx_send_sm_connect_req(struct rwnx_hw *rwnx_hw,
 		req->auth_type);
 
     /* Send the SM_CONNECT_REQ message to LMAC FW */
-    return rwnx_send_msg(rwnx_hw, req, 1, SM_CONNECT_CFM, cfm);
+    err = rwnx_send_msg(rwnx_hw, req, 1, SM_CONNECT_CFM, cfm);
+    if (!err && (!cfm || !cfm->status))
+        aicwf_join_watch_start(rwnx_hw);
+    return err;
 
 invalid_param:
     rwnx_msg_free(rwnx_hw, req);
@@ -3852,6 +3856,8 @@ int rwnx_send_sm_disconnect_req(struct rwnx_hw *rwnx_hw,
     struct sm_disconnect_req *req;
 
     RWNX_DBG(RWNX_FN_ENTRY_STR);
+
+    aicwf_join_watch_stop();
 
     /* Build the SM_DISCONNECT_REQ message */
     req = rwnx_msg_zalloc(SM_DISCONNECT_REQ, TASK_SM, DRV_TASK_ID,
