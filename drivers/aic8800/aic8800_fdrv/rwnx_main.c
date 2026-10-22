@@ -4174,6 +4174,26 @@ static int rwnx_cfg80211_change_station(struct wiphy *wiphy,
     return 0;
 }
 
+/* An AP started while a STA on the same chip joins can stop the firmware (the DC: the join's scan, or the next
+ * SM_DISCONNECT_REQ, never answered). So an AP start waits, at most AP_START_WAIT_MAX_MS, while a STA is connecting
+ * and for AP_START_JOIN_SETTLE_MS after its connect indication. Only the STA's key installation, which needs the
+ * wiphy lock held here, waits with it: its EAPOL frames go through the data path. */
+#define AP_START_JOIN_SETTLE_MS	3000
+#define AP_START_WAIT_MAX_MS	8000
+
+static bool rwnx_sta_joining(struct rwnx_hw *rwnx_hw)
+{
+    struct rwnx_vif *vif;
+
+    list_for_each_entry(vif, &rwnx_hw->vifs, list) {
+        if (RWNX_VIF_TYPE(vif) == NL80211_IFTYPE_STATION &&
+            atomic_read(&vif->drv_conn_state) == (int)RWNX_DRV_STATUS_CONNECTING)
+            return true;
+    }
+    return rwnx_hw->last_connect_ind &&
+           time_before(jiffies, rwnx_hw->last_connect_ind + msecs_to_jiffies(AP_START_JOIN_SETTLE_MS));
+}
+
 /**
  * @start_ap: Start acting in AP mode defined by the parameters.
  */
@@ -4186,8 +4206,16 @@ static int rwnx_cfg80211_start_ap(struct wiphy *wiphy, struct net_device *dev,
     struct rwnx_ipc_elem_var elem;
     struct rwnx_sta *sta;
     int error = 0;
+    unsigned int waited = 0;
 
     RWNX_DBG(RWNX_FN_ENTRY_STR);
+
+    while (waited < AP_START_WAIT_MAX_MS && rwnx_sta_joining(rwnx_hw)) {
+        msleep(100);
+        waited += 100;
+    }
+    if (waited)
+        printk(KERN_INFO "aic8800: the AP start waited %u ms for a STA's join\n", waited);
 
     INIT_WORK(&rwnx_vif->sta_probe.apmprobestaWork, apm_probe_sta_work_process);
     rwnx_vif->sta_probe.apmprobesta_wq = create_singlethread_workqueue("apmprobe_wq");

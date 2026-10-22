@@ -792,6 +792,7 @@ struct rwnx_hw {
     #endif
     struct rwnx_survey_info survey[SCAN_CHANNEL_MAX];
     struct cfg80211_scan_request *scan_request;
+    unsigned long last_connect_ind;             /* jiffies of the last successful SM_CONNECT_IND; 0: none */
 #ifdef CONFIG_SCHED_SCAN
     struct cfg80211_sched_scan_request *sched_scan_req;
 #endif
