@@ -660,12 +660,20 @@ void cmd_mgr_task_process(struct work_struct *work)
 
             tout = msecs_to_jiffies(RWNX_80211_CMD_TIMEOUT_MS * cmd_mgr->queue_sz);
             if (!wait_for_completion_killable_timeout(&next->complete, tout)) {
+                bool empty;
+
                 printk(KERN_CRIT"%s cmd timed-out cmd_mgr->queue_sz:%d\n", __func__, cmd_mgr->queue_sz);
                 cmd_dump(next);
+                /* As in cmd_mgr_queue(): off the queue, the state read, then marked crashed. */
                 spin_lock_bh(&cmd_mgr->lock);
-                cmd_mgr->state = RWNX_CMD_MGR_STATE_CRASHED;
                 list_del(&next->list);
                 cmd_mgr->queue_sz--;
+                empty = cmd_mgr->queue_sz == 0;
+                spin_unlock_bh(&cmd_mgr->lock);
+                if (empty)
+                    cmd_mgr_log_fw_state(usbdev, next->id);
+                spin_lock_bh(&cmd_mgr->lock);
+                cmd_mgr->state = RWNX_CMD_MGR_STATE_CRASHED;
                 if (cmd_mgr->queue_sz == 0)
                     rwnx_wakeup_unlock(usbdev->rwnx_hw->ws_tx);
                 spin_unlock_bh(&cmd_mgr->lock);
