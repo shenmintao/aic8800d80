@@ -155,6 +155,108 @@ static void cmd_mgr_log_fw_state(struct aic_usb_dev *usbdev, lmac_msg_id_t timed
     printk(KERN_CRIT "aic8800: firmware state after %s timed out:%s\n", RWNX_ID2STR(timed_out), line);
 }
 
+/* The stall watch (DC, DW), at the two points where a stalled firmware shows first: a join whose scan stays on the
+ * access point's channel for JOIN_SCAN_STUCK_MS (a healthy scan leaves within its slot, ~100 ms), and a disconnect
+ * unconfirmed after DISCONNECT_WATCH_MS (a healthy one comes in milliseconds). 0 off, 1 log, 2 reset at once. */
+static int stall_watch = 1;
+module_param(stall_watch, int, 0644);
+MODULE_PARM_DESC(stall_watch, "Watch joins and disconnects for a stalled firmware (DC, DW): 0 off, 1 log, 2 reset at once");
+#define JOIN_WATCH_MS		500
+#define JOIN_SCAN_STUCK_MS	2000
+#define JOIN_WATCH_MAX_MS	30000
+#define DISCONNECT_WATCH_MS	1000
+#define SCAN_WAIT_BEACON_PROBE_RSP	3
+
+static void cmd_mgr_reset_device(struct rwnx_cmd_mgr *cmd_mgr);
+static void join_watch_tick(struct work_struct *work);
+static DECLARE_DELAYED_WORK(join_watch_work, join_watch_tick);
+static struct aic_usb_dev *join_watch_dev;
+static bool join_watch_on;
+static unsigned long join_watch_since, join_scan_since;
+
+static void join_watch_tick(struct work_struct *work)
+{
+    struct aic_usb_dev *usbdev = join_watch_dev;
+    unsigned int ms = jiffies_to_msecs(jiffies - join_watch_since), stuck;
+    u32 scan, sm;
+
+    if (!join_watch_on || !usbdev)
+        return;
+    if (ms > JOIN_WATCH_MAX_MS) {
+        join_watch_on = false;
+        return;
+    }
+    /* Only with nothing else queued: a read behind a waiting command would wait with it. */
+    if (usbdev->state != USB_UP_ST || usbdev->cmd_mgr.state == RWNX_CMD_MGR_STATE_CRASHED || usbdev->cmd_mgr.queue_sz)
+        goto again;
+    if (fw_read_word(usbdev, DC_SCAN_STATE, &scan) || fw_read_word(usbdev, DC_SM_STATE, &sm))
+        goto again;
+    if (!join_watch_on)
+        return;		/* the connect ended meanwhile */
+    if ((scan & 0xff) != SCAN_WAIT_BEACON_PROBE_RSP) {
+        join_scan_since = 0;
+        goto again;
+    }
+    if (!join_scan_since)
+        join_scan_since = jiffies;
+    stuck = jiffies_to_msecs(jiffies - join_scan_since);
+    if (stuck < JOIN_SCAN_STUCK_MS)
+        goto again;
+    join_watch_on = false;
+    printk(KERN_CRIT "aic8800: stall watch: a join's scan stuck on its channel for %u ms (SM %u)%s\n", stuck,
+           sm & 0xff, stall_watch >= 2 ? ": resetting the device now" : "");
+    if (stall_watch >= 2)
+        cmd_mgr_reset_device(&usbdev->cmd_mgr);
+    return;
+again:
+    if (join_watch_on)
+        schedule_delayed_work(&join_watch_work, msecs_to_jiffies(JOIN_WATCH_MS));
+}
+
+/* A connect the firmware has taken (SM_CONNECT_CFM, status 0): watched until its indication. */
+void aicwf_join_watch_start(struct rwnx_hw *rwnx_hw)
+{
+    struct aic_usb_dev *usbdev = rwnx_hw->usbdev;
+
+    if (!stall_watch || !usbdev || (usbdev->chipid != PRODUCT_ID_AIC8800DC && usbdev->chipid != PRODUCT_ID_AIC8800DW))
+        return;
+    join_watch_dev = usbdev;
+    join_watch_since = jiffies;
+    join_scan_since = 0;
+    join_watch_on = true;
+    mod_delayed_work(system_wq, &join_watch_work, msecs_to_jiffies(JOIN_WATCH_MS));
+}
+
+/* From the receive path too: never waits for the work, whose reads are answered on that path. */
+void aicwf_join_watch_stop(void)
+{
+    join_watch_on = false;
+    cancel_delayed_work(&join_watch_work);
+}
+
+/* A command's wait for its confirm; for SM_DISCONNECT_REQ with the stall watch on, a checkpoint at
+ * DISCONNECT_WATCH_MS. Nonzero: the confirm came (or the wait was interrupted, as before). */
+static long cmd_mgr_wait(struct rwnx_cmd *cmd, unsigned long tout)
+{
+    unsigned long first = msecs_to_jiffies(DISCONNECT_WATCH_MS), waited = jiffies;
+    long ret;
+
+    if (cmd->id != SM_DISCONNECT_REQ || !stall_watch || tout <= first)
+        return wait_for_completion_killable_timeout(&cmd->complete, tout);
+    ret = wait_for_completion_killable_timeout(&cmd->complete, first);
+    if (ret)
+        return ret;
+    printk(KERN_CRIT "aic8800: stall watch: no SM_DISCONNECT_CFM in %d ms%s\n", DISCONNECT_WATCH_MS,
+           stall_watch >= 2 ? ": resetting the device now" : "");
+    if (stall_watch >= 2)
+        return 0;
+    ret = wait_for_completion_killable_timeout(&cmd->complete, tout - first);
+    if (ret)
+        printk(KERN_CRIT "aic8800: stall watch: SM_DISCONNECT_CFM after %u ms: acting at %d ms would have reset a "
+               "working chip\n", jiffies_to_msecs(jiffies - waited), DISCONNECT_WATCH_MS);
+    return ret;
+}
+
 #define RESET_INTERVAL	(30 * HZ)
 
 /* The firmware stopped answering: reset the USB device, so the driver probes again and loads the firmware afresh.
@@ -408,7 +510,7 @@ static int cmd_mgr_queue(struct rwnx_cmd_mgr *cmd_mgr, struct rwnx_cmd *cmd)
         bool state_read = fw_state_reading && cmd->id == DBG_MEM_READ_REQ;
         bool empty;
         unsigned long tout = msecs_to_jiffies(state_read ? STATE_READ_MS : RWNX_80211_CMD_TIMEOUT_MS/*AIDEN workaround* cmd_mgr->queue_sz*/);
-        if (!wait_for_completion_killable_timeout(&cmd->complete, tout)) {
+        if (!cmd_mgr_wait(cmd, tout)) {
             if (state_read) {
                 /* A state read not answered: dropped; the reset after the reads does the rest. */
                 spin_lock_bh(&cmd_mgr->lock);
@@ -724,9 +826,12 @@ void rwnx_cmd_mgr_init(struct rwnx_cmd_mgr *cmd_mgr)
 
 void rwnx_cmd_mgr_deinit(struct rwnx_cmd_mgr *cmd_mgr)
 {
+    join_watch_on = false;	/* no new reads; the work is waited for once the queue is drained */
     if(cmd_mgr->print && cmd_mgr->drain){
         cmd_mgr->print(cmd_mgr);
         cmd_mgr->drain(cmd_mgr);
+        cancel_delayed_work_sync(&join_watch_work);
+        join_watch_dev = NULL;
         cmd_mgr->print(cmd_mgr);
         flush_workqueue(cmd_mgr->cmd_wq);
         destroy_workqueue(cmd_mgr->cmd_wq);
