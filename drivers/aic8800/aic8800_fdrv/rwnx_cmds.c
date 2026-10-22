@@ -89,6 +89,14 @@ bool aicwf_reboot_chip_on_probe(struct usb_device *udev)
 }
 #endif
 
+/* Read-only: lets user space tell the driver's own reset from a fault, and wait for the device to come back. */
+static unsigned int recoveries;
+module_param(recoveries, uint, 0444);
+MODULE_PARM_DESC(recoveries, "How many device resets have been asked for on a command timeout");
+static long recovered_at;
+module_param(recovered_at, long, 0444);
+MODULE_PARM_DESC(recovered_at, "When the last reset was asked for, in seconds since boot as in /proc/uptime (0: none)");
+
 #define RESET_INTERVAL	(30 * HZ)
 
 /* The firmware stopped answering: reset the USB device, so the driver probes again and loads the firmware afresh.
@@ -112,6 +120,8 @@ static void cmd_mgr_reset_device(struct rwnx_cmd_mgr *cmd_mgr)
         port->reboot_on_probe = true;
     }
     spin_unlock_bh(&aicwf_ports_lock);
+    recoveries++;
+    recovered_at = (long)ktime_get_boottime_seconds();
     printk(KERN_CRIT "aic8800: firmware not answering: resetting the device to load it afresh\n");
     usb_queue_reset_device(usbdev->intf);
 #endif
