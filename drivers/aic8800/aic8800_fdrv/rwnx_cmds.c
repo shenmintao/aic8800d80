@@ -20,6 +20,7 @@
 #include "rwnx_events.h"
 #include "aicwf_txrxif.h"
 #include "rwnx_wakelock.h"
+#include "rwnx_msg_tx.h"
 #ifdef AICWF_SDIO_SUPPORT
 #include "aicwf_sdio.h"
 #else
@@ -96,6 +97,63 @@ MODULE_PARM_DESC(recoveries, "How many device resets have been asked for on a co
 static long recovered_at;
 module_param(recovered_at, long, 0444);
 MODULE_PARM_DESC(recovered_at, "When the last reset was asked for, in seconds since boot as in /proc/uptime (0: none)");
+
+/* The firmware's state on the DC and DW, read by debug reads: the kernel tasks' states in RAM (the ROM's task table)
+ * and the MAC's state control. Read nothing else at a fault: a debug read of an unmapped address, or of a register
+ * with side effects, can hang the chip past this recovery. */
+#define DC_SM_STATE		0x00118648
+#define DC_SCANU_STATE		0x0011868c
+#define DC_SCAN_STATE		0x00116768
+#define DC_ME_STATE		0x001184c8
+#define DC_MM_STATE		0x00116404
+#define DC_MAC_STATE		0x40320038
+#define STATE_READ_MS		500
+
+static const struct { u32 addr; const char *name; } fw_state_regs[] = {
+    { DC_SM_STATE, "SM" }, { DC_SCANU_STATE, "SCANU" }, { DC_SCAN_STATE, "SCAN" }, { DC_ME_STATE, "ME" },
+    { DC_MM_STATE, "MM" }, { DC_MAC_STATE, "MAC" },
+};
+static bool fw_state_reading;	/* a read not answered here is dropped, never a second reset */
+
+static int fw_read_word(struct aic_usb_dev *usbdev, u32 addr, u32 *val)
+{
+    struct dbg_mem_read_cfm cfm;
+    int err;
+
+    memset(&cfm, 0, sizeof(cfm));
+    err = rwnx_send_dbg_mem_read_req(usbdev->rwnx_hw, addr, &cfm);
+    if (err)
+        return err;
+    /* With the bus down the send returns 0 and no answer: trust only an answer for this address. */
+    if (cfm.memaddr != addr)
+        return -EIO;
+    *val = cfm.memdata;
+    return 0;
+}
+
+/* At a command timeout, before the reset: the firmware's state in one line, stopping at the first read not answered
+ * (the firmware's task loop has then stopped). */
+static void cmd_mgr_log_fw_state(struct aic_usb_dev *usbdev, lmac_msg_id_t timed_out)
+{
+    char line[96];
+    int len = 0, i, err = 0;
+    u32 val;
+
+    if (usbdev->chipid != PRODUCT_ID_AIC8800DC && usbdev->chipid != PRODUCT_ID_AIC8800DW)
+        return;
+    fw_state_reading = true;
+    for (i = 0; i < ARRAY_SIZE(fw_state_regs); i++) {
+        err = fw_read_word(usbdev, fw_state_regs[i].addr, &val);
+        if (err)
+            break;
+        len += scnprintf(line + len, sizeof(line) - len, " %s %x", fw_state_regs[i].name,
+                         fw_state_regs[i].addr >> 28 ? val : val & 0xff);
+    }
+    fw_state_reading = false;
+    if (i < ARRAY_SIZE(fw_state_regs))
+        len += scnprintf(line + len, sizeof(line) - len, " %s not answered (%d)", fw_state_regs[i].name, err);
+    printk(KERN_CRIT "aic8800: firmware state after %s timed out:%s\n", RWNX_ID2STR(timed_out), line);
+}
 
 #define RESET_INTERVAL	(30 * HZ)
 
@@ -347,9 +405,31 @@ static int cmd_mgr_queue(struct rwnx_cmd_mgr *cmd_mgr, struct rwnx_cmd *cmd)
             /* TODO: kill the cmd at fw level */
         }
         #else
-        unsigned long tout = msecs_to_jiffies(RWNX_80211_CMD_TIMEOUT_MS/*AIDEN workaround* cmd_mgr->queue_sz*/);
+        bool state_read = fw_state_reading && cmd->id == DBG_MEM_READ_REQ;
+        bool empty;
+        unsigned long tout = msecs_to_jiffies(state_read ? STATE_READ_MS : RWNX_80211_CMD_TIMEOUT_MS/*AIDEN workaround* cmd_mgr->queue_sz*/);
         if (!wait_for_completion_killable_timeout(&cmd->complete, tout)) {
+            if (state_read) {
+                /* A state read not answered: dropped; the reset after the reads does the rest. */
+                spin_lock_bh(&cmd_mgr->lock);
+                list_del(&cmd->list);
+                cmd_mgr->queue_sz--;
+                if (!(cmd->flags & RWNX_CMD_FLAG_DONE)) {
+                    cmd->result = -ETIMEDOUT;
+                    cmd_complete(cmd_mgr, cmd);
+                }
+                spin_unlock_bh(&cmd_mgr->lock);
+                return -ETIMEDOUT;
+            }
             printk(KERN_CRIT"%s cmd timed-out cmd_mgr->queue_sz:%d\n", __func__,cmd_mgr->queue_sz);
+            /* Off the queue, and not yet marked crashed, so that the state reads go straight out. */
+            spin_lock_bh(&cmd_mgr->lock);
+            list_del(&cmd->list);
+            cmd_mgr->queue_sz--;
+            empty = cmd_mgr->queue_sz == 0;
+            spin_unlock_bh(&cmd_mgr->lock);
+            if (empty)
+                cmd_mgr_log_fw_state(usbdev, cmd->id);
         #ifdef AICWF_SDIO_SUPPORT
             ret = aicwf_sdio_writeb(sdiodev, SDIOWIFI_WAKEUP_REG, 2);
             if (ret < 0) {
@@ -360,8 +440,6 @@ static int cmd_mgr_queue(struct rwnx_cmd_mgr *cmd_mgr, struct rwnx_cmd *cmd)
             cmd_dump(cmd);
             spin_lock_bh(&cmd_mgr->lock);
             cmd_mgr->state = RWNX_CMD_MGR_STATE_CRASHED;
-            list_del(&cmd->list);
-            cmd_mgr->queue_sz--;
             if (cmd_mgr->queue_sz == 0)
                 rwnx_wakeup_unlock(usbdev->rwnx_hw->ws_tx);
             if (!(cmd->flags & RWNX_CMD_FLAG_DONE)) {
