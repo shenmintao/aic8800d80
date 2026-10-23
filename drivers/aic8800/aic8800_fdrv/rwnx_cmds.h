@@ -117,6 +117,8 @@ void rwnx_cmd_mgr_deinit(struct rwnx_cmd_mgr *cmd_mgr);
 struct rwnx_hw;
 void aicwf_join_watch_start(struct rwnx_hw *rwnx_hw);
 void aicwf_join_watch_stop(struct rwnx_hw *rwnx_hw);
+struct aic_usb_dev;
+void aicwf_join_watch_cancel(struct aic_usb_dev *usbdev);
 int cmd_mgr_queue_force_defer(struct rwnx_cmd_mgr *cmd_mgr, struct rwnx_cmd *cmd);
 void aicwf_set_cmd_tx(void *dev, struct lmac_msg *msg, uint len);
 void cmd_mgr_task_process(struct work_struct *work);

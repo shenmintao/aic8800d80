@@ -153,10 +153,9 @@ struct aic_usb_dev {
     struct aicwf_rx_priv* rx_priv;
     enum aicwf_usb_state state;
     struct rwnx_cmd_mgr cmd_mgr;
-    /* The stall watch (rwnx_cmds.c): this device's join watch, and whether its firmware state is being read. */
+    /* The stall watch (rwnx_cmds.c): this device's join watch. */
     struct delayed_work join_watch_work;
     bool join_watch_on;
-    bool fw_state_reading;
     unsigned long join_watch_since, join_scan_since;
 
 #ifdef CONFIG_USB_TX_AGGR
