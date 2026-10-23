@@ -176,16 +176,21 @@ int aicwf_plat_patch_table_load_8800d80n(struct rwnx_hw *rwnx_hw)
     AICWFDBG(LOGINFO, "tbl size = %d \n", size);
 
     if (!err) {
+        int written = 0;
+
         for (i = 0; i < (size / 4); i += 2) {
             if ((dst[i] == 0x0) || (dst[i] == 0xFFFFFFFF)) {
                 break; // end of tbl
             }
-            AICWFDBG(LOGERROR, "patch_tbl:  %x  %x\n", dst[i], dst[i+1]);
+            AICWFDBG(LOGDEBUG, "patch_tbl:  %x  %x\n", dst[i], dst[i+1]);
             err = rwnx_send_dbg_mem_write_req(rwnx_hw, dst[i], dst[i+1]);
+            if (!err)
+                written++;
         }
         if (err) {
             AICWFDBG(LOGERROR, "tbl bin upload fail: %x, err:%d\r\n", dst[i], err);
         }
+        AICWFDBG(LOGINFO, "patch_tbl: %s: %d entries written (each at debug level)\n", filename, written);
     }
 
     if (dst) {

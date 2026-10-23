@@ -191,6 +191,17 @@ Both `aic8800_fdrv` and `aic_load_fw` default to `aicwf_dbg_level=1`
 This changes the driver's log mask; it does not remove the detailed log
 statements or suppress direct `printk()` / `dev_err()` output.
 
+Enabling INFO (`0x2`) adds concise Wi-Fi diagnostics:
+
+- A firmware patch-table summary with the file name and number of entries written.
+- For builds without `CONFIG_SUPPORT_4ADDR`, a count of dropped 4-address frames:
+  the first at once, then at most once a minute as more frames arrive.
+
+These routine summaries are hidden at the ERROR-only default. DEBUG (`0x8`)
+adds each patch-table entry and each dropped 4-address frame, including its
+hex dump. Both use `aicwf_dbg_level`; kernel dynamic debug support and a
+module rebuild are not required. Existing error reports retain `LOGERROR`.
+
 Some chip-revision, firmware-version and initialization messages use
 `LOGINFO`. Enable detailed logging before reproducing a startup failure or
 checking `chip_mcu_id` for branch selection. Messages suppressed earlier
@@ -283,4 +294,3 @@ The Wi-Fi-reset recovery behavior tracked in
 [issue #53](https://github.com/shenmintao/aic8800d80/issues/53) remains a known
 limitation: after an airplane-mode or hotspot reset, Bluetooth may require a
 physical unplug/replug of the adapter.
-

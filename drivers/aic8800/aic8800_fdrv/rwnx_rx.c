@@ -2427,8 +2427,17 @@ check_len_update:
 
 #ifndef CONFIG_SUPPORT_4ADDR
 		if (hw_rxhdr->flags_is_4addr) {
-					dev_err(rwnx_hw->dev, "4addr Frame received (%d), skb->len:%u\n", hw_rxhdr->flags_vif_idx, skb->len);
-					print_hex_dump(KERN_ERR,"4addr ",DUMP_PREFIX_NONE, 16, 1, skb->data, skb->len, false);
+					rwnx_hw->fouraddr_dropped++;
+					if (!rwnx_hw->fouraddr_said || time_after(jiffies, rwnx_hw->fouraddr_said + 60 * HZ)) {
+						AICWFDBG(LOGINFO, "4addr frames dropped (this build has no CONFIG_SUPPORT_4ADDR): %u since the last count; "
+							 "aicwf_dbg_level with 0x8 (debug) logs each one\n", rwnx_hw->fouraddr_dropped);
+						rwnx_hw->fouraddr_dropped = 0;
+						rwnx_hw->fouraddr_said = jiffies ? jiffies : 1;
+					}
+					if (aicwf_dbg_level & LOGDEBUG) {
+						AICWFDBG(LOGDEBUG, "4addr Frame received (%d), skb->len:%u\n", hw_rxhdr->flags_vif_idx, skb->len);
+						print_hex_dump(KERN_DEBUG, "4addr ", DUMP_PREFIX_NONE, 16, 1, skb->data, skb->len, false);
+					}
 					dev_kfree_skb(skb);
 					goto end;
 		}

@@ -935,6 +935,10 @@ struct rwnx_hw {
 	ktime_t last_time;
 	char last_alpha2[3];
 
+	/* 4-address frames dropped (a build without CONFIG_SUPPORT_4ADDR): counted, and said at most once a minute. */
+	unsigned int fouraddr_dropped;
+	unsigned long fouraddr_said;
+
 };
 
 u8 *rwnx_build_bcn(struct rwnx_bcn *bcn, struct cfg80211_beacon_data *new);

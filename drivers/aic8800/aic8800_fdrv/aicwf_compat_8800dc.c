@@ -2748,13 +2748,18 @@ int aicwf_patch_table_load(struct rwnx_hw *rwnx_hw, char *filename)
 	}
 
     if (!err && (i < size)) {
+        int written = 0;
+
         for (i =(128/4); i < (size/4); i +=2) {
-            AICWFDBG(LOGERROR, "patch_tbl:  %x  %x\n", dst[i], dst[i+1]);
+            AICWFDBG(LOGDEBUG, "patch_tbl:  %x  %x\n", dst[i], dst[i+1]);
             err = rwnx_send_dbg_mem_write_req(rwnx_hw, dst[i], dst[i+1]);
+            if (!err)
+                written++;
         }
         if (err) {
             AICWFDBG(LOGERROR, "bin upload fail: %x, err:%d\r\n", dst[i], err);
         }
+        AICWFDBG(LOGINFO, "patch_tbl: %s: %d entries written (each at debug level)\n", filename, written);
     }
 
     if (dst) {
