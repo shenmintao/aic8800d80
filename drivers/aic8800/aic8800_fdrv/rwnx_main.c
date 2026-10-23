@@ -9603,6 +9603,7 @@ err_lmac_reqs:
 //err_platon:
 //err_config:
 err_cache:
+    rwnx_cmd_mgr_quiesce(rwnx_hw->cmd_mgr);
     aicwf_wakeup_lock_deinit(rwnx_hw);
     wiphy_free(wiphy);
 err_out:
@@ -9680,6 +9681,7 @@ void rwnx_cfg80211_deinit(struct rwnx_hw *rwnx_hw)
 		AICWFDBG(LOGINFO, "%s wiphy_unregister \r\n", __func__);
     	wiphy_unregister(rwnx_hw->wiphy);
 	}
+    rwnx_cmd_mgr_quiesce(rwnx_hw->cmd_mgr);
     rwnx_radar_detection_deinit(&rwnx_hw->radar);
     rwnx_platform_off(rwnx_hw, NULL);
     kmem_cache_destroy(rwnx_hw->sw_txhdr_cache);
