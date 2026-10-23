@@ -113,7 +113,6 @@ static const struct { u32 addr; const char *name; } fw_state_regs[] = {
     { DC_SM_STATE, "SM" }, { DC_SCANU_STATE, "SCANU" }, { DC_SCAN_STATE, "SCAN" }, { DC_ME_STATE, "ME" },
     { DC_MM_STATE, "MM" }, { DC_MAC_STATE, "MAC" },
 };
-static bool fw_state_reading;	/* a read not answered here is dropped, never a second reset */
 
 static int fw_read_word(struct aic_usb_dev *usbdev, u32 addr, u32 *val)
 {
@@ -141,7 +140,8 @@ static void cmd_mgr_log_fw_state(struct aic_usb_dev *usbdev, lmac_msg_id_t timed
 
     if (usbdev->chipid != PRODUCT_ID_AIC8800DC && usbdev->chipid != PRODUCT_ID_AIC8800DW)
         return;
-    fw_state_reading = true;
+    /* A read not answered here is dropped, never a second reset; a read that finds the queue busy is not sent. */
+    usbdev->fw_state_reading = true;
     for (i = 0; i < ARRAY_SIZE(fw_state_regs); i++) {
         err = fw_read_word(usbdev, fw_state_regs[i].addr, &val);
         if (err)
@@ -149,7 +149,7 @@ static void cmd_mgr_log_fw_state(struct aic_usb_dev *usbdev, lmac_msg_id_t timed
         len += scnprintf(line + len, sizeof(line) - len, " %s %x", fw_state_regs[i].name,
                          fw_state_regs[i].addr >> 28 ? val : val & 0xff);
     }
-    fw_state_reading = false;
+    usbdev->fw_state_reading = false;
     if (i < ARRAY_SIZE(fw_state_regs))
         len += scnprintf(line + len, sizeof(line) - len, " %s not answered (%d)", fw_state_regs[i].name, err);
     printk(KERN_CRIT "aic8800: firmware state after %s timed out:%s\n", RWNX_ID2STR(timed_out), line);
@@ -168,22 +168,17 @@ MODULE_PARM_DESC(stall_watch, "Watch joins and disconnects for a stalled firmwar
 #define SCAN_WAIT_BEACON_PROBE_RSP	3
 
 static void cmd_mgr_reset_device(struct rwnx_cmd_mgr *cmd_mgr);
-static void join_watch_tick(struct work_struct *work);
-static DECLARE_DELAYED_WORK(join_watch_work, join_watch_tick);
-static struct aic_usb_dev *join_watch_dev;
-static bool join_watch_on;
-static unsigned long join_watch_since, join_scan_since;
 
 static void join_watch_tick(struct work_struct *work)
 {
-    struct aic_usb_dev *usbdev = join_watch_dev;
-    unsigned int ms = jiffies_to_msecs(jiffies - join_watch_since), stuck;
+    struct aic_usb_dev *usbdev = container_of(to_delayed_work(work), struct aic_usb_dev, join_watch_work);
+    unsigned int ms = jiffies_to_msecs(jiffies - usbdev->join_watch_since), stuck;
     u32 scan, sm;
 
-    if (!join_watch_on || !usbdev)
+    if (!usbdev->join_watch_on)
         return;
     if (ms > JOIN_WATCH_MAX_MS) {
-        join_watch_on = false;
+        usbdev->join_watch_on = false;
         return;
     }
     /* Only with nothing else queued: a read behind a waiting command would wait with it. */
@@ -191,26 +186,31 @@ static void join_watch_tick(struct work_struct *work)
         goto again;
     if (fw_read_word(usbdev, DC_SCAN_STATE, &scan) || fw_read_word(usbdev, DC_SM_STATE, &sm))
         goto again;
-    if (!join_watch_on)
+    if (!usbdev->join_watch_on)
         return;		/* the connect ended meanwhile */
     if ((scan & 0xff) != SCAN_WAIT_BEACON_PROBE_RSP) {
-        join_scan_since = 0;
+        usbdev->join_scan_since = 0;
         goto again;
     }
-    if (!join_scan_since)
-        join_scan_since = jiffies;
-    stuck = jiffies_to_msecs(jiffies - join_scan_since);
+    if (!usbdev->join_scan_since)
+        usbdev->join_scan_since = jiffies;
+    stuck = jiffies_to_msecs(jiffies - usbdev->join_scan_since);
     if (stuck < JOIN_SCAN_STUCK_MS)
         goto again;
-    join_watch_on = false;
+    usbdev->join_watch_on = false;
     printk(KERN_CRIT "aic8800: stall watch: a join's scan stuck on its channel for %u ms (SM %u)%s\n", stuck,
            sm & 0xff, stall_watch >= 2 ? ": resetting the device now" : "");
     if (stall_watch >= 2)
         cmd_mgr_reset_device(&usbdev->cmd_mgr);
     return;
 again:
-    if (join_watch_on)
-        schedule_delayed_work(&join_watch_work, msecs_to_jiffies(JOIN_WATCH_MS));
+    if (usbdev->join_watch_on)
+        schedule_delayed_work(&usbdev->join_watch_work, msecs_to_jiffies(JOIN_WATCH_MS));
+}
+
+static bool stall_watch_chip(struct aic_usb_dev *usbdev)
+{
+    return usbdev && (usbdev->chipid == PRODUCT_ID_AIC8800DC || usbdev->chipid == PRODUCT_ID_AIC8800DW);
 }
 
 /* A connect the firmware has taken (SM_CONNECT_CFM, status 0): watched until its indication. */
@@ -218,30 +218,33 @@ void aicwf_join_watch_start(struct rwnx_hw *rwnx_hw)
 {
     struct aic_usb_dev *usbdev = rwnx_hw->usbdev;
 
-    if (!stall_watch || !usbdev || (usbdev->chipid != PRODUCT_ID_AIC8800DC && usbdev->chipid != PRODUCT_ID_AIC8800DW))
+    if (!stall_watch || !stall_watch_chip(usbdev))
         return;
-    join_watch_dev = usbdev;
-    join_watch_since = jiffies;
-    join_scan_since = 0;
-    join_watch_on = true;
-    mod_delayed_work(system_wq, &join_watch_work, msecs_to_jiffies(JOIN_WATCH_MS));
+    usbdev->join_watch_since = jiffies;
+    usbdev->join_scan_since = 0;
+    usbdev->join_watch_on = true;
+    mod_delayed_work(system_wq, &usbdev->join_watch_work, msecs_to_jiffies(JOIN_WATCH_MS));
 }
 
 /* From the receive path too: never waits for the work, whose reads are answered on that path. */
-void aicwf_join_watch_stop(void)
+void aicwf_join_watch_stop(struct rwnx_hw *rwnx_hw)
 {
-    join_watch_on = false;
-    cancel_delayed_work(&join_watch_work);
+    struct aic_usb_dev *usbdev = rwnx_hw->usbdev;
+
+    if (!usbdev)
+        return;
+    usbdev->join_watch_on = false;
+    cancel_delayed_work(&usbdev->join_watch_work);
 }
 
 /* A command's wait for its confirm; for SM_DISCONNECT_REQ with the stall watch on, a checkpoint at
  * DISCONNECT_WATCH_MS. Nonzero: the confirm came (or the wait was interrupted, as before). */
-static long cmd_mgr_wait(struct rwnx_cmd *cmd, unsigned long tout)
+static long cmd_mgr_wait(struct aic_usb_dev *usbdev, struct rwnx_cmd *cmd, unsigned long tout)
 {
     unsigned long first = msecs_to_jiffies(DISCONNECT_WATCH_MS), waited = jiffies;
     long ret;
 
-    if (cmd->id != SM_DISCONNECT_REQ || !stall_watch || tout <= first)
+    if (cmd->id != SM_DISCONNECT_REQ || !stall_watch || !stall_watch_chip(usbdev) || tout <= first)
         return wait_for_completion_killable_timeout(&cmd->complete, tout);
     ret = wait_for_completion_killable_timeout(&cmd->complete, first);
     if (ret)
@@ -397,6 +400,11 @@ static int cmd_mgr_queue(struct rwnx_cmd_mgr *cmd_mgr, struct rwnx_cmd *cmd)
 				return -EPIPE;
 			}
             empty = list_empty(&cmd_mgr->cmds);
+            if (!empty && usbdev->fw_state_reading && cmd->id == DBG_MEM_READ_REQ) {
+                /* Never waited for: from the command worker, the command ahead needs that same worker. */
+                spin_unlock_bh(&cmd_mgr->lock);
+                return -EBUSY;
+            }
             if(!empty) {
                 spin_unlock_bh(&cmd_mgr->lock);
                 if(in_softirq()) {
@@ -507,10 +515,10 @@ static int cmd_mgr_queue(struct rwnx_cmd_mgr *cmd_mgr, struct rwnx_cmd *cmd)
             /* TODO: kill the cmd at fw level */
         }
         #else
-        bool state_read = fw_state_reading && cmd->id == DBG_MEM_READ_REQ;
+        bool state_read = usbdev->fw_state_reading && cmd->id == DBG_MEM_READ_REQ;
         bool empty;
         unsigned long tout = msecs_to_jiffies(state_read ? STATE_READ_MS : RWNX_80211_CMD_TIMEOUT_MS/*AIDEN workaround* cmd_mgr->queue_sz*/);
-        if (!cmd_mgr_wait(cmd, tout)) {
+        if (!cmd_mgr_wait(usbdev, cmd, tout)) {
             if (state_read) {
                 /* A state read not answered: dropped; the reset after the reads does the rest. */
                 spin_lock_bh(&cmd_mgr->lock);
@@ -815,6 +823,9 @@ void rwnx_cmd_mgr_init(struct rwnx_cmd_mgr *cmd_mgr)
     RWNX_DBG(RWNX_FN_ENTRY_STR);
 
     INIT_LIST_HEAD(&cmd_mgr->cmds);
+#ifdef AICWF_USB_SUPPORT
+    INIT_DELAYED_WORK(&container_of(cmd_mgr, struct aic_usb_dev, cmd_mgr)->join_watch_work, join_watch_tick);
+#endif
 	cmd_mgr->state = RWNX_CMD_MGR_STATE_INITED;
     spin_lock_init(&cmd_mgr->lock);
     cmd_mgr->max_queue_sz = RWNX_CMD_MAX_QUEUED;
@@ -834,12 +845,18 @@ void rwnx_cmd_mgr_init(struct rwnx_cmd_mgr *cmd_mgr)
 
 void rwnx_cmd_mgr_deinit(struct rwnx_cmd_mgr *cmd_mgr)
 {
-    join_watch_on = false;	/* no new reads; the work is waited for once the queue is drained */
+#ifdef AICWF_USB_SUPPORT
+    struct aic_usb_dev *usbdev = container_of(cmd_mgr, struct aic_usb_dev, cmd_mgr);
+#endif
+
     if(cmd_mgr->print && cmd_mgr->drain){
+#ifdef AICWF_USB_SUPPORT
+        /* The watch first: a read of its in flight owns a node in the queue, which the drain would take from it. */
+        usbdev->join_watch_on = false;
+        cancel_delayed_work_sync(&usbdev->join_watch_work);
+#endif
         cmd_mgr->print(cmd_mgr);
         cmd_mgr->drain(cmd_mgr);
-        cancel_delayed_work_sync(&join_watch_work);
-        join_watch_dev = NULL;
         cmd_mgr->print(cmd_mgr);
         flush_workqueue(cmd_mgr->cmd_wq);
         destroy_workqueue(cmd_mgr->cmd_wq);
