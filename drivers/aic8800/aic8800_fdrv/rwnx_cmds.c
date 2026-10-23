@@ -158,7 +158,7 @@ static void cmd_mgr_log_fw_state(struct aic_usb_dev *usbdev, lmac_msg_id_t timed
 /* The stall watch (DC, DW), at the two points where a stalled firmware shows first: a join whose scan stays on the
  * access point's channel for JOIN_SCAN_STUCK_MS (a healthy scan leaves within its slot, ~100 ms), and a disconnect
  * unconfirmed after DISCONNECT_WATCH_MS (a healthy one comes in milliseconds). 0 off, 1 log, 2 reset at once. */
-static int stall_watch = 1;
+static int stall_watch = 2;
 module_param(stall_watch, int, 0644);
 MODULE_PARM_DESC(stall_watch, "Watch joins and disconnects for a stalled firmware (DC, DW): 0 off, 1 log, 2 reset at once");
 #define JOIN_WATCH_MS		500
