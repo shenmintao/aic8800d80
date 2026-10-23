@@ -229,3 +229,32 @@ The Wi-Fi-reset recovery behavior tracked in
 limitation: after an airplane-mode or hotspot reset, Bluetooth may require a
 physical unplug/replug of the adapter.
 
+
+### Debug Logging
+
+The Wi-Fi driver's log is set by its `aicwf_dbg_level` parameter, a mask. The default, `0x203`, logs errors
+(`0x1`), information (`0x2`) and firmware messages (`0x200`). Add `0x8` for debug detail: `0x20b`.
+
+At the default level the log keeps a summary of what is routine:
+
+- the firmware patch table: one line with the number of entries written, and any failure;
+- 4-address frames that a build without `CONFIG_SUPPORT_4ADDR` drops: the first at once, then a count at most
+  once a minute.
+
+With `0x8` it also logs each patch-table entry, and each dropped 4-address frame with a dump of it.
+
+To set it for the running driver (back to the default with `0x203`):
+
+```bash
+echo 0x20b | sudo tee /sys/module/aic8800_fdrv/parameters/aicwf_dbg_level
+```
+
+The patch table is written when the adapter starts, so to log its entries, set the level before the driver loads,
+then load it or plug the adapter in:
+
+```bash
+echo 'options aic8800_fdrv aicwf_dbg_level=0x20b' | sudo tee /etc/modprobe.d/aic8800-debug.conf
+sudo modprobe -r aic8800_fdrv && sudo modprobe aic8800_fdrv
+```
+
+Remove that file to go back to the default at the next load.
