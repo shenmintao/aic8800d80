@@ -15,6 +15,9 @@ This driver is for the AIC8800D80 chipset, supported by devices such as the Tend
 > kernel's standard `btusb` driver. After switching branches, rerun
 > `sudo ./install.sh` and reboot; switching the Git branch alone does not
 > replace the firmware already installed under `/lib/firmware`.
+>
+> If `chip_mcu_id` is missing from the log, enable
+> [diagnostic logging](#diagnostic-logging) and repeat device initialization.
 
 Added support for devices with Vendor ID 368B (tested).
 
@@ -179,6 +182,58 @@ If the device is still not active, check the kernel logs for any errors related 
 ```bash
 sudo dmesg
 ```
+
+### Diagnostic Logging
+
+Both `aic8800_fdrv` and `aic_load_fw` default to `aicwf_dbg_level=1`
+(`LOGERROR`), matching
+[Radxa's logging default](https://github.com/radxa-pkg/aic8800/blob/fce88024ed40279def034e203128e0892fdbcac3/debian/patches/fix-Lower-the-debugging-log-level.patch).
+This changes the driver's log mask; it does not remove the detailed log
+statements or suppress direct `printk()` / `dev_err()` output.
+
+Some chip-revision, firmware-version and initialization messages use
+`LOGINFO`. Enable detailed logging before reproducing a startup failure or
+checking `chip_mcu_id` for branch selection. Messages suppressed earlier
+cannot be recovered by changing the mask afterward.
+
+For modules that are already loaded, enable detailed logs without rebuilding:
+
+```bash
+echo 527 | sudo tee /sys/module/aic8800_fdrv/parameters/aicwf_dbg_level
+echo 15 | sudo tee /sys/module/aic_load_fw/parameters/aicwf_dbg_level
+sudo dmesg -w
+```
+
+The Wi-Fi mask `527` (`0x20f`) enables ERROR, INFO, TRACE, DEBUG and FW;
+the loader mask `15` (`0x0f`) enables ERROR, INFO, TRACE and DEBUG.
+Reproduce the problem, then save the kernel log with
+`sudo journalctl -k -b --no-pager` or `sudo dmesg`.
+
+To capture messages from module initialization, set the options before the
+modules are loaded:
+
+```bash
+sudo tee /etc/modprobe.d/aic8800-debug.conf >/dev/null <<'EOF'
+options aic8800_fdrv aicwf_dbg_level=527
+options aic_load_fw aicwf_dbg_level=15
+EOF
+```
+
+Reload both modules or reboot, then reproduce the device initialization.
+If the modules load from an initramfs, regenerate that initramfs using your
+distribution's procedure so it includes these options.
+
+After collecting the logs, remove the temporary
+`/etc/modprobe.d/aic8800-debug.conf` file and restore the running modules'
+default masks:
+
+```bash
+echo 1 | sudo tee /sys/module/aic8800_fdrv/parameters/aicwf_dbg_level
+echo 1 | sudo tee /sys/module/aic_load_fw/parameters/aicwf_dbg_level
+```
+
+If the options were included in an initramfs, regenerate it after removing
+the configuration as well.
 
 ### Bluetooth on Combo Adapters
 
