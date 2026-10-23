@@ -246,6 +246,34 @@ echo 1 | sudo tee /sys/module/aic_load_fw/parameters/aicwf_dbg_level
 If the options were included in an initramfs, regenerate it after removing
 the configuration as well.
 
+### When the Firmware Stops Answering
+
+If a command gets no answer within its timeout, the driver drops the command and resets the USB device, so it
+probes again and loads the firmware afresh. It does this at most once every 30 seconds on each USB port. On the
+AIC8800DC and DW it first logs the firmware's state in one line (`aic8800: firmware state after ...`), and after
+the reset it reboots the chip before starting it.
+
+**A reset takes down every interface on the adapter.** The station joins again as user space has it configured
+(NetworkManager, wpa_supplicant). An access point is not recreated by the driver: whatever started it (hostapd,
+NetworkManager) has to start it again.
+
+The resets are counted in `/sys/module/aic8800_fdrv/parameters/recoveries`, and the time of the last one (seconds
+since boot) is in `recovered_at`.
+
+On the DC and DW, the `stall_watch` parameter watches for a stall earlier than the command timeout: a join whose
+scan stays on the access point's channel for 2 s, and a disconnect not confirmed within 1 s.
+
+- `stall_watch=1` (default): log what it finds, nothing more.
+- `stall_watch=2`: reset the device at that point (opt-in).
+- `stall_watch=0`: off.
+
+To set it at load time, or for the running module:
+
+```bash
+echo 'options aic8800_fdrv stall_watch=2' | sudo tee /etc/modprobe.d/aic8800-stall-watch.conf
+echo 2 | sudo tee /sys/module/aic8800_fdrv/parameters/stall_watch
+```
+
 ### Bluetooth on Combo Adapters
 
 Bluetooth support does not require a separate AIC transport module. After
