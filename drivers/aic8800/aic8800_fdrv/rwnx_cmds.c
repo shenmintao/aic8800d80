@@ -114,6 +114,23 @@ static const struct { u32 addr; const char *name; } fw_state_regs[] = {
     { DC_MM_STATE, "MM" }, { DC_MAC_STATE, "MAC" },
 };
 
+/* A read of the firmware's state (the reads above, the join watch's too), known by its address: never waits for a busy
+ * queue, waits STATE_READ_MS for its answer, and without one is dropped, never the manager crashed or the device reset.
+ * Looked at before the request is sent (the queue frees it then). */
+static bool fw_state_read(struct rwnx_cmd *cmd)
+{
+    u32 addr;
+    int i;
+
+    if (cmd->id != DBG_MEM_READ_REQ || !cmd->a2e_msg)
+        return false;
+    addr = ((struct dbg_mem_read_req *)cmd->a2e_msg->param)->memaddr;
+    for (i = 0; i < ARRAY_SIZE(fw_state_regs); i++)
+        if (fw_state_regs[i].addr == addr)
+            return true;
+    return false;
+}
+
 static int fw_read_word(struct aic_usb_dev *usbdev, u32 addr, u32 *val)
 {
     struct dbg_mem_read_cfm cfm;
@@ -140,8 +157,6 @@ static void cmd_mgr_log_fw_state(struct aic_usb_dev *usbdev, lmac_msg_id_t timed
 
     if (usbdev->chipid != PRODUCT_ID_AIC8800DC && usbdev->chipid != PRODUCT_ID_AIC8800DW)
         return;
-    /* A read not answered here is dropped, never a second reset; a read that finds the queue busy is not sent. */
-    usbdev->fw_state_reading = true;
     for (i = 0; i < ARRAY_SIZE(fw_state_regs); i++) {
         err = fw_read_word(usbdev, fw_state_regs[i].addr, &val);
         if (err)
@@ -149,7 +164,6 @@ static void cmd_mgr_log_fw_state(struct aic_usb_dev *usbdev, lmac_msg_id_t timed
         len += scnprintf(line + len, sizeof(line) - len, " %s %x", fw_state_regs[i].name,
                          fw_state_regs[i].addr >> 28 ? val : val & 0xff);
     }
-    usbdev->fw_state_reading = false;
     if (i < ARRAY_SIZE(fw_state_regs))
         len += scnprintf(line + len, sizeof(line) - len, " %s not answered (%d)", fw_state_regs[i].name, err);
     printk(KERN_CRIT "aic8800: firmware state after %s timed out:%s\n", RWNX_ID2STR(timed_out), line);
@@ -226,6 +240,13 @@ void aicwf_join_watch_start(struct rwnx_hw *rwnx_hw)
     mod_delayed_work(system_wq, &usbdev->join_watch_work, msecs_to_jiffies(JOIN_WATCH_MS));
 }
 
+/* At teardown, before the platform goes (aicwf_bus_deinit): the watch's reads use rwnx_hw. */
+void aicwf_join_watch_cancel(struct aic_usb_dev *usbdev)
+{
+    usbdev->join_watch_on = false;
+    cancel_delayed_work_sync(&usbdev->join_watch_work);
+}
+
 /* From the receive path too: never waits for the work, whose reads are answered on that path. */
 void aicwf_join_watch_stop(struct rwnx_hw *rwnx_hw)
 {
@@ -288,6 +309,16 @@ static void cmd_mgr_reset_device(struct rwnx_cmd_mgr *cmd_mgr)
     printk(KERN_CRIT "aic8800: firmware not answering: resetting the device to load it afresh\n");
     usb_queue_reset_device(usbdev->intf);
 #endif
+}
+
+/* Off the queue, by whichever of its waiter and the drain gets there first (the drain unlinks without freeing, and
+ * the waiter it wakes would unlink it again). Under cmd_mgr->lock. */
+static void cmd_unqueue(struct rwnx_cmd_mgr *cmd_mgr, struct rwnx_cmd *cmd)
+{
+    if (list_empty(&cmd->list))
+        return;
+    list_del_init(&cmd->list);
+    cmd_mgr->queue_sz--;
 }
 
 /**
@@ -383,6 +414,7 @@ static int cmd_mgr_queue(struct rwnx_cmd_mgr *cmd_mgr, struct rwnx_cmd *cmd)
     struct aic_usb_dev *usbdev = container_of(cmd_mgr, struct aic_usb_dev, cmd_mgr);
 #endif
     bool defer_push = false;
+    bool state_read = fw_state_read(cmd);
     u8_l empty = 0;
 
     //RWNX_DBG(RWNX_FN_ENTRY_STR);
@@ -400,7 +432,7 @@ static int cmd_mgr_queue(struct rwnx_cmd_mgr *cmd_mgr, struct rwnx_cmd *cmd)
 				return -EPIPE;
 			}
             empty = list_empty(&cmd_mgr->cmds);
-            if (!empty && usbdev->fw_state_reading && cmd->id == DBG_MEM_READ_REQ) {
+            if (!empty && state_read) {
                 /* Never waited for: from the command worker, the command ahead needs that same worker. */
                 spin_unlock_bh(&cmd_mgr->lock);
                 return -EBUSY;
@@ -515,15 +547,13 @@ static int cmd_mgr_queue(struct rwnx_cmd_mgr *cmd_mgr, struct rwnx_cmd *cmd)
             /* TODO: kill the cmd at fw level */
         }
         #else
-        bool state_read = usbdev->fw_state_reading && cmd->id == DBG_MEM_READ_REQ;
         bool empty;
         unsigned long tout = msecs_to_jiffies(state_read ? STATE_READ_MS : RWNX_80211_CMD_TIMEOUT_MS/*AIDEN workaround* cmd_mgr->queue_sz*/);
         if (!cmd_mgr_wait(usbdev, cmd, tout)) {
             if (state_read) {
                 /* A state read not answered: dropped; the reset after the reads does the rest. */
                 spin_lock_bh(&cmd_mgr->lock);
-                list_del(&cmd->list);
-                cmd_mgr->queue_sz--;
+                cmd_unqueue(cmd_mgr, cmd);
                 if (!(cmd->flags & RWNX_CMD_FLAG_DONE)) {
                     cmd->result = -ETIMEDOUT;
                     cmd_complete(cmd_mgr, cmd);
@@ -534,8 +564,7 @@ static int cmd_mgr_queue(struct rwnx_cmd_mgr *cmd_mgr, struct rwnx_cmd *cmd)
             printk(KERN_CRIT"%s cmd timed-out cmd_mgr->queue_sz:%d\n", __func__,cmd_mgr->queue_sz);
             /* Off the queue, and not yet marked crashed, so that the state reads go straight out. */
             spin_lock_bh(&cmd_mgr->lock);
-            list_del(&cmd->list);
-            cmd_mgr->queue_sz--;
+            cmd_unqueue(cmd_mgr, cmd);
             empty = cmd_mgr->queue_sz == 0;
             spin_unlock_bh(&cmd_mgr->lock);
             if (empty)
@@ -562,8 +591,7 @@ static int cmd_mgr_queue(struct rwnx_cmd_mgr *cmd_mgr, struct rwnx_cmd *cmd)
         }
 		else{
 			spin_lock_bh(&cmd_mgr->lock);
-			list_del(&cmd->list);
-			cmd_mgr->queue_sz--;
+			cmd_unqueue(cmd_mgr, cmd);
 			if(cmd_mgr->queue_sz == 0){
                 rwnx_wakeup_unlock(usbdev->rwnx_hw->ws_tx);
             }
@@ -674,8 +702,7 @@ void cmd_mgr_task_process(struct work_struct *work)
                 cmd_dump(next);
                 /* As in cmd_mgr_queue(): off the queue, the state read, then marked crashed. */
                 spin_lock_bh(&cmd_mgr->lock);
-                list_del(&next->list);
-                cmd_mgr->queue_sz--;
+                cmd_unqueue(cmd_mgr, next);
                 empty = cmd_mgr->queue_sz == 0;
                 spin_unlock_bh(&cmd_mgr->lock);
                 if (empty)
@@ -689,8 +716,7 @@ void cmd_mgr_task_process(struct work_struct *work)
                 cmd_mgr_reset_device(cmd_mgr);
             } else {
 				spin_lock_bh(&cmd_mgr->lock);
-				list_del(&next->list);
-				cmd_mgr->queue_sz--;
+				cmd_unqueue(cmd_mgr, next);
 				if(cmd_mgr->queue_sz == 0){
                     rwnx_wakeup_unlock(usbdev->rwnx_hw->ws_tx);
                 }
@@ -804,7 +830,7 @@ static void cmd_mgr_drain(struct rwnx_cmd_mgr *cmd_mgr)
 
     spin_lock_bh(&cmd_mgr->lock);
     list_for_each_entry_safe(cur, nxt, &cmd_mgr->cmds, list) {
-        list_del(&cur->list);
+        list_del_init(&cur->list);
         //cmd_mgr->queue_sz--;
         if (!(cur->flags & RWNX_CMD_FLAG_NONBLOCK))
             complete(&cur->complete);
@@ -845,16 +871,7 @@ void rwnx_cmd_mgr_init(struct rwnx_cmd_mgr *cmd_mgr)
 
 void rwnx_cmd_mgr_deinit(struct rwnx_cmd_mgr *cmd_mgr)
 {
-#ifdef AICWF_USB_SUPPORT
-    struct aic_usb_dev *usbdev = container_of(cmd_mgr, struct aic_usb_dev, cmd_mgr);
-#endif
-
     if(cmd_mgr->print && cmd_mgr->drain){
-#ifdef AICWF_USB_SUPPORT
-        /* The watch first: a read of its in flight owns a node in the queue, which the drain would take from it. */
-        usbdev->join_watch_on = false;
-        cancel_delayed_work_sync(&usbdev->join_watch_work);
-#endif
         cmd_mgr->print(cmd_mgr);
         cmd_mgr->drain(cmd_mgr);
         cmd_mgr->print(cmd_mgr);
