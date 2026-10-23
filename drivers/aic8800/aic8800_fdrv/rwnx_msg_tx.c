@@ -3857,7 +3857,7 @@ int rwnx_send_sm_disconnect_req(struct rwnx_hw *rwnx_hw,
 
     RWNX_DBG(RWNX_FN_ENTRY_STR);
 
-    aicwf_join_watch_stop();
+    aicwf_join_watch_stop(rwnx_hw);
 
     /* Build the SM_DISCONNECT_REQ message */
     req = rwnx_msg_zalloc(SM_DISCONNECT_REQ, TASK_SM, DRV_TASK_ID,

@@ -928,7 +928,7 @@ static inline int rwnx_rx_sm_connect_ind(struct rwnx_hw *rwnx_hw,
 
     RWNX_DBG(RWNX_FN_ENTRY_STR);
 
-    aicwf_join_watch_stop();
+    aicwf_join_watch_stop(rwnx_hw);
     if (!ind->status_code) {
         rwnx_hw->last_connect_ind = jiffies ? jiffies : 1;
     }
