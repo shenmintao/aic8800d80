@@ -183,7 +183,8 @@ MODULE_PARM_DESC(stall_watch, "Watch joins and disconnects for a stalled firmwar
 
 static void cmd_mgr_reset_device(struct rwnx_cmd_mgr *cmd_mgr);
 
-static void join_watch_tick(struct work_struct *work)
+/* Set up at probe (aicwf_usb_probe), before any path that cancels it. */
+void join_watch_tick(struct work_struct *work)
 {
     struct aic_usb_dev *usbdev = container_of(to_delayed_work(work), struct aic_usb_dev, join_watch_work);
     unsigned int ms = jiffies_to_msecs(jiffies - usbdev->join_watch_since), stuck;
@@ -849,9 +850,6 @@ void rwnx_cmd_mgr_init(struct rwnx_cmd_mgr *cmd_mgr)
     RWNX_DBG(RWNX_FN_ENTRY_STR);
 
     INIT_LIST_HEAD(&cmd_mgr->cmds);
-#ifdef AICWF_USB_SUPPORT
-    INIT_DELAYED_WORK(&container_of(cmd_mgr, struct aic_usb_dev, cmd_mgr)->join_watch_work, join_watch_tick);
-#endif
 	cmd_mgr->state = RWNX_CMD_MGR_STATE_INITED;
     spin_lock_init(&cmd_mgr->lock);
     cmd_mgr->max_queue_sz = RWNX_CMD_MAX_QUEUED;
