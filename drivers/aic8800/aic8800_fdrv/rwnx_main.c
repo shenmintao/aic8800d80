@@ -4174,6 +4174,26 @@ static int rwnx_cfg80211_change_station(struct wiphy *wiphy,
     return 0;
 }
 
+/* An AP started while a STA on the same chip joins can stop the firmware (the DC: the join's scan, or the next
+ * SM_DISCONNECT_REQ, never answered). So an AP start waits, at most AP_START_WAIT_MAX_MS, while a STA is connecting
+ * and for AP_START_JOIN_SETTLE_MS after its connect indication. Only the STA's key installation, which needs the
+ * wiphy lock held here, waits with it: its EAPOL frames go through the data path. */
+#define AP_START_JOIN_SETTLE_MS	3000
+#define AP_START_WAIT_MAX_MS	8000
+
+static bool rwnx_sta_joining(struct rwnx_hw *rwnx_hw)
+{
+    struct rwnx_vif *vif;
+
+    list_for_each_entry(vif, &rwnx_hw->vifs, list) {
+        if (RWNX_VIF_TYPE(vif) == NL80211_IFTYPE_STATION &&
+            atomic_read(&vif->drv_conn_state) == (int)RWNX_DRV_STATUS_CONNECTING)
+            return true;
+    }
+    return rwnx_hw->last_connect_ind &&
+           time_before(jiffies, rwnx_hw->last_connect_ind + msecs_to_jiffies(AP_START_JOIN_SETTLE_MS));
+}
+
 /**
  * @start_ap: Start acting in AP mode defined by the parameters.
  */
@@ -4186,8 +4206,16 @@ static int rwnx_cfg80211_start_ap(struct wiphy *wiphy, struct net_device *dev,
     struct rwnx_ipc_elem_var elem;
     struct rwnx_sta *sta;
     int error = 0;
+    unsigned int waited = 0;
 
     RWNX_DBG(RWNX_FN_ENTRY_STR);
+
+    while (waited < AP_START_WAIT_MAX_MS && rwnx_sta_joining(rwnx_hw)) {
+        msleep(100);
+        waited += 100;
+    }
+    if (waited)
+        printk(KERN_INFO "aic8800: the AP start waited %u ms for a STA's join\n", waited);
 
     INIT_WORK(&rwnx_vif->sta_probe.apmprobestaWork, apm_probe_sta_work_process);
     rwnx_vif->sta_probe.apmprobesta_wq = create_singlethread_workqueue("apmprobe_wq");
@@ -8924,6 +8952,17 @@ static int start_from_bootrom(struct rwnx_hw *rwnx_hw)
 
 int rwnx_ic_system_init(struct rwnx_hw *rwnx_hw){
 
+	/* A USB reset leaves the DC and DW powered, and the firmware loaded afresh can hang at its first start. After a
+	 * reset for a stall, reboot the chip first: it leaves the bus, and the next probe starts it clean. */
+#ifdef AICWF_USB_SUPPORT
+	if (aicwf_reboot_chip_on_probe(rwnx_hw->usbdev->udev) &&
+	    (rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800DC || rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800DW) &&
+	    !rwnx_send_reboot(rwnx_hw)) {
+		printk(KERN_CRIT "aic8800: rebooted the chip after the reset\n");
+		return -1;
+	}
+#endif
+
 	if(rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8801){
 		system_config(rwnx_hw);
 	}else if(rwnx_hw->usbdev->chipid == PRODUCT_ID_AIC8800DC ||
@@ -9564,6 +9603,7 @@ err_lmac_reqs:
 //err_platon:
 //err_config:
 err_cache:
+    rwnx_cmd_mgr_quiesce(rwnx_hw->cmd_mgr);
     aicwf_wakeup_lock_deinit(rwnx_hw);
     wiphy_free(wiphy);
 err_out:
@@ -9641,6 +9681,7 @@ void rwnx_cfg80211_deinit(struct rwnx_hw *rwnx_hw)
 		AICWFDBG(LOGINFO, "%s wiphy_unregister \r\n", __func__);
     	wiphy_unregister(rwnx_hw->wiphy);
 	}
+    rwnx_cmd_mgr_quiesce(rwnx_hw->cmd_mgr);
     rwnx_radar_detection_deinit(&rwnx_hw->radar);
     rwnx_platform_off(rwnx_hw, NULL);
     kmem_cache_destroy(rwnx_hw->sw_txhdr_cache);
