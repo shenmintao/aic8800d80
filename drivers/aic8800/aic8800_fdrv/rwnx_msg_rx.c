@@ -929,8 +929,9 @@ static inline int rwnx_rx_sm_connect_ind(struct rwnx_hw *rwnx_hw,
     RWNX_DBG(RWNX_FN_ENTRY_STR);
 
     aicwf_join_watch_stop();
-    if (!ind->status_code)
+    if (!ind->status_code) {
         rwnx_hw->last_connect_ind = jiffies ? jiffies : 1;
+    }
 	
 	if(!rwnx_vif){
 		AICWFDBG(LOGERROR, "%s rwnx_vif is null \r\n", __func__);
