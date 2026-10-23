@@ -15,6 +15,9 @@ This driver is for the AIC8800D80 chipset, supported by devices such as the Tend
 > kernel's standard `btusb` driver. After switching branches, rerun
 > `sudo ./install.sh` and reboot; switching the Git branch alone does not
 > replace the firmware already installed under `/lib/firmware`.
+>
+> If `chip_mcu_id` is missing from the log, enable
+> [diagnostic logging](#diagnostic-logging) and repeat device initialization.
 
 Added support for devices with Vendor ID 368B (tested).
 
@@ -180,6 +183,69 @@ If the device is still not active, check the kernel logs for any errors related 
 sudo dmesg
 ```
 
+### Diagnostic Logging
+
+Both `aic8800_fdrv` and `aic_load_fw` default to `aicwf_dbg_level=1`
+(`LOGERROR`), matching
+[Radxa's logging default](https://github.com/radxa-pkg/aic8800/blob/fce88024ed40279def034e203128e0892fdbcac3/debian/patches/fix-Lower-the-debugging-log-level.patch).
+This changes the driver's log mask; it does not remove the detailed log
+statements or suppress direct `printk()` / `dev_err()` output.
+
+Enabling INFO (`0x2`) adds concise Wi-Fi diagnostics:
+
+- A firmware patch-table summary with the file name and number of entries written.
+- For builds without `CONFIG_SUPPORT_4ADDR`, a count of dropped 4-address frames:
+  the first at once, then at most once a minute as more frames arrive.
+
+These routine summaries are hidden at the ERROR-only default. DEBUG (`0x8`)
+adds each patch-table entry and each dropped 4-address frame, including its
+hex dump. Both use `aicwf_dbg_level`; kernel dynamic debug support and a
+module rebuild are not required. Existing error reports retain `LOGERROR`.
+
+Some chip-revision, firmware-version and initialization messages use
+`LOGINFO`. Enable detailed logging before reproducing a startup failure or
+checking `chip_mcu_id` for branch selection. Messages suppressed earlier
+cannot be recovered by changing the mask afterward.
+
+For modules that are already loaded, enable detailed logs without rebuilding:
+
+```bash
+echo 527 | sudo tee /sys/module/aic8800_fdrv/parameters/aicwf_dbg_level
+echo 15 | sudo tee /sys/module/aic_load_fw/parameters/aicwf_dbg_level
+sudo dmesg -w
+```
+
+The Wi-Fi mask `527` (`0x20f`) enables ERROR, INFO, TRACE, DEBUG and FW;
+the loader mask `15` (`0x0f`) enables ERROR, INFO, TRACE and DEBUG.
+Reproduce the problem, then save the kernel log with
+`sudo journalctl -k -b --no-pager` or `sudo dmesg`.
+
+To capture messages from module initialization, set the options before the
+modules are loaded:
+
+```bash
+sudo tee /etc/modprobe.d/aic8800-debug.conf >/dev/null <<'EOF'
+options aic8800_fdrv aicwf_dbg_level=527
+options aic_load_fw aicwf_dbg_level=15
+EOF
+```
+
+Reload both modules or reboot, then reproduce the device initialization.
+If the modules load from an initramfs, regenerate that initramfs using your
+distribution's procedure so it includes these options.
+
+After collecting the logs, remove the temporary
+`/etc/modprobe.d/aic8800-debug.conf` file and restore the running modules'
+default masks:
+
+```bash
+echo 1 | sudo tee /sys/module/aic8800_fdrv/parameters/aicwf_dbg_level
+echo 1 | sudo tee /sys/module/aic_load_fw/parameters/aicwf_dbg_level
+```
+
+If the options were included in an initramfs, regenerate it after removing
+the configuration as well.
+
 ### Bluetooth on Combo Adapters
 
 Bluetooth support does not require a separate AIC transport module. After
@@ -228,33 +294,3 @@ The Wi-Fi-reset recovery behavior tracked in
 [issue #53](https://github.com/shenmintao/aic8800d80/issues/53) remains a known
 limitation: after an airplane-mode or hotspot reset, Bluetooth may require a
 physical unplug/replug of the adapter.
-
-
-### Debug Logging
-
-The Wi-Fi driver's log is set by its `aicwf_dbg_level` parameter, a mask. The default, `0x203`, logs errors
-(`0x1`), information (`0x2`) and firmware messages (`0x200`). Add `0x8` for debug detail: `0x20b`.
-
-At the default level the log keeps a summary of what is routine:
-
-- the firmware patch table: one line with the number of entries written, and any failure;
-- 4-address frames that a build without `CONFIG_SUPPORT_4ADDR` drops: the first at once, then a count at most
-  once a minute.
-
-With `0x8` it also logs each patch-table entry, and each dropped 4-address frame with a dump of it.
-
-To set it for the running driver (back to the default with `0x203`):
-
-```bash
-echo 0x20b | sudo tee /sys/module/aic8800_fdrv/parameters/aicwf_dbg_level
-```
-
-The patch table is written when the adapter starts, so to log its entries, set the level before the driver loads,
-then load it or plug the adapter in:
-
-```bash
-echo 'options aic8800_fdrv aicwf_dbg_level=0x20b' | sudo tee /etc/modprobe.d/aic8800-debug.conf
-sudo modprobe -r aic8800_fdrv && sudo modprobe aic8800_fdrv
-```
-
-Remove that file to go back to the default at the next load.

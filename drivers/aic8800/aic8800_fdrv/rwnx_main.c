@@ -548,7 +548,7 @@ static const int rwnx_hwq2uapsd[NL80211_NUM_ACS] = {
 struct semaphore aicwf_deinit_sem;
 atomic_t aicwf_deinit_atomic;
 
-int aicwf_dbg_level = LOGERROR|LOGINFO|LOGFW;
+int aicwf_dbg_level = LOGERROR;
 module_param(aicwf_dbg_level, int, 0660);
 #ifdef CONFIG_DYNAMIC_PWR
 int dynamic_pwr = 1;
@@ -2947,8 +2947,10 @@ static int rwnx_cfg80211_scan(struct wiphy *wiphy,
 	}
 
     rwnx_hw->scan_request = request;
-    if ((error = rwnx_send_scanu_req(rwnx_hw, rwnx_vif, request)))
+    if ((error = rwnx_send_scanu_req(rwnx_hw, rwnx_vif, request))) {
+        rwnx_hw->scan_request = NULL;
         return error;
+    }
 
     return 0;
 }
@@ -9282,6 +9284,11 @@ if((g_rwnx_plat->usbdev->chipid == PRODUCT_ID_AIC8801) ||
         #endif
         WIPHY_FLAG_4ADDR_STATION |
         WIPHY_FLAG_4ADDR_AP;
+
+#if !defined(CONFIG_BR_SUPPORT) && !defined(CONFIG_BAND_STEERING)
+    /* The optional bridge and steering paths still use init_net. */
+    wiphy->flags |= WIPHY_FLAG_NETNS_OK;
+#endif
 
     #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0)
     wiphy->max_num_csa_counters = BCN_MAX_CSA_CPT;
