@@ -292,7 +292,7 @@ static void cmd_mgr_reset_device(struct rwnx_cmd_mgr *cmd_mgr)
     struct aic_usb_dev *usbdev = container_of(cmd_mgr, struct aic_usb_dev, cmd_mgr);
     struct aicwf_port *port;
 
-    if (!usbdev->intf)
+    if (!usbdev->intf || cmd_mgr->state == RWNX_CMD_MGR_STATE_DEINIT)
         return;
     spin_lock_bh(&aicwf_ports_lock);
     port = aicwf_port_of(usbdev->udev);
@@ -358,6 +358,11 @@ int cmd_mgr_queue_force_defer(struct rwnx_cmd_mgr *cmd_mgr, struct rwnx_cmd *cmd
 #endif
     spin_lock_bh(&cmd_mgr->lock);
 
+    if (cmd_mgr->state == RWNX_CMD_MGR_STATE_DEINIT) {
+        cmd->result = -EPIPE;
+        spin_unlock_bh(&cmd_mgr->lock);
+        return -EPIPE;
+    }
     if (cmd_mgr->state == RWNX_CMD_MGR_STATE_CRASHED) {
         printk(KERN_CRIT"cmd queue crashed\n");
         cmd->result = -EPIPE;
@@ -425,6 +430,11 @@ static int cmd_mgr_queue(struct rwnx_cmd_mgr *cmd_mgr, struct rwnx_cmd *cmd)
     if(cmd->e2a_msg != NULL) {
         do {
 			spin_lock_bh(&cmd_mgr->lock);
+			if (cmd_mgr->state == RWNX_CMD_MGR_STATE_DEINIT) {
+				cmd->result = -EPIPE;
+				spin_unlock_bh(&cmd_mgr->lock);
+				return -EPIPE;
+			}
 			if(cmd_mgr->state == RWNX_CMD_MGR_STATE_CRASHED) {
 				AICWFDBG(LOGERROR, "cmd queue crashed\n");
 				cmd->result = -EPIPE;
@@ -451,6 +461,11 @@ static int cmd_mgr_queue(struct rwnx_cmd_mgr *cmd_mgr, struct rwnx_cmd *cmd)
         } while(!empty);//wait for cmd queue empty
     } else {
 			spin_lock_bh(&cmd_mgr->lock);
+			if (cmd_mgr->state == RWNX_CMD_MGR_STATE_DEINIT) {
+				cmd->result = -EPIPE;
+				spin_unlock_bh(&cmd_mgr->lock);
+				return -EPIPE;
+			}
 			if (cmd_mgr->state == RWNX_CMD_MGR_STATE_CRASHED) {
 				printk(KERN_CRIT"cmd queue crashed\n");
 				cmd->result = -EPIPE;
@@ -579,7 +594,8 @@ static int cmd_mgr_queue(struct rwnx_cmd_mgr *cmd_mgr, struct rwnx_cmd *cmd)
 
             cmd_dump(cmd);
             spin_lock_bh(&cmd_mgr->lock);
-            cmd_mgr->state = RWNX_CMD_MGR_STATE_CRASHED;
+            if (cmd_mgr->state != RWNX_CMD_MGR_STATE_DEINIT)
+                cmd_mgr->state = RWNX_CMD_MGR_STATE_CRASHED;
             if (cmd_mgr->queue_sz == 0)
                 rwnx_wakeup_unlock(usbdev->rwnx_hw->ws_tx);
             if (!(cmd->flags & RWNX_CMD_FLAG_DONE)) {
@@ -709,7 +725,8 @@ void cmd_mgr_task_process(struct work_struct *work)
                 if (empty)
                     cmd_mgr_log_fw_state(usbdev, next->id);
                 spin_lock_bh(&cmd_mgr->lock);
-                cmd_mgr->state = RWNX_CMD_MGR_STATE_CRASHED;
+                if (cmd_mgr->state != RWNX_CMD_MGR_STATE_DEINIT)
+                    cmd_mgr->state = RWNX_CMD_MGR_STATE_CRASHED;
                 if (cmd_mgr->queue_sz == 0)
                     rwnx_wakeup_unlock(usbdev->rwnx_hw->ws_tx);
                 spin_unlock_bh(&cmd_mgr->lock);
@@ -831,8 +848,7 @@ static void cmd_mgr_drain(struct rwnx_cmd_mgr *cmd_mgr)
 
     spin_lock_bh(&cmd_mgr->lock);
     list_for_each_entry_safe(cur, nxt, &cmd_mgr->cmds, list) {
-        list_del_init(&cur->list);
-        //cmd_mgr->queue_sz--;
+        cmd_unqueue(cmd_mgr, cur);
         if (!(cur->flags & RWNX_CMD_FLAG_NONBLOCK))
             complete(&cur->complete);
     }
@@ -865,6 +881,20 @@ void rwnx_cmd_mgr_init(struct rwnx_cmd_mgr *cmd_mgr)
         txrx_err("insufficient memory to create cmd workqueue.\n");
         return;
     }
+}
+
+/* Before the platform goes (rwnx_cfg80211_deinit(), and its init's failure path): no command taken any more, those
+ * queued woken, and the command worker finished, while rwnx_hw and its wakeup sources, which the worker uses, are
+ * still there. A timeout meanwhile neither marks the manager crashed nor resets the device. */
+void rwnx_cmd_mgr_quiesce(struct rwnx_cmd_mgr *cmd_mgr)
+{
+    if (!cmd_mgr || !cmd_mgr->cmd_wq)
+        return;
+    spin_lock_bh(&cmd_mgr->lock);
+    cmd_mgr->state = RWNX_CMD_MGR_STATE_DEINIT;
+    spin_unlock_bh(&cmd_mgr->lock);
+    cmd_mgr->drain(cmd_mgr);
+    flush_workqueue(cmd_mgr->cmd_wq);
 }
 
 void rwnx_cmd_mgr_deinit(struct rwnx_cmd_mgr *cmd_mgr)
