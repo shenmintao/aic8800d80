@@ -9281,8 +9281,12 @@ if((g_rwnx_plat->usbdev->chipid == PRODUCT_ID_AIC8801) ||
         WIPHY_FLAG_HAS_CHANNEL_SWITCH |
         #endif
         WIPHY_FLAG_4ADDR_STATION |
-        WIPHY_FLAG_4ADDR_AP |
-        WIPHY_FLAG_NETNS_OK;
+        WIPHY_FLAG_4ADDR_AP;
+
+#if !defined(CONFIG_BR_SUPPORT) && !defined(CONFIG_BAND_STEERING)
+    /* The optional bridge and steering paths still use init_net. */
+    wiphy->flags |= WIPHY_FLAG_NETNS_OK;
+#endif
 
     #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0)
     wiphy->max_num_csa_counters = BCN_MAX_CSA_CPT;
