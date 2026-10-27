@@ -18,6 +18,7 @@ void rwnx_release_firmware_common(u32** buffer);
 extern int testmode;
 extern u8 chip_id;
 extern u8 chip_mcu_id;
+extern u8 aic8800d80_m80_variant;
 
 typedef u32 (*array2_tbl_t)[2];
 
@@ -233,6 +234,7 @@ int rwnx_plat_userconfig_load_8800d80(struct aic_usb_dev *usb_dev){
 int system_config_8800d80(struct aic_usb_dev *usb_dev){
 		int syscfg_num;
 		int ret, cnt;
+		u32 product_id;
 		const u32 mem_addr = 0x40500000;
 		const u32 cache_mem_addr = 0x40100020;
 		struct dbg_mem_read_cfm rd_mem_addr_cfm;
@@ -245,7 +247,9 @@ int system_config_8800d80(struct aic_usb_dev *usb_dev){
             chip_mcu_id = 1;
         }
 		chip_id = (u8)(rd_mem_addr_cfm.memdata >> 16);
-		printk("chip_id=%x, chip_mcu_id = %d\n", chip_id, chip_mcu_id);
+		product_id = rd_mem_addr_cfm.memdata & 0xFFFF;
+		printk("chip_id=%x, chip_mcu_id = %d, product_id=0x%04x\n",
+		       chip_id, chip_mcu_id, product_id);
 		printk("AIC8800D80 legacy: using Radxa SDK V3 loader profile\n");
 		if (chip_mcu_id == 1) {
 			ret = rwnx_send_dbg_mem_read_req(usb_dev, cache_mem_addr, &rd_mem_addr_cfm);
@@ -260,6 +264,27 @@ int system_config_8800d80(struct aic_usb_dev *usb_dev){
 				return ret;
 			}
 			printk("AIC8800D80 MCU1: enabled Bluetooth cache fix\n");
+		}
+		/*
+		 * product 0x8820: the Windows loader (aicloadfw.sys) performs two extra
+		 * system-configuration writes and uploads only the FMAC firmware, without
+		 * the adid/patch/patch-table/patch-config layer. Upstream issue #79 and
+		 * #118: without this the firmware boots and answers configuration
+		 * requests, but never confirms MM_START_REQ, so the MAC never starts.
+		 */
+		if (product_id == 0x8820) {
+			ret = rwnx_send_dbg_mem_write_req(usb_dev, 0x40500010, 0x2);
+			if (ret) {
+				printk("0x8820: 40500010 write fail: %d\n", ret);
+				return ret;
+			}
+			ret = rwnx_send_dbg_mem_mask_write_req(usb_dev, 0x40506024, 0xff, 0xdf);
+			if (ret) {
+				printk("0x8820: 40506024 mask write fail: %d\n", ret);
+				return ret;
+			}
+			aic8800d80_m80_variant = 1;
+			printk("AIC8800D80 0x8820: applied vendor syscfg writes, patch layer will be skipped\n");
 		}
     #if 1
 		syscfg_num = sizeof(syscfg_tbl_8800d80) / sizeof(u32) / 2;
@@ -364,6 +389,7 @@ int aicfw_download_fw_8800d80(struct aic_usb_dev *usb_dev)
     if(testmode == FW_NORMAL_MODE){
 
         if (chip_id != CHIP_REV_U01){
+            if (!aic8800d80_m80_variant) {
             if(rwnx_plat_bin_fw_upload_android(usb_dev, patch_info.addr_adid, FW_ADID_BASE_NAME_8800D80_U02)) {
                 return -1;
             }
@@ -377,6 +403,9 @@ int aicfw_download_fw_8800d80(struct aic_usb_dev *usb_dev)
 
             if (aicbt_patch_table_load(usb_dev, head)) {
                 return -1;
+            }
+            } else {
+                printk("AIC8800D80 0x8820: skipping adid/patch/patch-table upload (vendor loader behaviour)\n");
             }
 
             if (IS_CHIP_ID_H()){
@@ -393,7 +422,7 @@ int aicfw_download_fw_8800d80(struct aic_usb_dev *usb_dev)
             if (rwnx_send_dbg_mem_write_req(usb_dev, 0x40500048, 0x1e0000))
                 return -1;
             #endif
-            if (aicwf_patch_config_8800d80(usb_dev)) {
+            if (!aic8800d80_m80_variant && aicwf_patch_config_8800d80(usb_dev)) {
                 return -1;
             }
             if (rwnx_send_dbg_start_app_req(usb_dev, RAM_FMAC_FW_ADDR_8800D80_U02, HOST_START_APP_AUTO)) {

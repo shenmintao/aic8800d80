@@ -39,6 +39,7 @@ extern uint32_t gpio_dft_lvl;//0:defalut pull down,  1:default pull up
 u8 chip_id = 0;
 u8 chip_sub_id = 0;
 u8 chip_mcu_id = 0;
+u8 aic8800d80_m80_variant = 0; /* product_id == 0x8820 (upstream issue #79) */
 int fw_loaded = 0;
 
 void aicwf_usb_tx_flowctrl(struct aic_usb_dev *usb_dev, bool state)
