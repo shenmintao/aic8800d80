@@ -233,6 +233,7 @@ int rwnx_plat_userconfig_load_8800d80(struct aic_usb_dev *usb_dev){
 int system_config_8800d80(struct aic_usb_dev *usb_dev){
 		int syscfg_num;
 		int ret, cnt;
+		u32 product_id;
 		const u32 mem_addr = 0x40500000;
 		const u32 cache_mem_addr = 0x40100020;
 		struct dbg_mem_read_cfm rd_mem_addr_cfm;
@@ -245,7 +246,9 @@ int system_config_8800d80(struct aic_usb_dev *usb_dev){
             chip_mcu_id = 1;
         }
 		chip_id = (u8)(rd_mem_addr_cfm.memdata >> 16);
-		printk("chip_id=%x, chip_mcu_id = %d\n", chip_id, chip_mcu_id);
+		product_id = rd_mem_addr_cfm.memdata & 0xFFFF;
+		printk("chip_id=%x, chip_mcu_id = %d, product_id=0x%04x\n",
+		       chip_id, chip_mcu_id, product_id);
 		printk("AIC8800D80 legacy: using Radxa SDK V3 loader profile\n");
 		if (chip_mcu_id == 1) {
 			ret = rwnx_send_dbg_mem_read_req(usb_dev, cache_mem_addr, &rd_mem_addr_cfm);
@@ -260,6 +263,25 @@ int system_config_8800d80(struct aic_usb_dev *usb_dev){
 				return ret;
 			}
 			printk("AIC8800D80 MCU1: enabled Bluetooth cache fix\n");
+		}
+		/*
+		 * Product 0x8820 needs these extra system-configuration writes for
+		 * MM_START to complete (#118/#119). Keep the normal patch uploads:
+		 * skipping them causes Bluetooth HCI Reset to time out on the
+		 * reported MCU1 unit.
+		 */
+		if (product_id == 0x8820) {
+			ret = rwnx_send_dbg_mem_write_req(usb_dev, 0x40500010, 0x2);
+			if (ret) {
+				printk("0x8820: 40500010 write fail: %d\n", ret);
+				return ret;
+			}
+			ret = rwnx_send_dbg_mem_mask_write_req(usb_dev, 0x40506024, 0xff, 0xdf);
+			if (ret) {
+				printk("0x8820: 40506024 mask write fail: %d\n", ret);
+				return ret;
+			}
+			printk("AIC8800D80 0x8820: applied vendor syscfg writes\n");
 		}
     #if 1
 		syscfg_num = sizeof(syscfg_tbl_8800d80) / sizeof(u32) / 2;

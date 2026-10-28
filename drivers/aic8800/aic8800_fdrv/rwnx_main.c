@@ -3206,7 +3206,12 @@ static int rwnx_cfg80211_connect(struct wiphy *wiphy, struct net_device *dev,
 	if((int)atomic_read(&rwnx_vif->drv_conn_state) == (int)RWNX_DRV_STATUS_DISCONNECTING||
 		(int)atomic_read(&rwnx_vif->drv_conn_state) == (int)RWNX_DRV_STATUS_CONNECTING) {
 		AICWFDBG(LOGERROR, "%s driver is disconnecting or connecting ,return it \r\n", __func__);
-		return 0;
+		/*
+		 * Returning 0 would accept this request without submitting it to
+		 * the firmware or providing its own connect result.
+		 * Reject the new request without changing an in-flight operation's state.
+		 */
+		return -EBUSY;
 	}
 #endif
 
