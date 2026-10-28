@@ -35,6 +35,15 @@ cannot download dependencies because the database is stale, run
 `sudo pacman -Syu` yourself, reboot if the kernel was updated, and rerun the
 installer with headers matching the running kernel.
 
+The USB modules declare the complete firmware set shipped in `fw/`, including
+configuration files and extension patches, so initramfs tools can include those
+files when they include the modules. Rerun the installer after updating the
+driver to rebuild DKMS modules and refresh the current kernel's initramfs.
+If the adapter only works after reloading its modules after boot, check that
+the initramfs contains its `aic8800*/` firmware directory (issue #117).
+Custom firmware paths supplied with `aic_fw_path` still need to be included
+in the initramfs by the administrator.
+
 > For more information, please refer to the [README.md](README.md) file.
 
 <br>

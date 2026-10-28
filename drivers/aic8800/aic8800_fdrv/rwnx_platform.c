@@ -3972,6 +3972,7 @@ struct device *rwnx_platform_get_dev(struct rwnx_plat *rwnx_plat)
 }
 
 
+#ifndef AICWF_USB_SUPPORT
 #ifndef CONFIG_RWNX_SDM
 MODULE_FIRMWARE(RWNX_AGC_FW_NAME);
 MODULE_FIRMWARE(RWNX_FCU_FW_NAME);
@@ -3981,5 +3982,6 @@ MODULE_FIRMWARE(RWNX_MAC_FW_NAME);
 #ifndef CONFIG_RWNX_TL4
 MODULE_FIRMWARE(RWNX_MAC_FW_NAME2);
 #endif
+#endif /* !AICWF_USB_SUPPORT */
 
 
