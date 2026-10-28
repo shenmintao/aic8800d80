@@ -3207,13 +3207,11 @@ static int rwnx_cfg80211_connect(struct wiphy *wiphy, struct net_device *dev,
 		(int)atomic_read(&rwnx_vif->drv_conn_state) == (int)RWNX_DRV_STATUS_CONNECTING) {
 		AICWFDBG(LOGERROR, "%s driver is disconnecting or connecting ,return it \r\n", __func__);
 		/*
-		 * local fix: returning 0 here leaves cfg80211 waiting for a connect
+		 * Returning 0 here leaves cfg80211 waiting for a connect
 		 * result that never comes, so every later connect fails with -EALREADY
 		 * (NetworkManager then loops asking for the password forever).
-		 * Report the failure instead so cfg80211 drops its pending request.
+		 * Reject the new request without changing an in-flight operation's state.
 		 */
-		rwnx_set_conn_state(rwnx_vif, &rwnx_vif->drv_conn_state,
-				    (int)RWNX_DRV_STATUS_DISCONNECTED);
 		return -EBUSY;
 	}
 #endif

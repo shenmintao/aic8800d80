@@ -18,7 +18,6 @@ void rwnx_release_firmware_common(u32** buffer);
 extern int testmode;
 extern u8 chip_id;
 extern u8 chip_mcu_id;
-extern u8 aic8800d80_m80_variant;
 
 typedef u32 (*array2_tbl_t)[2];
 
@@ -248,6 +247,7 @@ int system_config_8800d80(struct aic_usb_dev *usb_dev){
         }
 		chip_id = (u8)(rd_mem_addr_cfm.memdata >> 16);
 		product_id = rd_mem_addr_cfm.memdata & 0xFFFF;
+		usb_dev->d80_m80_variant = product_id == 0x8820;
 		printk("chip_id=%x, chip_mcu_id = %d, product_id=0x%04x\n",
 		       chip_id, chip_mcu_id, product_id);
 		printk("AIC8800D80 legacy: using Radxa SDK V3 loader profile\n");
@@ -272,7 +272,7 @@ int system_config_8800d80(struct aic_usb_dev *usb_dev){
 		 * #118: without this the firmware boots and answers configuration
 		 * requests, but never confirms MM_START_REQ, so the MAC never starts.
 		 */
-		if (product_id == 0x8820) {
+		if (usb_dev->d80_m80_variant) {
 			ret = rwnx_send_dbg_mem_write_req(usb_dev, 0x40500010, 0x2);
 			if (ret) {
 				printk("0x8820: 40500010 write fail: %d\n", ret);
@@ -283,7 +283,6 @@ int system_config_8800d80(struct aic_usb_dev *usb_dev){
 				printk("0x8820: 40506024 mask write fail: %d\n", ret);
 				return ret;
 			}
-			aic8800d80_m80_variant = 1;
 			printk("AIC8800D80 0x8820: applied vendor syscfg writes, patch layer will be skipped\n");
 		}
     #if 1
@@ -389,7 +388,7 @@ int aicfw_download_fw_8800d80(struct aic_usb_dev *usb_dev)
     if(testmode == FW_NORMAL_MODE){
 
         if (chip_id != CHIP_REV_U01){
-            if (!aic8800d80_m80_variant) {
+            if (!usb_dev->d80_m80_variant) {
             if(rwnx_plat_bin_fw_upload_android(usb_dev, patch_info.addr_adid, FW_ADID_BASE_NAME_8800D80_U02)) {
                 return -1;
             }
@@ -422,7 +421,7 @@ int aicfw_download_fw_8800d80(struct aic_usb_dev *usb_dev)
             if (rwnx_send_dbg_mem_write_req(usb_dev, 0x40500048, 0x1e0000))
                 return -1;
             #endif
-            if (!aic8800d80_m80_variant && aicwf_patch_config_8800d80(usb_dev)) {
+            if (!usb_dev->d80_m80_variant && aicwf_patch_config_8800d80(usb_dev)) {
                 return -1;
             }
             if (rwnx_send_dbg_start_app_req(usb_dev, RAM_FMAC_FW_ADDR_8800D80_U02, HOST_START_APP_AUTO)) {
