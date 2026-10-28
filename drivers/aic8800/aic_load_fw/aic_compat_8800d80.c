@@ -247,7 +247,6 @@ int system_config_8800d80(struct aic_usb_dev *usb_dev){
         }
 		chip_id = (u8)(rd_mem_addr_cfm.memdata >> 16);
 		product_id = rd_mem_addr_cfm.memdata & 0xFFFF;
-		usb_dev->d80_m80_variant = product_id == 0x8820;
 		printk("chip_id=%x, chip_mcu_id = %d, product_id=0x%04x\n",
 		       chip_id, chip_mcu_id, product_id);
 		printk("AIC8800D80 legacy: using Radxa SDK V3 loader profile\n");
@@ -266,13 +265,12 @@ int system_config_8800d80(struct aic_usb_dev *usb_dev){
 			printk("AIC8800D80 MCU1: enabled Bluetooth cache fix\n");
 		}
 		/*
-		 * product 0x8820: the Windows loader (aicloadfw.sys) performs two extra
-		 * system-configuration writes and uploads only the FMAC firmware, without
-		 * the adid/patch/patch-table/patch-config layer. Upstream issue #79 and
-		 * #118: without this the firmware boots and answers configuration
-		 * requests, but never confirms MM_START_REQ, so the MAC never starts.
+		 * Product 0x8820 needs these extra system-configuration writes for
+		 * MM_START to complete (#118/#119). Keep the normal patch uploads:
+		 * skipping them causes Bluetooth HCI Reset to time out on the
+		 * reported MCU1 unit.
 		 */
-		if (usb_dev->d80_m80_variant) {
+		if (product_id == 0x8820) {
 			ret = rwnx_send_dbg_mem_write_req(usb_dev, 0x40500010, 0x2);
 			if (ret) {
 				printk("0x8820: 40500010 write fail: %d\n", ret);
@@ -283,7 +281,7 @@ int system_config_8800d80(struct aic_usb_dev *usb_dev){
 				printk("0x8820: 40506024 mask write fail: %d\n", ret);
 				return ret;
 			}
-			printk("AIC8800D80 0x8820: applied vendor syscfg writes, patch layer will be skipped\n");
+			printk("AIC8800D80 0x8820: applied vendor syscfg writes\n");
 		}
     #if 1
 		syscfg_num = sizeof(syscfg_tbl_8800d80) / sizeof(u32) / 2;
@@ -388,7 +386,6 @@ int aicfw_download_fw_8800d80(struct aic_usb_dev *usb_dev)
     if(testmode == FW_NORMAL_MODE){
 
         if (chip_id != CHIP_REV_U01){
-            if (!usb_dev->d80_m80_variant) {
             if(rwnx_plat_bin_fw_upload_android(usb_dev, patch_info.addr_adid, FW_ADID_BASE_NAME_8800D80_U02)) {
                 return -1;
             }
@@ -402,9 +399,6 @@ int aicfw_download_fw_8800d80(struct aic_usb_dev *usb_dev)
 
             if (aicbt_patch_table_load(usb_dev, head)) {
                 return -1;
-            }
-            } else {
-                printk("AIC8800D80 0x8820: skipping adid/patch/patch-table upload (vendor loader behaviour)\n");
             }
 
             if (IS_CHIP_ID_H()){
@@ -421,7 +415,7 @@ int aicfw_download_fw_8800d80(struct aic_usb_dev *usb_dev)
             if (rwnx_send_dbg_mem_write_req(usb_dev, 0x40500048, 0x1e0000))
                 return -1;
             #endif
-            if (!usb_dev->d80_m80_variant && aicwf_patch_config_8800d80(usb_dev)) {
+            if (aicwf_patch_config_8800d80(usb_dev)) {
                 return -1;
             }
             if (rwnx_send_dbg_start_app_req(usb_dev, RAM_FMAC_FW_ADDR_8800D80_U02, HOST_START_APP_AUTO)) {

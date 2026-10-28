@@ -41,14 +41,14 @@ typedef uint8_t u8;
 #define FW_NORMAL_MODE 0
 #define HOST_START_APP_AUTO 0
 struct aic_usb_dev {
-    bool d80_m80_variant;
     u32 id, cache;
     int syscfg_writes, syscfg_masks, patches, fmacs, starts;
 };
 struct dbg_mem_read_cfm { u32 memdata; };
 struct aicbt_patch_info_t { u32 addr_adid, addr_patch; };
 static u8 chip_id, chip_mcu_id;
-static int testmode = FW_NORMAL_MODE, fail_read, fail_write;
+static int testmode = FW_NORMAL_MODE, fail_read, fail_write, fail_mask;
+static u32 fail_write_addr;
 static u32 syscfg_tbl_8800d80[0][2], syscfg_tbl_masked_8800d80[0][3];
 static int rwnx_send_dbg_mem_read_req(struct aic_usb_dev *dev, u32 addr,
                                     struct dbg_mem_read_cfm *cfm) {
@@ -56,13 +56,14 @@ static int rwnx_send_dbg_mem_read_req(struct aic_usb_dev *dev, u32 addr,
     cfm->memdata = addr == 0x40500000 ? dev->id : dev->cache; return 0;
 }
 static int rwnx_send_dbg_mem_write_req(struct aic_usb_dev *dev, u32 addr, u32 val) {
-    if (fail_write) return -EIO;
+    if (fail_write && (!fail_write_addr || addr == fail_write_addr)) return -EIO;
     if (addr == 0x40100020) dev->cache = val;
     if (addr == 0x40500010) { assert(val == 2); dev->syscfg_writes++; }
     return 0;
 }
 static int rwnx_send_dbg_mem_mask_write_req(struct aic_usb_dev *dev, u32 addr, u32 mask, u32 val) {
     assert(addr == 0x40506024 && mask == 0xff && val == 0xdf);
+    if (fail_mask) return -EIO;
     dev->syscfg_masks++; return 0;
 }
 static int rwnx_plat_bin_fw_upload_android(struct aic_usb_dev *dev, u32 addr, const char *name) {
@@ -102,22 +103,28 @@ return 0;
 }
 int main(void) {
     struct aic_usb_dev m80 = {.id = 0x00078820}, d80 = {.id = 0x00078800};
-    /* Configuring a second adapter must not change the first's load sequence. */
+    /* Both products need the full patch layer; only 0x8820 gets extra syscfg. */
     assert(system_config_8800d80(&m80) == 0);
     assert(system_config_8800d80(&d80) == 0);
-    assert(load_normal(&m80) == 0 && m80.patches == 0 && m80.fmacs == 1 && m80.starts == 1);
+    assert(load_normal(&m80) == 0 && m80.patches == 5 && m80.fmacs == 1 && m80.starts == 1);
     assert(load_normal(&d80) == 0 && d80.patches == 5 && d80.fmacs == 1 && d80.starts == 1);
     assert(m80.syscfg_writes == 1 && m80.syscfg_masks == 1 && (m80.cache & 1));
     assert(d80.syscfg_writes == 0 && d80.syscfg_masks == 0 && (d80.cache & 1));
-    /* Reusing a zeroed/reprobed device, and a fresh device after an M80. */
+    /* Re-read the product on reprobe in both directions. */
     m80.id = 0x00078800; m80.patches = m80.fmacs = m80.starts = 0;
     assert(system_config_8800d80(&m80) == 0);
-    assert(load_normal(&m80) == 0 && m80.patches == 5);
+    assert(load_normal(&m80) == 0 && m80.patches == 5 && m80.fmacs == 1 && m80.starts == 1);
+    assert(m80.syscfg_writes == 1 && m80.syscfg_masks == 1);
     d80.id = 0x00078820; d80.patches = d80.fmacs = d80.starts = 0;
     assert(system_config_8800d80(&d80) == 0);
-    assert(load_normal(&d80) == 0 && d80.patches == 0 && d80.fmacs == 1);
+    assert(load_normal(&d80) == 0 && d80.patches == 5 && d80.fmacs == 1 && d80.starts == 1);
+    assert(d80.syscfg_writes == 1 && d80.syscfg_masks == 1);
     fail_read = 1; assert(system_config_8800d80(&d80) == -EIO);
     fail_read = 0; fail_write = 1; assert(system_config_8800d80(&d80) == -EIO);
+    fail_write_addr = 0x40500010;
+    assert(system_config_8800d80(&d80) == -EIO);
+    fail_write = 0; fail_mask = 1;
+    assert(system_config_8800d80(&d80) == -EIO);
     for (int state = RWNX_DRV_STATUS_CONNECTING; state <= RWNX_DRV_STATUS_DISCONNECTING; state++) {
         struct vif vif = {.drv_conn_state = state};
         assert(busy(&vif) == -EBUSY && vif.drv_conn_state == state);
@@ -132,5 +139,5 @@ with tempfile.TemporaryDirectory(prefix="aic-8820-test-") as temp:
     subprocess.run([os.environ.get("CC", "cc"), "-std=gnu11", "-o", str(binary),
                     str(c_file)], check=True)
     subprocess.run([str(binary)], check=True)
-print("PASS: per-device/reprobe loader selection, MCU1 cache fix, write errors, busy connect state")
+print("PASS: full patch uploads for both products, per-probe syscfg, MCU1 cache fix, write errors, busy connect state")
 

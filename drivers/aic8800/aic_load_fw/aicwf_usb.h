@@ -223,7 +223,6 @@ struct aic_usb_dev {
     #endif
     
     u16 chipid;
-    bool d80_m80_variant; /* D80 product 0x8820: FMAC-only loader sequence */
     bool tbusy;
     bool app_cmp;
     u32 fw_version_uint;
