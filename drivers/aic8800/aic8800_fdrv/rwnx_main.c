@@ -4191,7 +4191,7 @@ static bool rwnx_sta_joining(struct rwnx_hw *rwnx_hw)
             return true;
     }
     return rwnx_hw->last_connect_ind &&
-           time_before(jiffies, rwnx_hw->last_connect_ind + msecs_to_jiffies(AP_START_JOIN_SETTLE_MS));
+           time_before64(get_jiffies_64(), rwnx_hw->last_connect_ind + msecs_to_jiffies(AP_START_JOIN_SETTLE_MS));
 }
 
 /**
