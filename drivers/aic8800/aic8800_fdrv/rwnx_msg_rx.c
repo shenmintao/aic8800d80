@@ -930,7 +930,7 @@ static inline int rwnx_rx_sm_connect_ind(struct rwnx_hw *rwnx_hw,
 
     aicwf_join_watch_stop(rwnx_hw);
     if (!ind->status_code) {
-        rwnx_hw->last_connect_ind = jiffies ? jiffies : 1;
+        rwnx_hw->last_connect_ind = get_jiffies_64();
     }
 	
 	if(!rwnx_vif){
