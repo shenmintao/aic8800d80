@@ -907,6 +907,10 @@ void rwnx_cmd_mgr_quiesce(struct rwnx_cmd_mgr *cmd_mgr)
 {
     if (!cmd_mgr || !cmd_mgr->cmd_wq)
         return;
+#ifdef AICWF_USB_SUPPORT
+    /* Again, as aicwf_bus_deinit() did: a connect confirmed since may have started it. None can start now. */
+    aicwf_join_watch_cancel(container_of(cmd_mgr, struct aic_usb_dev, cmd_mgr));
+#endif
     spin_lock_bh(&cmd_mgr->lock);
     cmd_mgr->state = RWNX_CMD_MGR_STATE_DEINIT;
     spin_unlock_bh(&cmd_mgr->lock);
