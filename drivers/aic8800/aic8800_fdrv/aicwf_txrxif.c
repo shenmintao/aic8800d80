@@ -214,6 +214,7 @@ void aicwf_bus_deinit(struct device *dev)
 
 #ifdef AICWF_USB_SUPPORT
     usb = bus_if->bus_priv.usb;
+    aicwf_join_watch_cancel(usb);
 	aicwf_usb_cancel_all_urbs(usb);//AIDEN
 
     if(g_rwnx_plat && g_rwnx_plat->enabled){
