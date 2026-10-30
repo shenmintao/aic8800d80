@@ -642,7 +642,8 @@ void rwnx_tx_push(struct rwnx_hw *rwnx_hw, struct rwnx_txhdr *txhdr, int flags)
     rwnx_ipc_txdesc_push(rwnx_hw, &sw_txhdr->desc, skb, hw_queue, user);
 #else
 #ifdef  AICWF_SDIO_SUPPORT
-    if( ((sw_txhdr->desc.host.flags & TXU_CNTRL_MGMT) && \
+    /* Raw monitor frames also need a firmware confirmation-ring descriptor. */
+    if( sw_txhdr->raw_frame || ((sw_txhdr->desc.host.flags & TXU_CNTRL_MGMT) && \
 	((*(skb->data+sw_txhdr->headroom)==0xd0) || (*(skb->data+sw_txhdr->headroom)==0x10) || (*(skb->data+sw_txhdr->headroom)==0x30))) || \
         (sw_txhdr->desc.host.ethertype == 0x8e88) ) { // 0xd0:Action, 0x10:AssocRsp, 0x8e88:EAPOL
         sw_txhdr->need_cfm = 1;
@@ -671,7 +672,8 @@ void rwnx_tx_push(struct rwnx_hw *rwnx_hw, struct rwnx_txhdr *txhdr, int flags)
     aicwf_frame_tx((void *)(rwnx_hw->sdiodev), skb);
 #endif
 #ifdef AICWF_USB_SUPPORT
-    if( ((sw_txhdr->desc.host.flags & TXU_CNTRL_MGMT) && \
+    /* Bit 30's fixed-rate descriptor silently drops injected D80 frames. */
+    if( sw_txhdr->raw_frame || ((sw_txhdr->desc.host.flags & TXU_CNTRL_MGMT) && \
 	((*(skb->data+sw_txhdr->headroom)==0xd0) || (*(skb->data+sw_txhdr->headroom)==0x10) || (*(skb->data+sw_txhdr->headroom)==0x30))) || \
         (sw_txhdr->desc.host.ethertype == 0x8e88) || (sw_txhdr->desc.host.ethertype == 0xb488)) {
 	// 0xd0:Action, 0x10:AssocRsp, 0x8e88:EAPOL, 0xb488: WAPI
