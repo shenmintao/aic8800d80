@@ -507,8 +507,9 @@ install_firmware() {
         mv "${existing_fw[@]}" "$backup_dir/" >> "$LOG_FILE" 2>&1
     fi
 
-    # Copy all firmware variants
+    # Copy all firmware variants (minimal systems may not have /lib/firmware yet)
     print_info "Installing firmware for all chip variants..."
+    mkdir -p /lib/firmware
     for fw_dir in "${fw_dirs[@]}"; do
         if [ -d "$fw_dir" ]; then
             local fw_name
