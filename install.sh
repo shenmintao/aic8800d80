@@ -219,80 +219,124 @@ kernel_build_tree_available() {
     [ -d "$kernel_build_dir" ] && [ -r "$kernel_build_dir/Makefile" ]
 }
 
+# Kernel flavour from the release string, used to name the headers
+# metapackage: 6.12.113+deb13-amd64 -> amd64, 6.8.0-47-generic -> generic,
+# 6.12.113+deb13-cloud-amd64 -> cloud-amd64.
+kernel_flavour() {
+    uname -r | sed -E 's/^[0-9]+\.[0-9]+(\.[0-9]+)?(-[0-9]+)?(\+[^-]+)*-//'
+}
+
+# Headers that follow kernel upgrades. Without them DKMS has nothing to
+# build against when a new kernel is installed and skips the rebuild
+# silently, so the adapter stops working after the next reboot.
+install_kernel_headers() {
+    local pkg_manager="$1"
+    local kver flavour
+    kver="$(uname -r)"
+    flavour="$(kernel_flavour)"
+    local -a headers=()
+
+    case "$pkg_manager" in
+        apt)
+            if ! kernel_build_tree_available; then
+                headers+=("linux-headers-${kver}")
+            fi
+            if [ -n "$flavour" ] && [ "$flavour" != "$kver" ] && apt-cache show "linux-headers-${flavour}" > /dev/null 2>&1; then
+                headers+=("linux-headers-${flavour}")
+            else
+                print_warning "No kernel headers metapackage found for flavour '${flavour}'."
+                print_warning "Install headers for each new kernel yourself, or DKMS cannot rebuild the driver after kernel updates."
+            fi
+            [ "${#headers[@]}" -eq 0 ] && return 0
+            run_logged "Kernel headers installation" env DEBIAN_FRONTEND=noninteractive apt-get install -y "${headers[@]}"
+            ;;
+        dnf|yum)
+            # kernel-devel is install-only and is upgraded alongside the kernel.
+            headers=("kernel-devel-${kver}" kernel-devel)
+            run_logged "Kernel headers installation" "$pkg_manager" install -y "${headers[@]}"
+            ;;
+        pacman)
+            # The pkgbase file names the kernel package (linux, linux-lts, linux-zen, ...).
+            local pkgbase="linux"
+            if [ -r "/usr/lib/modules/${kver}/pkgbase" ]; then
+                pkgbase="$(cat "/usr/lib/modules/${kver}/pkgbase")"
+            fi
+            headers=("${pkgbase}-headers")
+            run_logged "Kernel headers installation" pacman -S --needed --noconfirm "${headers[@]}"
+            ;;
+        zypper)
+            # openSUSE names headers kernel-<flavour>-devel (kernel-default-devel).
+            headers=("kernel-${kver##*-}-devel")
+            run_logged "Kernel headers installation" zypper --non-interactive install "${headers[@]}"
+            ;;
+    esac
+}
+
 install_dependencies() {
     local pkg_manager="$1"
     local install_kernel_headers=true
-    
+
     print_step "Installing dependencies..."
 
-    if kernel_build_tree_available; then
-        install_kernel_headers=false
-        print_info "Kernel build tree already exists; skipping generic kernel headers package."
-    elif is_volumio; then
+    if is_volumio; then
         install_kernel_headers=false
         print_info "Volumio detected; skipping generic kernel headers package."
     fi
-    
+
     case "$pkg_manager" in
         apt)
             print_info "Updating package database..."
             run_logged "Package database update" apt-get update
 
             local -a packages=(dkms build-essential mokutil eject usb-modeswitch)
-            if [ "$install_kernel_headers" = true ]; then
-                packages+=("linux-headers-$(uname -r)")
-            fi
             print_info "Installing: ${packages[*]}..."
             run_logged "Dependency installation" env DEBIAN_FRONTEND=noninteractive apt-get install -y "${packages[@]}"
             ;;
-            
+
         dnf)
             local -a packages=(dkms make gcc mokutil util-linux usb_modeswitch)
-            if [ "$install_kernel_headers" = true ]; then
-                packages+=(kernel-devel kernel-headers)
-            fi
             print_info "Installing: ${packages[*]}..."
             run_logged "Dependency installation" dnf install -y "${packages[@]}"
             ;;
-            
+
         yum)
             local -a packages=(dkms make gcc mokutil util-linux usb_modeswitch)
-            if [ "$install_kernel_headers" = true ]; then
-                packages+=(kernel-devel)
-            fi
             print_info "Enabling EPEL repository..."
             run_logged "EPEL repository installation" yum install -y epel-release
             print_info "Installing: ${packages[*]}..."
             run_logged "Dependency installation" yum install -y "${packages[@]}"
             ;;
-            
+
         pacman)
             local -a packages=(dkms base-devel mokutil util-linux usb_modeswitch)
-            if [ "$install_kernel_headers" = true ]; then
-                packages+=(linux-headers)
-            fi
             print_info "Installing: ${packages[*]}..."
             if ! run_logged "Dependency installation" pacman -S --needed --noconfirm "${packages[@]}"; then
                 print_error "Check the pacman errors above. If the package database is stale, run 'sudo pacman -Syu', reboot if the kernel was updated, then rerun this installer."
                 return 1
             fi
             ;;
-            
+
         zypper)
             local -a packages=(dkms make gcc mokutil util-linux usb_modeswitch)
-            if [ "$install_kernel_headers" = true ]; then
-                packages+=(kernel-devel)
-            fi
             print_info "Installing: ${packages[*]}..."
             run_logged "Dependency installation" zypper --non-interactive install "${packages[@]}"
             ;;
-            
+
         *)
             print_error "Unsupported package manager: $pkg_manager"
             exit 1
             ;;
     esac
-    
+
+    if [ "$install_kernel_headers" = true ]; then
+        print_info "Installing kernel headers for $(uname -r) and future kernels..."
+        if ! install_kernel_headers "$pkg_manager"; then
+            # Not fatal here: check_kernel_build_tree stops the install if the
+            # running kernel's build tree is still missing.
+            print_warning "Kernel headers could not be installed automatically."
+        fi
+    fi
+
     print_success "Dependencies installed successfully."
 }
 
