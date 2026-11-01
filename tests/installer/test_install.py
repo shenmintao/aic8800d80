@@ -29,7 +29,7 @@ class InstallerTests(unittest.TestCase):
 
     def run_installer_function(self, name, stubs="", after=""):
         # Extract only the functions under test; never execute main().
-        names = ["run_logged", "cleanup_on_error", name]
+        names = ["run_logged", "cleanup_on_error", "firmware_path_owner", name]
         if name == "main" and re.search(r"(?m)^preflight_build\(\)", SOURCE):
             names.insert(-1, "preflight_build")
         functions = []
@@ -48,6 +48,7 @@ SRC_DIR="$SCRIPT_DIR/installed-source"
 TMPDIR="$SCRIPT_DIR/tmp"
 export TMPDIR
 mkdir -p "$TMPDIR"
+FW_BACKUP_ROOT="$SCRIPT_DIR/backups"
 DRV_NAME=aic8800
 DRV_VERSION=1.0.0
 MODULE_NAME=aic8800_fdrv
@@ -99,12 +100,16 @@ cleanup_legacy_bluetooth_config() {{ echo LEGACY_CLEANUP; }}
         self.assertNotIn("UNEXPECTED_SUCCESS", result.stdout)
         self.assertIn("Installation failed", result.stdout)
 
-    def test_secure_boot_eof_cancels_cleanly(self):
+    def test_secure_boot_without_terminal_stops_with_failure(self):
+        # stdin is not a terminal here, so nobody can answer the prompt. The
+        # installer must stop with a non-zero status (not report success) and
+        # must not continue to the next step.
         result = self.run_installer_function(
             "check_secure_boot", 'mokutil() { echo "SecureBoot enabled"; }', "\necho UNEXPECTED_CONTINUE",
         )
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("Installation cancelled", result.stdout)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("no terminal is attached", result.stdout)
+        self.assertIn("mokutil --import", result.stdout)
         self.assertNotIn("UNEXPECTED_CONTINUE", result.stdout)
 
     def check_invalid_firmware(self):
@@ -138,6 +143,10 @@ cleanup_legacy_bluetooth_config() {{ echo LEGACY_CLEANUP; }}
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertFalse(old.exists())
         self.assertEqual((old.parent / "new.bin").read_bytes(), b"new")
+        # The old firmware is moved to a backup, not deleted.
+        backups = list((self.root / "backups").glob("aic8800-firmware-*/aic8800D80/old.bin"))
+        self.assertEqual(len(backups), 1)
+        self.assertEqual(backups[0].read_bytes(), b"old")
 
     def prepare_preflight(self):
         source = self.root / "drivers" / "aic8800" / "source.c"
