@@ -2566,6 +2566,13 @@ static void aicwf_usb_disconnect(struct usb_interface *intf)
 	}
 #endif
     aicwf_bus_deinit(usb_dev->dev);
+
+    /* Keep the reboot owed to the probe that follows a reset: USB core unbinds the interface before resetting it,
+     * while the device is still attached, and a failed reset leaves needs_binding set for its later unbind. A real
+     * disconnect has no probe left to consume the reboot. */
+    if (usb_dev->udev && usb_dev->udev->state == USB_STATE_NOTATTACHED && !intf->needs_binding)
+        aicwf_port_cancel(usb_dev->udev);
+
     aicwf_usb_deinit(usb_dev);
 
 #ifdef CONFIG_GPIO_WAKEUP
