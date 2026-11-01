@@ -501,7 +501,7 @@ install_firmware() {
     # backup lets the previous state be restored by hand.
     if [ "${#existing_fw[@]}" -gt 0 ]; then
         local backup_dir
-        backup_dir="/var/backups/aic8800-firmware-$(date '+%Y%m%d-%H%M%S')"
+        backup_dir="${FW_BACKUP_ROOT:-/var/backups}/aic8800-firmware-$(date '+%Y%m%d-%H%M%S')"
         print_info "Moving existing firmware to $backup_dir..."
         mkdir -p "$backup_dir"
         mv "${existing_fw[@]}" "$backup_dir/" >> "$LOG_FILE" 2>&1
