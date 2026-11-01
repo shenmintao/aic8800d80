@@ -254,10 +254,12 @@ the configuration as well.
 ### When the Firmware Stops Answering
 
 If a command gets no answer within its timeout, the driver drops the command and resets the USB device, so it
-probes again and loads the firmware afresh. It does this at most once every 30 seconds on each USB port, and for
-up to eight ports within the same 30 seconds; a further reset waits until one of them is past its 30 seconds. On the
-AIC8800DC and DW it first logs the firmware's state in one line (`aic8800: firmware state after ...`), and after
-the reset it reboots the chip before starting it.
+probes again and loads the firmware afresh. It does this at most once every 30 seconds on each USB port. The reboot
+owed to the probe after a reset is kept until that probe consumes it, even if it arrives later than 30 seconds; it is
+dropped when the device really disconnects, not when USB core unbinds it for the reset. Eight ports are tracked at
+once, counting both the 30-second limit and a reboot still owed; a further reset is refused while all eight are held,
+and a command refused meanwhile asks again later. On the AIC8800DC and DW it first logs the firmware's state in one
+line (`aic8800: firmware state after ...`), and after the reset it reboots the chip before starting it.
 
 **A reset takes down every interface on the adapter.** The station joins again as user space has it configured
 (NetworkManager, wpa_supplicant). An access point is not recreated by the driver: whatever started it (hostapd,

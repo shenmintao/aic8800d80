@@ -128,6 +128,7 @@ void cmd_mgr_task_process(struct work_struct *work);
 #ifdef AICWF_USB_SUPPORT
 struct usb_device;
 bool aicwf_reboot_chip_on_probe(struct usb_device *udev);
+void aicwf_port_cancel(struct usb_device *udev);
 #endif
 
 #endif /* _RWNX_CMDS_H_ */
