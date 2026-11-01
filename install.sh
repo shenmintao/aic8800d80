@@ -430,15 +430,29 @@ install_firmware() {
 
     # Install udev rules
     local rules_source="${SCRIPT_DIR}/aic.rules"
-    local rules_dest="/usr/lib/udev/rules.d/aic.rules"
+    # /etc/udev/rules.d is the administrator's location; /usr may be
+    # read-only (image-based distributions) and belongs to the package manager.
+    local rules_dest="/etc/udev/rules.d/aic.rules"
+    local old_rules
 
     if [ -f "$rules_source" ]; then
         print_info "Installing udev rules to $rules_dest..."
+        mkdir -p /etc/udev/rules.d
         cp "$rules_source" "$rules_dest" >> "$LOG_FILE" 2>&1
-        # Reload udev rules
+        # Remove copies left in vendor directories by earlier installers or
+        # manual installs. Same-named files there are shadowed by /etc anyway.
+        for old_rules in /usr/lib/udev/rules.d/aic.rules /lib/udev/rules.d/aic.rules; do
+            if [ -f "$old_rules" ] && grep -q 'AIC8800' "$old_rules" 2>/dev/null; then
+                rm -f "$old_rules" >> "$LOG_FILE" 2>&1 || print_warning "Could not remove old rules file $old_rules."
+            fi
+        done
         udevadm control --reload-rules >> "$LOG_FILE" 2>&1 || true
-        udevadm trigger >> "$LOG_FILE" 2>&1 || true
+        # Re-run the rules only for a 1111:1111 adapter that is already
+        # plugged in, rather than re-triggering every device on the system.
+        udevadm trigger --action=add --subsystem-match=usb \
+            --attr-match=idVendor=1111 --attr-match=idProduct=1111 >> "$LOG_FILE" 2>&1 || true
         print_success "Udev rules installed successfully."
+        print_info "If an adapter in mass-storage mode is already plugged in, unplug and replug it."
     else
         print_warning "Udev rules file not found: $rules_source"
     fi
