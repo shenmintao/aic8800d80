@@ -19,7 +19,11 @@ NC='\033[0m'
 
 DRV_NAME="aic8800"
 DRV_VERSION="1.0.0"
-INSTALL_LOG="/tmp/aic8800d80_install.log"
+INSTALL_LOG="/var/log/aic8800-install.log"
+# Installers before this change wrote their log to /tmp.
+if [ ! -f "$INSTALL_LOG" ] && [ -f /tmp/aic8800d80_install.log ]; then
+    INSTALL_LOG="/tmp/aic8800d80_install.log"
+fi
 
 read_dkms_conf_value() {
     local key="$1"
