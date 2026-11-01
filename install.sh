@@ -379,6 +379,26 @@ cleanup_legacy_bluetooth_config() {
     fi
 }
 
+# Print the package that owns a path, if any package manager claims it.
+firmware_path_owner() {
+    local path="$1" alt owner=""
+    alt="/usr${path}"
+    [[ "$path" == /usr/* ]] && alt="${path#/usr}"
+
+    if command -v dpkg > /dev/null 2>&1; then
+        owner=$(dpkg -S "$path" 2>/dev/null || dpkg -S "$alt" 2>/dev/null || true)
+        owner="${owner%%:*}"
+    fi
+    if [ -z "$owner" ] && command -v rpm > /dev/null 2>&1; then
+        owner=$(rpm -qf "$path" 2>/dev/null || true)
+        [[ "$owner" == *"not owned"* ]] && owner=""
+    fi
+    if [ -z "$owner" ] && command -v pacman > /dev/null 2>&1; then
+        owner=$(pacman -Qqo "$path" 2>/dev/null || true)
+    fi
+    printf '%s' "$owner"
+}
+
 install_firmware() {
     print_step "Installing firmware..."
 
@@ -406,12 +426,31 @@ install_firmware() {
         exit 1
     fi
 
+    # Never remove firmware that a distribution or AUR package installed;
+    # deleting it would leave that package's file list out of sync.
+    local -a existing_fw=()
+    local existing owner
+    mapfile -t existing_fw < <(find /lib/firmware -maxdepth 1 -name 'aic8800*' -type d 2>/dev/null | sort)
+    for existing in "${existing_fw[@]}"; do
+        owner=$(firmware_path_owner "$existing")
+        if [ -n "$owner" ]; then
+            print_error "$existing belongs to the package '$owner'; existing firmware has not been changed."
+            echo "Remove that package first if you want this installer to manage the AIC8800 firmware."
+            exit 1
+        fi
+    done
+
     cleanup_legacy_bluetooth_config
 
-    # Remove old firmware versions
-    if [ -d "/lib/firmware" ] && [ -n "$(find /lib/firmware -maxdepth 1 -name 'aic8800*' -type d 2>/dev/null)" ]; then
-        print_info "Removing existing firmware..."
-        rm -rf /lib/firmware/aic8800* >> "$LOG_FILE" 2>&1
+    # Move old firmware aside instead of deleting it. Mixing firmware
+    # versions can hang the adapter, so the old directories must go, but a
+    # backup lets the previous state be restored by hand.
+    if [ "${#existing_fw[@]}" -gt 0 ]; then
+        local backup_dir
+        backup_dir="/var/backups/aic8800-firmware-$(date '+%Y%m%d-%H%M%S')"
+        print_info "Moving existing firmware to $backup_dir..."
+        mkdir -p "$backup_dir"
+        mv "${existing_fw[@]}" "$backup_dir/" >> "$LOG_FILE" 2>&1
     fi
 
     # Copy all firmware variants
