@@ -24,7 +24,7 @@ readonly DRV_NAME="aic8800"
 readonly DRV_VERSION="1.0.0"
 readonly SRC_DIR="/usr/src/${DRV_NAME}-${DRV_VERSION}"
 readonly MODULE_NAME="aic8800_fdrv"
-readonly LOG_FILE="/tmp/aic8800d80_install.log"
+readonly LOG_FILE="/var/log/aic8800-install.log"
 
 # Script directory (where the script is located)
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -36,12 +36,7 @@ readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 log_message() {
     local level="$1"
     shift
-    # Garantir que o arquivo de log existe e tem permissões corretas
-    if [ ! -f "$LOG_FILE" ]; then
-        touch "$LOG_FILE" 2>/dev/null || true
-        chmod 666 "$LOG_FILE" 2>/dev/null || true
-    fi
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$level] $*" >> "$LOG_FILE" 2>/dev/null || true
+    { echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$level] $*" >> "$LOG_FILE"; } 2>/dev/null || true
 }
 
 print_info() {
@@ -823,11 +818,14 @@ show_final_instructions() {
 #############################################################################
 
 main() {
-    # Initialize log file
+    # Step 1: Check root privileges (before touching the log, which lives in
+    # /var/log and is written by root only)
+    check_root
+
+    # Initialize log file: owned by root, readable by all, never world-writable
     rm -f "$LOG_FILE" 2>/dev/null || true
-    touch "$LOG_FILE" 2>/dev/null || true
-    chmod 666 "$LOG_FILE" 2>/dev/null || true
-    
+    install -m 0644 /dev/null "$LOG_FILE" 2>/dev/null || true
+
     echo -e "${CYAN}"
     echo "╔════════════════════════════════════════════════════════════════╗"
     echo "║     AIC8800D80 WiFi 6 Driver - Universal Installer (DKMS)      ║"
@@ -838,9 +836,6 @@ main() {
     log_message "START" "Installation started"
     log_message "INFO" "Kernel: $(uname -r)"
     log_message "INFO" "Distribution: $(cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d= -f2 | tr -d '"')"
-    
-    # Step 1: Check root privileges
-    check_root
     
     # Step 2: Check Secure Boot
     check_secure_boot
