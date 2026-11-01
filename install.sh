@@ -813,9 +813,18 @@ verify_installation() {
         print_warning "DKMS status unclear: $dkms_status"
     fi
     
-    # Check if the Wi-Fi module is loaded
+    # Check if the Wi-Fi module is loaded, and that it is the one just
+    # installed rather than an older copy that could not be unloaded.
     if lsmod | grep -q "$MODULE_NAME"; then
-        print_success "Wi-Fi kernel module is loaded."
+        local running_src installed_src
+        running_src=$(cat "/sys/module/$MODULE_NAME/srcversion" 2>/dev/null || true)
+        installed_src=$(modinfo -F srcversion "$MODULE_NAME" 2>/dev/null || true)
+        if [ -n "$running_src" ] && [ -n "$installed_src" ] && [ "$running_src" != "$installed_src" ]; then
+            print_warning "A different build of $MODULE_NAME is still loaded (the old one could not be unloaded)."
+            print_warning "Reboot, or unplug the adapter and run: sudo modprobe -r $MODULE_NAME aic_load_fw && sudo modprobe $MODULE_NAME"
+        else
+            print_success "Wi-Fi kernel module is loaded."
+        fi
     else
         print_info "Wi-Fi module not currently loaded (this is OK if no hardware is connected)."
     fi
