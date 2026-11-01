@@ -141,19 +141,29 @@ check_secure_boot() {
         echo -e "${YELLOW}║                  SECURE BOOT IS ENABLED                        ║${NC}"
         echo -e "${YELLOW}╚════════════════════════════════════════════════════════════════╝${NC}"
         echo ""
-        echo "The driver may not load automatically due to Secure Boot restrictions."
-        echo "Third-party modules require signing or Secure Boot must be disabled."
+        echo "With Secure Boot enabled the kernel only loads modules signed by a key"
+        echo "it trusts. Out-of-tree modules built by DKMS are not signed by your"
+        echo "distribution, so the driver will not load until you either:"
         echo ""
         echo -e "${CYAN}Options:${NC}"
-        echo "  1. Disable Secure Boot in BIOS/UEFI settings (recommended)"
-        echo "  2. Sign the module manually (advanced)"
-        echo "  3. Continue installation anyway (module may fail to load)"
+        echo "  1. Enroll a Machine Owner Key (MOK) that DKMS signs with. Recent DKMS"
+        echo "     versions create one and sign automatically; enroll it with"
+        echo "     'sudo mokutil --import <key.der>' and confirm in the blue MOK"
+        echo "     manager screen on the next boot. See your distribution's DKMS"
+        echo "     documentation for where the key is stored."
+        echo "  2. Disable Secure Boot in the firmware settings."
+        echo "  3. Continue anyway; the module will be installed but will not load"
+        echo "     until one of the above is done."
         echo ""
         local choice
+        if [ ! -t 0 ]; then
+            print_error "Secure Boot is enabled and no terminal is attached to answer the prompt; stopping."
+            exit 1
+        fi
         read -r -p "Continue installation? (y/N): " choice || choice="n"
         if [[ ! "$choice" =~ ^[Yy]$ ]]; then
-            print_info "Installation cancelled by user."
-            exit 0
+            print_info "Installation cancelled by user. Nothing was changed."
+            exit 1
         fi
         print_warning "Continuing with Secure Boot enabled..."
     else
@@ -917,7 +927,7 @@ show_final_instructions() {
     echo -e "  ${BLUE}cat $LOG_FILE${NC}"
     echo ""
     echo -e "${YELLOW}Known Limitations:${NC}"
-    echo "• Secure Boot may prevent module loading (disable in BIOS if needed)"
+    echo "• With Secure Boot enabled, the module loads only after its signing key is enrolled (MOK)"
     echo ""
     echo -e "${CYAN}Uninstallation:${NC}"
     echo -e "  ${BLUE}sudo dkms remove ${DRV_NAME}/${DRV_VERSION} --all${NC}"
