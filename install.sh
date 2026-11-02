@@ -500,6 +500,30 @@ EOF
 }
 
 #############################################################################
+# Pre-flight Build
+#############################################################################
+
+preflight_build() {
+    local build_root kver
+    kver="$(uname -r)"
+    print_step "Test-building the driver for $kver before replacing the existing installation..."
+
+    build_root=$(mktemp -d "${TMPDIR:-/tmp}/aic8800-preflight.XXXXXX")
+    # Use a private copy and clean it so a previous build cannot hide an error.
+    if cp -r "${SCRIPT_DIR}/drivers" "$build_root/" >> "$LOG_FILE" 2>&1 &&
+            make -C "$build_root/drivers/aic8800" KVER="$kver" KDIR="/lib/modules/$kver/build" clean >> "$LOG_FILE" 2>&1 &&
+            make -C "$build_root/drivers/aic8800" KVER="$kver" KDIR="/lib/modules/$kver/build" >> "$LOG_FILE" 2>&1; then
+        rm -rf "$build_root"
+        print_success "Test build succeeded."
+    else
+        rm -rf "$build_root"
+        print_error "Test build failed for kernel $kver. Existing firmware and DKMS installation were not changed."
+        echo "See $LOG_FILE for the compiler output."
+        return 1
+    fi
+}
+
+#############################################################################
 # DKMS Installation
 #############################################################################
 
@@ -823,8 +847,8 @@ main() {
     check_root
 
     # Initialize log file: owned by root, readable by all, never world-writable
-    rm -f "$LOG_FILE" 2>/dev/null || true
-    install -m 0644 /dev/null "$LOG_FILE" 2>/dev/null || true
+    rm -f "$LOG_FILE"
+    install -m 0644 /dev/null "$LOG_FILE"
 
     echo -e "${CYAN}"
     echo "╔════════════════════════════════════════════════════════════════╗"
@@ -849,7 +873,8 @@ main() {
     # Step 5: Check kernel build tree
     check_kernel_build_tree
 
-    # Step 6: Install firmware
+    # Step 6: Test-build before changing installed firmware or DKMS modules
+    preflight_build
     install_firmware
     
     # Step 7: Create DKMS configuration
