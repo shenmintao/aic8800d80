@@ -86,7 +86,7 @@ int main(void) {
     for (unsigned int i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
         char path[256];
         snprintf(path, sizeof(path), "%s/fw.bin", cases[i].dir);
-#if defined(CONFIG_PLATFORM_UBUNTU) && defined(AICWF_USB_SUPPORT)
+#ifdef EXPECT_CHIPDIR
         setup(cases[i].chip, path);
 #else
         setup(cases[i].chip, "fw.bin");
@@ -97,7 +97,7 @@ int main(void) {
     setup(cases[0].chip, "fw.bin"); hw.dev = expected_device = NULL; success();
     setup(cases[0].chip, "fw.bin"); dev.data = NULL; success();
     setup(cases[0].chip, "fw.bin"); bus.bus_priv.usb = NULL; success();
-#if defined(CONFIG_PLATFORM_UBUNTU) && defined(AICWF_USB_SUPPORT)
+#ifdef EXPECT_CHIPDIR
     char path[256];
     snprintf(path, sizeof(path), "%s/fw.bin", cases[0].dir);
     setup(cases[0].chip, path);
@@ -165,8 +165,20 @@ class RequestFirmwareTests(unittest.TestCase):
                 for chip in chips:
                     code += '{PRODUCT_ID_' + chip + ', "' + directory + '"},\n'
             code += "};\n" + CHECKS
+            # The flags the module's own Makefile passes must select the chip
+            # directories: aic_load_fw defines both macros, aic8800_fdrv only
+            # AICWF_USB_SUPPORT.
+            makefile = (folder / "Makefile").read_text()
+            build = sorted(set(re.findall(
+                r"^ccflags-\S+\s*\+=\s*-D(CONFIG_PLATFORM_UBUNTU|AICWF_USB_SUPPORT)\b",
+                makefile, re.M)))
+            chipdir = (lambda d: "AICWF_USB_SUPPORT" in d) if module == "aic8800_fdrv" else \
+                (lambda d: "AICWF_USB_SUPPORT" in d and "CONFIG_PLATFORM_UBUNTU" in d)
+            self.assertTrue(chipdir(build), (module, build))
             for defines in ([], ["CONFIG_PLATFORM_UBUNTU", "AICWF_USB_SUPPORT"],
-                            ["CONFIG_PLATFORM_UBUNTU"]):
+                            ["CONFIG_PLATFORM_UBUNTU"], ["AICWF_USB_SUPPORT"], build):
+                if chipdir(defines):
+                    defines = defines + ["EXPECT_CHIPDIR"]
                 with self.subTest(module=module, defines=defines):
                     with tempfile.TemporaryDirectory(prefix="aic-fw-request-") as temp:
                         c_file, binary = Path(temp) / "test.c", Path(temp) / "test"
