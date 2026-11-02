@@ -30,6 +30,8 @@ class InstallerTests(unittest.TestCase):
     def run_installer_function(self, name, stubs="", after=""):
         # Extract only the functions under test; never execute main().
         names = ["run_logged", "cleanup_on_error", name]
+        if name == "main" and re.search(r"(?m)^preflight_build\(\)", SOURCE):
+            names.insert(-1, "preflight_build")
         functions = []
         for function in names:
             match = re.search(r"(?ms)^" + function + r"\(\) \{.*?^\}", SOURCE)
@@ -42,6 +44,10 @@ class InstallerTests(unittest.TestCase):
 {SHELL_OPTIONS}
 SCRIPT_DIR={shlex.quote(str(self.root))}
 LOG_FILE="$SCRIPT_DIR/install.log"
+SRC_DIR="$SCRIPT_DIR/installed-source"
+TMPDIR="$SCRIPT_DIR/tmp"
+export TMPDIR
+mkdir -p "$TMPDIR"
 DRV_NAME=aic8800
 DRV_VERSION=1.0.0
 MODULE_NAME=aic8800_fdrv
@@ -50,6 +56,7 @@ print_info() {{ echo "$*"; }}
 print_success() {{ echo "$*"; }}
 print_warning() {{ echo "$*"; }}
 print_error() {{ echo "$*"; }}
+log_message() {{ :; }}
 dkms() {{ echo 'aic8800/1.0.0: installed'; }}
 lsmod() {{ :; }}
 aic_zlp_target_present() {{ return 1; }}
@@ -131,6 +138,123 @@ cleanup_legacy_bluetooth_config() {{ echo LEGACY_CLEANUP; }}
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertFalse(old.exists())
         self.assertEqual((old.parent / "new.bin").read_bytes(), b"new")
+
+    def prepare_preflight(self):
+        source = self.root / "drivers" / "aic8800" / "source.c"
+        source.parent.mkdir(parents=True)
+        source.write_bytes(b"source")
+        old = self.firmware / "aic8800D80" / "old.bin"
+        old.parent.mkdir()
+        old.write_bytes(b"installed firmware")
+        installed = self.root / "installed-source" / "revision"
+        installed.parent.mkdir()
+        installed.write_bytes(b"installed source")
+        (self.root / "dkms-state").write_bytes(b"installed modules")
+        return r'''
+uname() { echo test-kernel; }
+check_root() { :; }
+check_secure_boot() { :; }
+detect_package_manager() { DETECTED_PKG_MANAGER=apt; }
+install_dependencies() { :; }
+check_kernel_build_tree() { :; }
+create_dkms_conf() { :; }
+refresh_initramfs() { :; }
+load_module() { :; }
+verify_installation() { :; }
+show_final_instructions() { echo FINAL_INSTRUCTIONS; }
+make() {
+    echo "MAKE $*" >> "$SCRIPT_DIR/events"
+    [ "$(cat "$2/source.c")" = source ] || return 99
+    case "$*" in
+        *' clean') return "${MAKE_CLEAN_STATUS:-0}" ;;
+    esac
+    echo built > "$2/source.c"
+    return "${MAKE_BUILD_STATUS:-0}"
+}
+install_firmware() {
+    echo FIRMWARE >> "$SCRIPT_DIR/events"
+    echo changed > "$SCRIPT_DIR/firmware/aic8800D80/old.bin"
+}
+install_via_dkms() {
+    echo DKMS >> "$SCRIPT_DIR/events"
+    echo changed > "$SRC_DIR/revision"
+    echo changed > "$SCRIPT_DIR/dkms-state"
+}
+'''
+
+    def assert_installation_preserved(self, result):
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual((self.firmware / "aic8800D80/old.bin").read_bytes(), b"installed firmware")
+        self.assertEqual((self.root / "installed-source/revision").read_bytes(), b"installed source")
+        self.assertEqual((self.root / "dkms-state").read_bytes(), b"installed modules")
+        events = self.root / "events"
+        if events.exists():
+            self.assertNotIn("FIRMWARE", events.read_text())
+            self.assertNotIn("DKMS", events.read_text())
+        self.assertNotIn("FINAL_INSTRUCTIONS", result.stdout)
+        self.assertEqual(list((self.root / "tmp").iterdir()), [])
+
+    def test_failed_preflight_preserves_firmware_source_and_dkms(self):
+        stubs = self.prepare_preflight() + "\nMAKE_BUILD_STATUS=17\n"
+        result = self.run_installer_function("main", stubs)
+        self.assert_installation_preserved(result)
+        self.assertIn("Test build failed", result.stdout)
+        self.assertIn("MAKE", (self.root / "events").read_text())
+        self.assertEqual((self.root / "drivers/aic8800/source.c").read_bytes(), b"source")
+
+    def test_preflight_copy_failure_preserves_installation(self):
+        stubs = self.prepare_preflight() + "\ncp() { return 18; }\n"
+        result = self.run_installer_function("main", stubs)
+        self.assert_installation_preserved(result)
+        self.assertFalse((self.root / "events").exists())
+
+    def test_preflight_clean_failure_preserves_installation(self):
+        stubs = self.prepare_preflight() + "\nMAKE_CLEAN_STATUS=19\n"
+        result = self.run_installer_function("main", stubs)
+        self.assert_installation_preserved(result)
+        self.assertEqual(len((self.root / "events").read_text().splitlines()), 1)
+
+    def test_preflight_success_precedes_installation_and_cleans_temp(self):
+        result = self.run_installer_function("main", self.prepare_preflight())
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        events = (self.root / "events").read_text().splitlines()
+        self.assertEqual(len(events), 4)
+        self.assertTrue(events[0].endswith(" clean"), events)
+        self.assertTrue(events[1].startswith("MAKE "), events)
+        self.assertEqual(events[2:], ["FIRMWARE", "DKMS"])
+        for line in events[:2]:
+            self.assertIn(str(self.root / "tmp"), line)
+            self.assertIn("KVER=test-kernel KDIR=/lib/modules/test-kernel/build", line)
+        self.assertEqual((self.root / "drivers/aic8800/source.c").read_bytes(), b"source")
+        self.assertEqual(list((self.root / "tmp").iterdir()), [])
+        self.assertIn("FINAL_INSTRUCTIONS", result.stdout)
+
+    def test_log_replaces_symlink_without_overwriting_target(self):
+        stubs = self.prepare_preflight()
+        target = self.root / "keep.log"
+        target.write_bytes(b"keep this file")
+        (self.root / "install.log").symlink_to(target)
+        result = self.run_installer_function("main", stubs)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(target.read_bytes(), b"keep this file")
+        log = self.root / "install.log"
+        self.assertFalse(log.is_symlink())
+        self.assertEqual(log.stat().st_mode & 0o777, 0o644)
+
+    def test_root_check_precedes_log_changes(self):
+        stubs = self.prepare_preflight() + "\ncheck_root() { return 20; }\n"
+        log = self.root / "install.log"
+        log.write_bytes(b"previous log")
+        result = self.run_installer_function("main", stubs)
+        self.assert_installation_preserved(result)
+        self.assertEqual(log.read_bytes(), b"previous log")
+        self.assertFalse((self.root / "events").exists())
+
+    def test_log_creation_failure_stops_before_preflight(self):
+        stubs = self.prepare_preflight() + "\ninstall() { return 21; }\n"
+        result = self.run_installer_function("main", stubs)
+        self.assert_installation_preserved(result)
+        self.assertFalse((self.root / "events").exists())
 
 
 if __name__ == "__main__":
