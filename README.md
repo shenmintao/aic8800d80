@@ -85,6 +85,11 @@ commands. Existing users must rerun `sudo ./install.sh` to replace the installed
 usb_modeswitch configuration, then unplug the adapter completely and plug it
 back in.
 
+Automatic switching requires the USB product string to start with `88M80`.
+Unrelated flash disks also use `1111:1111`, so that USB ID alone is not enough.
+If your adapter reports a different product string, verify its identity before
+trying the manual command below.
+
 If automatic switching does not occur, try the same sequence manually:
 
 ```bash
