@@ -18,6 +18,7 @@ sanitize_output() {
     local -a expr=(
         -e 's/([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}/<MAC>/g'
         -e 's/wlx[0-9A-Fa-f]{12}/wlx<MAC>/g'
+        -e 's/((addr|add)[=:] ?)([0-9A-Fa-f]{1,2} ){5}[0-9A-Fa-f]{1,2}($|[^0-9A-Fa-f])/\1<MAC>\4/g'
         -e 's/(Serial(Number)?[=: ]+)[^ ,]+/\1<SERIAL>/g'
         -e 's#/home/[^/[:space:]]+#/home/<user>#g'
         -e 's/(^|[^0-9.])([0-9]{1,3}\.){3}[0-9]{1,3}($|[^0-9.])/\1<IP>\3/g'
