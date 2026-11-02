@@ -832,8 +832,8 @@ show_final_instructions() {
     echo "• Secure Boot may prevent module loading (disable in BIOS if needed)"
     echo ""
     echo -e "${CYAN}Uninstallation:${NC}"
-    echo "  ${BLUE}sudo dkms remove ${DRV_NAME}/${DRV_VERSION} --all${NC}"
-    echo "  ${BLUE}sudo rm -rf /lib/firmware/aic8800*${NC}"
+    echo -e "  ${BLUE}sudo ./uninstall.sh --dry-run${NC}   (show what would be removed)"
+    echo -e "  ${BLUE}sudo ./uninstall.sh${NC}"
     echo ""
 }
 
