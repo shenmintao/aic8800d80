@@ -3709,6 +3709,66 @@ int rwnx_send_me_set_lp_level(struct rwnx_hw *rwnx_hw, u8 lp_level)
     return rwnx_send_msg(rwnx_hw, req, 1, ME_SET_LP_LEVEL_CFM, NULL);
 }
 
+/*
+ * wpa_supplicant's connect path (drivers without SME, like this one) adds the
+ * Mobility Domain element only when its FT state already holds the AP's
+ * mobility domain. That state is filled after the IEs are built, so the first
+ * FT association after wpa_supplicant starts carries an FT AKM without an MDE,
+ * and an 802.11r AP rejects it with status 54 (invalid MDE). Copy the AP's MDE
+ * into the request when an FT AKM is selected and the element is missing.
+ */
+static void rwnx_connect_add_missing_mde(struct rwnx_hw *rwnx_hw,
+                                         struct cfg80211_connect_params *sme,
+                                         struct sm_connect_req *req)
+{
+    const struct cfg80211_bss_ies *ies;
+    struct cfg80211_bss *bss;
+    const u8 *bssid = sme->bssid ? sme->bssid : sme->bssid_hint;
+    const u8 *mde;
+    bool ft = false;
+    int i;
+
+    for (i = 0; i < sme->crypto.n_akm_suites; i++) {
+        switch (sme->crypto.akm_suites[i]) {
+        case WLAN_AKM_SUITE_FT_8021X:
+        case WLAN_AKM_SUITE_FT_PSK:
+#ifdef WLAN_AKM_SUITE_FT_OVER_SAE
+        case WLAN_AKM_SUITE_FT_OVER_SAE:
+#endif
+#ifdef WLAN_AKM_SUITE_FT_8021X_SHA384
+        case WLAN_AKM_SUITE_FT_8021X_SHA384:
+#endif
+#ifdef WLAN_AKM_SUITE_FT_PSK_SHA384
+        case WLAN_AKM_SUITE_FT_PSK_SHA384:
+#endif
+            ft = true;
+            break;
+        }
+    }
+    if (!ft || !bssid)
+        return;
+    if (cfg80211_find_ie(WLAN_EID_MOBILITY_DOMAIN, (const u8 *)req->ie_buf, req->ie_len))
+        return;
+
+    bss = cfg80211_get_bss(rwnx_hw->wiphy, sme->channel, bssid, sme->ssid,
+                           sme->ssid_len, IEEE80211_BSS_TYPE_ESS,
+                           IEEE80211_PRIVACY_ANY);
+    if (!bss)
+        return;
+
+    rcu_read_lock();
+    ies = rcu_dereference(bss->ies);
+    mde = ies ? cfg80211_find_ie(WLAN_EID_MOBILITY_DOMAIN, ies->data, ies->len) : NULL;
+    if (mde && mde[1] == 3 && req->ie_len + 5 <= sizeof(req->ie_buf)) {
+        memcpy((u8 *)req->ie_buf + req->ie_len, mde, 5);
+        req->ie_len += 5;
+        AICWFDBG(LOGINFO, "%s: added AP MDE %02x%02x for FT AKM\n",
+                 __func__, mde[2], mde[3]);
+    }
+    rcu_read_unlock();
+    cfg80211_put_bss(rwnx_hw->wiphy, bss);
+}
+
 int rwnx_send_sm_connect_req(struct rwnx_hw *rwnx_hw,
                              struct rwnx_vif *rwnx_vif,
                              struct cfg80211_connect_params *sme,
@@ -3791,6 +3851,7 @@ int rwnx_send_sm_connect_req(struct rwnx_hw *rwnx_hw,
     if (sme->ie_len)
         memcpy(req->ie_buf, sme->ie, sme->ie_len);
     req->ie_len = sme->ie_len;
+    rwnx_connect_add_missing_mde(rwnx_hw, sme, req);
     req->listen_interval = rwnx_mod_params.listen_itv;
     req->dont_wait_bcmc = !rwnx_mod_params.listen_bcmc;
 
