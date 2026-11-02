@@ -35,6 +35,14 @@ cannot download dependencies because the database is stale, run
 `sudo pacman -Syu` yourself, reboot if the kernel was updated, and rerun the
 installer with headers matching the running kernel.
 
+Before replacing installed firmware or DKMS modules, the installer cleans and
+test-builds a temporary copy of the driver for the running kernel. A test-build
+failure leaves the existing firmware, DKMS registration and installed source
+untouched. A successful installation compiles again through DKMS, so this check
+adds build time. Logs are written to `/var/log/aic8800-install.log` with mode
+`0644` after the root check. This check does not provide automatic rollback if a
+later installation step fails.
+
 The USB modules declare the complete firmware set shipped in `fw/`, including
 configuration files and extension patches, so initramfs tools can include those
 files when they include the modules. Rerun the installer after updating the
