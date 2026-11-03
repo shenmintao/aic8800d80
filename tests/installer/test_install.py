@@ -29,7 +29,7 @@ class InstallerTests(unittest.TestCase):
 
     def run_installer_function(self, name, stubs="", after=""):
         # Extract only the functions under test; never execute main().
-        names = ["run_logged", "cleanup_on_error", "firmware_path_owner", name]
+        names = ["run_logged", "cleanup_on_error", "firmware_path_owner", "firmware_matches_shipped", name]
         if name == "main" and re.search(r"(?m)^preflight_build\(\)", SOURCE):
             names.insert(-1, "preflight_build")
         functions = []
@@ -147,6 +147,31 @@ cleanup_legacy_bluetooth_config() {{ echo LEGACY_CLEANUP; }}
         backups = list((self.root / "backups").glob("aic8800-firmware-*/aic8800D80/old.bin"))
         self.assertEqual(len(backups), 1)
         self.assertEqual(backups[0].read_bytes(), b"old")
+
+    def test_firmware_identical_to_the_shipped_copy_is_not_backed_up(self):
+        installed = self.firmware / "aic8800D80" / "new.bin"
+        installed.parent.mkdir()
+        installed.write_bytes(b"new")
+        shipped = self.root / "fw" / "aic8800D80" / "new.bin"
+        shipped.parent.mkdir(parents=True)
+        shipped.write_bytes(b"new")
+        result = self.run_installer_function("install_firmware")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertFalse((self.root / "backups").exists())
+        self.assertEqual(installed.read_bytes(), b"new")
+        self.assertFalse((installed.parent / "aic8800D80").exists())
+
+    def test_changed_or_extra_firmware_is_still_backed_up(self):
+        installed = self.firmware / "aic8800D80" / "new.bin"
+        installed.parent.mkdir()
+        installed.write_bytes(b"edited by hand")
+        shipped = self.root / "fw" / "aic8800D80" / "new.bin"
+        shipped.parent.mkdir(parents=True)
+        shipped.write_bytes(b"new")
+        result = self.run_installer_function("install_firmware")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        backups = list((self.root / "backups").glob("aic8800-firmware-*/aic8800D80/new.bin"))
+        self.assertEqual([b.read_bytes() for b in backups], [b"edited by hand"])
 
     def prepare_preflight(self):
         source = self.root / "drivers" / "aic8800" / "source.c"
