@@ -166,7 +166,7 @@ check_secure_boot() { :; }
 detect_package_manager() { DETECTED_PKG_MANAGER=apt; }
 install_dependencies() { :; }
 check_kernel_build_tree() { :; }
-create_dkms_conf() { :; }
+require_dkms_conf() { :; }
 refresh_initramfs() { :; }
 load_module() { :; }
 verify_installation() { :; }
@@ -210,6 +210,16 @@ install_via_dkms() {
         self.assertIn("Test build failed", result.stdout)
         self.assertIn("MAKE", (self.root / "events").read_text())
         self.assertEqual((self.root / "drivers/aic8800/source.c").read_bytes(), b"source")
+
+    def test_missing_dkms_conf_stops_before_any_change(self):
+        result = self.run_installer_function("require_dkms_conf")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("dkms.conf not found", result.stdout)
+
+    def test_shipped_dkms_conf_is_accepted(self):
+        (self.root / "dkms.conf").write_text("PACKAGE_NAME=aic8800\n", encoding="utf-8")
+        result = self.run_installer_function("require_dkms_conf")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_preflight_copy_failure_preserves_installation(self):
         stubs = self.prepare_preflight() + "\ncp() { return 18; }\n"
