@@ -453,6 +453,13 @@ firmware_path_owner() {
     printf '%s' "$owner"
 }
 
+# True if the installed firmware directory $1 holds exactly the files of the
+# shipped directory $2. If diff is missing, or anything differs, it is false and
+# the caller keeps a backup.
+firmware_matches_shipped() {
+    [ -d "$1" ] && [ -d "$2" ] && diff -rq "$1" "$2" > /dev/null 2>&1
+}
+
 install_firmware() {
     print_step "Installing firmware..."
 
@@ -496,15 +503,28 @@ install_firmware() {
 
     cleanup_legacy_bluetooth_config
 
-    # Move old firmware aside instead of deleting it. Mixing firmware
-    # versions can hang the adapter, so the old directories must go, but a
-    # backup lets the previous state be restored by hand.
-    if [ "${#existing_fw[@]}" -gt 0 ]; then
+    # Firmware that is exactly what this repository ships needs no backup:
+    # installing again restores it. Backing it up anyway would leave one more
+    # identical copy in /var/backups on every reinstall.
+    local -a to_backup=()
+    for existing in "${existing_fw[@]}"; do
+        if firmware_matches_shipped "$existing" "$fw_base/$(basename "$existing")"; then
+            print_info "$(basename "$existing") already matches the shipped firmware; replacing it without a backup."
+            rm -rf "${existing:?}"
+        else
+            to_backup+=("$existing")
+        fi
+    done
+
+    # Move any other old firmware aside instead of deleting it. Mixing
+    # firmware versions can hang the adapter, so the old directories must go,
+    # but a backup lets the previous state be restored by hand.
+    if [ "${#to_backup[@]}" -gt 0 ]; then
         local backup_dir
         backup_dir="${FW_BACKUP_ROOT:-/var/backups}/aic8800-firmware-$(date '+%Y%m%d-%H%M%S')"
         print_info "Moving existing firmware to $backup_dir..."
         mkdir -p "$backup_dir"
-        mv "${existing_fw[@]}" "$backup_dir/" >> "$LOG_FILE" 2>&1
+        mv "${to_backup[@]}" "$backup_dir/" >> "$LOG_FILE" 2>&1
     fi
 
     # Copy all firmware variants (minimal systems may not have /lib/firmware yet)
