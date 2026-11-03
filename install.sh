@@ -557,45 +557,19 @@ install_firmware() {
 # DKMS Configuration - CORRIGIDO v2.0.4
 #############################################################################
 
-create_dkms_conf() {
-    print_step "Configuring DKMS..."
-    
-    local dkms_conf="${SCRIPT_DIR}/dkms.conf"
-    
-    # Check if dkms.conf already exists
-    if [ -f "$dkms_conf" ]; then
-        print_info "DKMS configuration file already exists."
-        return 0
+require_dkms_conf() {
+    print_step "Checking DKMS configuration..."
+
+    # The shipped dkms.conf passes KVER/KDIR so DKMS builds for the kernel it
+    # is targeting. An earlier fallback generated a dkms.conf without them,
+    # which would build against the running kernel during autoinstall.
+    if [ ! -f "${SCRIPT_DIR}/dkms.conf" ]; then
+        print_error "dkms.conf not found in ${SCRIPT_DIR}; refusing to continue."
+        echo "Run this script from a complete checkout of the repository."
+        exit 1
     fi
-    
-    print_info "Creating dkms.conf..."
-    
-    # CORRIGIDO: Configuração para múltiplos módulos
-    cat > "$dkms_conf" << EOF
-PACKAGE_NAME="${DRV_NAME}"
-PACKAGE_VERSION="${DRV_VERSION}"
-CLEAN="cd drivers/aic8800 && make clean"
-MAKE="cd drivers/aic8800 && make"
 
-# Módulo principal (aic8800_fdrv)
-BUILT_MODULE_NAME[0]="aic8800_fdrv"
-BUILT_MODULE_LOCATION[0]="drivers/aic8800/aic8800_fdrv"
-DEST_MODULE_LOCATION[0]="/updates/dkms"
-
-# Módulo de carregamento de firmware (aic_load_fw)
-BUILT_MODULE_NAME[1]="aic_load_fw"
-BUILT_MODULE_LOCATION[1]="drivers/aic8800/aic_load_fw"
-DEST_MODULE_LOCATION[1]="/updates/dkms"
-
-# Quirk ZLP para Bluetooth ACL bulk TX (somente 368b:8d81)
-BUILT_MODULE_NAME[2]="aic_zlp_quirk"
-BUILT_MODULE_LOCATION[2]="drivers/aic8800/aic_zlp_quirk"
-DEST_MODULE_LOCATION[2]="/updates/dkms"
-
-AUTOINSTALL="yes"
-EOF
-    
-    print_success "DKMS configuration created."
+    print_success "Using ${SCRIPT_DIR}/dkms.conf"
 }
 
 #############################################################################
@@ -645,6 +619,13 @@ install_via_dkms() {
     print_info "Copying source files to $SRC_DIR..."
     mkdir -p "$SRC_DIR"
     cp -r "${SCRIPT_DIR}"/* "$SRC_DIR/" >> "$LOG_FILE" 2>&1
+
+    # Record which source revision is installed. DKMS only knows the fixed
+    # package version, so without this "dkms status" cannot tell installs apart.
+    {
+        echo "installed: $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+        echo "revision: $(git -c safe.directory="$SCRIPT_DIR" -C "$SCRIPT_DIR" describe --always --dirty --tags 2>/dev/null || echo unknown)"
+    } > "$SRC_DIR/SOURCE_REVISION"
     
     # Add to DKMS
     print_info "Adding module to DKMS..."
@@ -811,6 +792,9 @@ verify_installation() {
         print_success "DKMS module registered: $dkms_status"
     else
         print_warning "DKMS status unclear: $dkms_status"
+    fi
+    if [ -r "$SRC_DIR/SOURCE_REVISION" ]; then
+        print_info "Installed source: $(tr '\n' ' ' < "$SRC_DIR/SOURCE_REVISION")"
     fi
     
     # Check if the Wi-Fi module is loaded, and that it is the one just
@@ -981,12 +965,12 @@ main() {
     # Step 5: Check kernel build tree
     check_kernel_build_tree
 
-    # Step 6: Test-build before changing installed firmware or DKMS modules
+    # Step 6: Check the DKMS configuration, then test-build before changing the system
+    require_dkms_conf
     preflight_build
+
+    # Step 7: Install firmware
     install_firmware
-    
-    # Step 7: Create DKMS configuration
-    create_dkms_conf
     
     # Step 8: Install via DKMS
     install_via_dkms
