@@ -9,6 +9,7 @@ ACTION=="add", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", KERNEL=="sd*", ATTRS{id
 ACTION=="add", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="572a",  SYMLINK+="tendaudiskv5", RUN+="/usr/bin/eject /dev/%k"
 ACTION=="add", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="572c",  SYMLINK+="cudydiskv2", RUN+="/usr/bin/eject /dev/%k"
 ACTION=="add", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="572f",  SYMLINK+="aicudisk572f", RUN+="/usr/bin/eject /dev/%k"
+ACTION=="add", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", KERNEL=="sd*", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="5732",  SYMLINK+="brostrendax900bt", RUN+="/usr/bin/eject /dev/%k"
 
 # AIC8800D80 "Pandora" clone: switch 1111:1111 to its operational USB ID.
 # 1111:1111 is a placeholder ID that other devices also report (some AIC
