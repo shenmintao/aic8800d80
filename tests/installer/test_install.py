@@ -225,6 +225,56 @@ kernel_build_tree_available() {{ return {0 if build_tree else 1}; }}
         self.assertEqual(runs, [])
         self.assertIn("No kernel headers metapackage", result.stdout)
 
+    def prepare_changed_firmware(self):
+        installed = self.firmware / "aic8800D80" / "new.bin"
+        installed.parent.mkdir()
+        installed.write_bytes(b"edited by hand")
+        shipped = self.root / "fw" / "aic8800D80" / "new.bin"
+        shipped.parent.mkdir(parents=True)
+        shipped.write_bytes(b"new")
+
+    def installer_backups(self):
+        return sorted(d.name for d in (self.root / "backups").glob("aic8800-firmware-install-*") if d.is_dir())
+
+    def test_firmware_backup_reports_where_to_restore_from(self):
+        self.prepare_changed_firmware()
+        result = self.run_installer_function("install_firmware")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        backups = self.installer_backups()
+        self.assertEqual(len(backups), 1)
+        self.assertIn(f"Previous firmware saved in {self.root}/backups/{backups[0]}", result.stdout)
+        self.assertIn("To restore it", result.stdout)
+
+    def test_only_the_three_newest_installer_backups_are_kept(self):
+        for day in (1, 2, 3, 4):
+            (self.root / "backups" / f"aic8800-firmware-install-2026010{day}-000000" / "aic8800D80").mkdir(parents=True)
+        # Not provably made by this installer: uninstall.sh's and older installers'.
+        others = [self.root / "backups" / name for name in
+                  ("aic8800-firmware-20260101-000000", "aic8800-firmware-20250101-000000")]
+        for other in others:
+            other.mkdir(parents=True)
+        self.prepare_changed_firmware()
+        result = self.run_installer_function("install_firmware")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        backups = self.installer_backups()
+        self.assertEqual(len(backups), 3, backups)
+        self.assertEqual(backups[:2], ["aic8800-firmware-install-20260103-000000",
+                                       "aic8800-firmware-install-20260104-000000"])
+        self.assertEqual((self.root / "backups" / backups[2] / "aic8800D80" / "new.bin").read_bytes(), b"edited by hand")
+        for other in others:
+            self.assertTrue(other.exists(), other)
+
+    def test_new_backup_is_kept_even_if_older_names_sort_after_it(self):
+        for month in ("01", "02", "03"):
+            (self.root / "backups" / f"aic8800-firmware-install-2099{month}01-000000").mkdir(parents=True)
+        self.prepare_changed_firmware()
+        result = self.run_installer_function("install_firmware")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        backups = self.installer_backups()
+        self.assertEqual(len(backups), 3, backups)
+        self.assertNotIn("aic8800-firmware-install-20990101-000000", backups)
+        self.assertEqual(len([n for n in backups if "-2099" not in n]), 1, backups)
+
     def prepare_preflight(self):
         source = self.root / "drivers" / "aic8800" / "source.c"
         source.parent.mkdir(parents=True)

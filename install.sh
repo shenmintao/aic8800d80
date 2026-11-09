@@ -533,11 +533,25 @@ install_firmware() {
     # firmware versions can hang the adapter, so the old directories must go,
     # but a backup lets the previous state be restored by hand.
     if [ "${#to_backup[@]}" -gt 0 ]; then
-        local backup_dir
-        backup_dir="${FW_BACKUP_ROOT:-/var/backups}/aic8800-firmware-$(date '+%Y%m%d-%H%M%S')"
+        local backup_root backup_dir
+        local -a older_backups=()
+        backup_root="${FW_BACKUP_ROOT:-/var/backups}"
+        backup_dir="$backup_root/aic8800-firmware-install-$(date '+%Y%m%d-%H%M%S')"
         print_info "Moving existing firmware to $backup_dir..."
         mkdir -p "$backup_dir"
         mv "${to_backup[@]}" "$backup_dir/" >> "$LOG_FILE" 2>&1
+        print_info "Previous firmware saved in $backup_dir."
+        print_info "To restore it, replace each aic8800* directory in /lib/firmware with the one of the same name there."
+        # Keep this backup and the two newest older ones made by this
+        # installer (the names sort by date). Other aic8800-firmware-*
+        # directories, from uninstall.sh or older installers, are left alone.
+        mapfile -t older_backups < <(find "$backup_root" -mindepth 1 -maxdepth 1 -type d \
+            -name 'aic8800-firmware-install-*' ! -path "$backup_dir" 2>/dev/null | sort)
+        while [ "${#older_backups[@]}" -gt 2 ]; do
+            print_info "Removing old firmware backup ${older_backups[0]}..."
+            rm -rf "${older_backups[0]:?}"
+            older_backups=("${older_backups[@]:1}")
+        done
     fi
 
     # Copy all firmware variants (minimal systems may not have /lib/firmware yet)
