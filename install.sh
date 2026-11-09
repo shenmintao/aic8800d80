@@ -229,11 +229,24 @@ kernel_build_tree_available() {
     [ -d "$kernel_build_dir" ] && [ -r "$kernel_build_dir/Makefile" ]
 }
 
-# Kernel flavour from the release string, used to name the headers
-# metapackage: 6.12.113+deb13-amd64 -> amd64, 6.8.0-47-generic -> generic,
-# 6.12.113+deb13-cloud-amd64 -> cloud-amd64.
-kernel_flavour() {
-    uname -r | sed -E 's/^[0-9]+\.[0-9]+(\.[0-9]+)?(-[0-9]+)?(\+[^-]+)*-//'
+# Headers metapackages matching the installed kernel image metapackages:
+# linux-image-amd64 -> linux-headers-amd64, linux-image-generic-hwe-24.04 ->
+# linux-headers-generic-hwe-24.04. Ubuntu's GA and HWE kernels both end in
+# "-generic", so the running kernel's release cannot tell the tracks apart;
+# the installed metapackage can. Versioned and unsigned images are skipped,
+# and so is any metapackage without a headers counterpart (-dbg).
+kernel_headers_metapackages() {
+    local status image
+    dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' 'linux-image-*' 2>/dev/null |
+        while read -r status image; do
+            [ "$status" = ii ] || continue
+            case "$image" in
+                linux-image-[0-9]* | linux-image-unsigned-*) continue ;;
+            esac
+            if apt-cache show "linux-headers-${image#linux-image-}" > /dev/null 2>&1; then
+                echo "linux-headers-${image#linux-image-}"
+            fi
+        done
 }
 
 # Headers that follow kernel upgrades. Without them DKMS has nothing to
@@ -241,20 +254,20 @@ kernel_flavour() {
 # silently, so the adapter stops working after the next reboot.
 install_kernel_headers() {
     local pkg_manager="$1"
-    local kver flavour
+    local kver
     kver="$(uname -r)"
-    flavour="$(kernel_flavour)"
-    local -a headers=()
+    local -a headers=() metapackages=()
 
     case "$pkg_manager" in
         apt)
             if ! kernel_build_tree_available; then
                 headers+=("linux-headers-${kver}")
             fi
-            if [ -n "$flavour" ] && [ "$flavour" != "$kver" ] && apt-cache show "linux-headers-${flavour}" > /dev/null 2>&1; then
-                headers+=("linux-headers-${flavour}")
+            mapfile -t metapackages < <(kernel_headers_metapackages)
+            if [ "${#metapackages[@]}" -gt 0 ]; then
+                headers+=("${metapackages[@]}")
             else
-                print_warning "No kernel headers metapackage found for flavour '${flavour}'."
+                print_warning "No kernel headers metapackage found for the installed kernel packages."
                 print_warning "Install headers for each new kernel yourself, or DKMS cannot rebuild the driver after kernel updates."
             fi
             [ "${#headers[@]}" -eq 0 ] && return 0

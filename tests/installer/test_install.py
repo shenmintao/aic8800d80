@@ -32,6 +32,8 @@ class InstallerTests(unittest.TestCase):
         names = ["run_logged", "cleanup_on_error", "firmware_path_owner", "firmware_matches_shipped", name]
         if name == "main" and re.search(r"(?m)^preflight_build\(\)", SOURCE):
             names.insert(-1, "preflight_build")
+        if name == "install_kernel_headers" and re.search(r"(?m)^kernel_headers_metapackages\(\)", SOURCE):
+            names.insert(-1, "kernel_headers_metapackages")
         functions = []
         for function in names:
             match = re.search(r"(?ms)^" + function + r"\(\) \{.*?^\}", SOURCE)
@@ -172,6 +174,56 @@ cleanup_legacy_bluetooth_config() {{ echo LEGACY_CLEANUP; }}
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         backups = list((self.root / "backups").glob("aic8800-firmware-*/aic8800D80/new.bin"))
         self.assertEqual([b.read_bytes() for b in backups], [b"edited by hand"])
+
+    def run_headers(self, release, installed, build_tree=True):
+        """installed: (dpkg status, package) pairs that dpkg-query reports."""
+        listing = "\n".join(f"{status} {package}" for status, package in installed)
+        available = ("linux-headers-generic", "linux-headers-generic-hwe-24.04", "linux-headers-amd64")
+        stubs = f"""
+uname() {{ echo {shlex.quote(release)}; }}
+dpkg-query() {{ printf '%s\\n' {shlex.quote(listing)}; [ -n {shlex.quote(listing)} ]; }}
+apt-cache() {{ case "$2" in {"|".join(available)}) return 0 ;; esac; return 100; }}
+run_logged() {{ shift; echo "RUN: $*"; }}
+kernel_build_tree_available() {{ return {0 if build_tree else 1}; }}
+"""
+        result = self.run_installer_function("install_kernel_headers", stubs=stubs, after=" apt")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        runs = [line[5:] for line in result.stdout.splitlines() if line.startswith("RUN: ")]
+        return result, runs
+
+    APT = "env DEBIAN_FRONTEND=noninteractive apt-get install -y "
+
+    def test_headers_follow_the_ga_track(self):
+        _, runs = self.run_headers("6.8.0-149-generic", [
+            ("ii", "linux-image-6.8.0-149-generic"), ("ii", "linux-image-generic")])
+        self.assertEqual(runs, [self.APT + "linux-headers-generic"])
+
+    def test_headers_follow_the_hwe_track(self):
+        # GA and HWE kernels both end in "-generic"; only the metapackage differs.
+        _, runs = self.run_headers("7.0.0-42-generic", [
+            ("ii", "linux-image-7.0.0-42-generic"), ("ii", "linux-image-generic-hwe-24.04")])
+        self.assertEqual(runs, [self.APT + "linux-headers-generic-hwe-24.04"])
+
+    def test_headers_for_every_installed_track(self):
+        _, runs = self.run_headers("6.8.0-149-generic", [
+            ("ii", "linux-image-generic"), ("ii", "linux-image-generic-hwe-24.04")])
+        self.assertEqual(runs, [self.APT + "linux-headers-generic linux-headers-generic-hwe-24.04"])
+
+    def test_headers_debian_metapackage(self):
+        _, runs = self.run_headers("6.12.115+deb13.1-amd64", [
+            ("ii", "linux-image-6.12.115+deb13.1-amd64"), ("ii", "linux-image-amd64")])
+        self.assertEqual(runs, [self.APT + "linux-headers-amd64"])
+
+    def test_headers_for_running_kernel_when_build_tree_missing(self):
+        _, runs = self.run_headers("7.0.0-42-generic", [("ii", "linux-image-generic-hwe-24.04")], build_tree=False)
+        self.assertEqual(runs, [self.APT + "linux-headers-7.0.0-42-generic linux-headers-generic-hwe-24.04"])
+
+    def test_headers_skip_removed_unsigned_and_debug_packages(self):
+        result, runs = self.run_headers("6.12.115+deb13.1-amd64", [
+            ("rc", "linux-image-amd64"), ("ii", "linux-image-unsigned-6.8.0-47-generic"),
+            ("ii", "linux-image-amd64-dbg"), ("ii", "linux-image-6.12.115+deb13.1-amd64")])
+        self.assertEqual(runs, [])
+        self.assertIn("No kernel headers metapackage", result.stdout)
 
     def prepare_preflight(self):
         source = self.root / "drivers" / "aic8800" / "source.c"
