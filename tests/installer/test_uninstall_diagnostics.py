@@ -99,6 +99,23 @@ class UninstallTests(unittest.TestCase):
         self.assertTrue(self.source("1.0.0").exists())
         self.assertNotIn("dkms remove", self.calls.read_text())
 
+    def test_package_owned_rules_and_modeswitch_config_are_kept(self):
+        # A marker string alone does not make a file this project's to delete.
+        # The AUR package aic8800d80-dkms installs /usr/lib/udev/rules.d/aic.rules.
+        packaged = self.write("usr/lib/udev/rules.d/aic.rules", "# AIC8800 rules from a package\n")
+        modeswitch = self.write("etc/usb_modeswitch.d/1111:1111", "# AIC8800D80\n")
+        self.stub("dkms", f'[ "$1" = status ] && echo "{REGISTERED}"\nexit 0')
+        self.stub("dpkg", '[ "$1" = -S ] || exit 1\n'
+                          'case "$2" in /usr/lib/udev/rules.d/aic.rules|/etc/usb_modeswitch.d/1111:1111)\n'
+                          '  echo "aic8800-dkms: $2"; exit 0 ;;\nesac\nexit 1')
+        result = self.uninstall()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(packaged.read_text(), "# AIC8800 rules from a package\n")
+        self.assertTrue(modeswitch.exists())
+        self.assertIn("owned by package 'aic8800-dkms'", result.stdout)
+        # This project's own, unowned copy is still removed.
+        self.assertFalse(self.rules.exists())
+
 
 def sanitize(script, text):
     match = re.search(r"(?ms)^sanitize_output\(\) \{.*?^\}", script.read_text(encoding="utf-8"))

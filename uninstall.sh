@@ -54,7 +54,7 @@ run() {
     fi
 }
 
-# Same check as install.sh: print the package that owns a path, if any.
+# Print the package (dpkg, rpm or pacman) that owns a path, if any.
 firmware_path_owner() {
     local path="$1" alt owner=""
     alt="/usr${path}"
@@ -161,13 +161,23 @@ for rules in "${RULES_FILES[@]}"; do
     real=$(readlink -f "$rules" 2> /dev/null || echo "$rules")
     [ -n "${seen_rules[$real]:-}" ] && continue
     seen_rules[$real]=1
-    # Only remove files that are this project's rules.
+    # Only remove files that are this project's rules and that no package owns.
     if [ -f "$rules" ] && grep -q 'AIC8800' "$rules" 2> /dev/null; then
-        run rm -f "$rules"
+        owner=$(firmware_path_owner "${rules#"$DESTDIR"}")
+        if [ -n "$owner" ]; then
+            echo "    leaving $rules (owned by package '$owner')"
+        else
+            run rm -f "$rules"
+        fi
     fi
 done
 if [ -f "$MODESWITCH_CONF" ] && grep -q 'AIC8800' "$MODESWITCH_CONF" 2> /dev/null; then
-    run rm -f "$MODESWITCH_CONF"
+    owner=$(firmware_path_owner "${MODESWITCH_CONF#"$DESTDIR"}")
+    if [ -n "$owner" ]; then
+        echo "    leaving $MODESWITCH_CONF (owned by package '$owner')"
+    else
+        run rm -f "$MODESWITCH_CONF"
+    fi
 fi
 if command -v udevadm > /dev/null 2>&1; then
     run udevadm control --reload-rules || true
