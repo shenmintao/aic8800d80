@@ -83,14 +83,31 @@ for module in aic8800_fdrv aic_zlp_quirk aic_load_fw; do
     fi
 done
 
+# A DKMS registration that could not be removed still needs its source tree
+# to rebuild or be removed later, so its tree is kept and the script fails.
+exit_status=0
+keep_all_sources=0
+declare -A keep_source=()
+
 echo "==> Removing DKMS registrations"
 if command -v dkms > /dev/null 2>&1; then
-    # "dkms status" prints "aic8800/1.0.0, <kernel>, <arch>: installed".
-    mapfile -t versions < <(dkms status 2> /dev/null | sed -nE "s#^${DRV_NAME}/([^,:]+)[,:].*#\1#p" | sort -u)
+    versions=()
+    if dkms_status=$(dkms status 2> /dev/null); then
+        # "dkms status" prints "aic8800/1.0.0, <kernel>, <arch>: installed".
+        mapfile -t versions < <(printf '%s\n' "$dkms_status" | sed -nE "s#^${DRV_NAME}/([^,:]+)[,:].*#\1#p" | sort -u)
+        [ "${#versions[@]}" -eq 0 ] && echo "    none found"
+    else
+        echo "    dkms status failed; keeping every ${DRV_NAME} source tree"
+        keep_all_sources=1
+        exit_status=1
+    fi
     for version in "${versions[@]}"; do
-        run dkms remove "${DRV_NAME}/${version}" --all || echo "    dkms remove ${DRV_NAME}/${version} failed; continuing"
+        if ! run dkms remove "${DRV_NAME}/${version}" --all; then
+            echo "    dkms remove ${DRV_NAME}/${version} failed; keeping its source tree"
+            keep_source["$version"]=1
+            exit_status=1
+        fi
     done
-    [ "${#versions[@]}" -eq 0 ] && echo "    none found"
 else
     echo "    dkms is not installed; skipping"
 fi
@@ -101,8 +118,16 @@ for src in "${DESTDIR}/usr/src/${DRV_NAME}"-*; do
     [ -d "$src" ] || continue
     # Only remove trees that are this driver, identified by their dkms.conf.
     if grep -q "^PACKAGE_NAME=\"${DRV_NAME}\"" "$src/dkms.conf" 2> /dev/null; then
-        run rm -rf "$src"
         found=1
+        # DKMS names source trees /usr/src/<name>-<version>.
+        version="${src##*/"${DRV_NAME}"-}"
+        if [ "$keep_all_sources" = 1 ]; then
+            echo "    keeping $src (DKMS registrations could not be listed)"
+        elif [ -n "${keep_source[$version]:-}" ]; then
+            echo "    keeping $src (its DKMS registration is still present)"
+        else
+            run rm -rf "$src"
+        fi
     else
         echo "    leaving $src (no matching dkms.conf)"
     fi
@@ -163,7 +188,16 @@ if [ -f "$LOG_FILE" ]; then
     run rm -f "$LOG_FILE"
 fi
 
+if [ "$exit_status" -ne 0 ]; then
+    echo ""
+    echo "Some DKMS registrations could not be removed, so their source trees were kept." >&2
+    echo "Check 'dkms status', remove them with 'sudo dkms remove ${DRV_NAME}/<version> --all'," >&2
+    echo "then run this script again." >&2
+fi
+
 echo ""
 echo "Done. Not removed: packages installed as dependencies (dkms, headers,"
 echo "usb_modeswitch, ...), firmware backups in /var/backups/aic8800-firmware-*,"
 echo "and *.aic8800-backup files that install.sh made of legacy configuration."
+
+exit "$exit_status"
