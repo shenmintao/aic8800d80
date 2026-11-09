@@ -2969,7 +2969,12 @@ static int rwnx_cfg80211_add_key(struct wiphy *wiphy,
 #if (LINUX_VERSION_CODE >= HIGH_KERNEL_VERSION2)
                                                                  int link_id,
 #endif
+#if AICWF_CFG80211_VERSION_CODE >= KERNEL_VERSION(7, 4, 0)
+                                 u8 key_index, enum nl80211_key_type key_type,
+                                 const u8 *mac_addr,
+#else
                                  u8 key_index, bool pairwise, const u8 *mac_addr,
+#endif
                                  struct key_params *params)
 {
     struct rwnx_hw *rwnx_hw = wiphy_priv(wiphy);
@@ -2983,6 +2988,10 @@ static int rwnx_cfg80211_add_key(struct wiphy *wiphy,
     u8_l cipher = 0;
     struct rwnx_sta *sta = NULL;
     struct rwnx_key *rwnx_key;
+#if AICWF_CFG80211_VERSION_CODE >= KERNEL_VERSION(7, 4, 0)
+    /* Linux 7.4 passes the key type instead of a pairwise flag */
+    bool pairwise = key_type == NL80211_KEYTYPE_PAIRWISE;
+#endif
 
     RWNX_DBG(RWNX_FN_ENTRY_STR);
 
@@ -3094,7 +3103,12 @@ static int rwnx_cfg80211_get_key(struct wiphy *wiphy,
                                                                  int link_id,
 #endif
 
+#if AICWF_CFG80211_VERSION_CODE >= KERNEL_VERSION(7, 4, 0)
+                                 u8 key_index, enum nl80211_key_type key_type,
+                                 const u8 *mac_addr,
+#else
                                  u8 key_index, bool pairwise, const u8 *mac_addr,
+#endif
                                  void *cookie,
                                  void (*callback)(void *cookie, struct key_params*))
 {
@@ -3118,7 +3132,12 @@ static int rwnx_cfg80211_del_key(struct wiphy *wiphy,
                                                                  int link_id,
 #endif
 
+#if AICWF_CFG80211_VERSION_CODE >= KERNEL_VERSION(7, 4, 0)
+                                 u8 key_index, enum nl80211_key_type key_type,
+                                 const u8 *mac_addr)
+#else
                                  u8 key_index, bool pairwise, const u8 *mac_addr)
+#endif
 {
     struct rwnx_hw *rwnx_hw = wiphy_priv(wiphy);
 #if AICWF_CFG80211_VERSION_CODE >= KERNEL_VERSION(7, 1, 0)
