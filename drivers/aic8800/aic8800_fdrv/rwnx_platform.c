@@ -613,7 +613,7 @@ static int rwnx_plat_bin_fw_upload(struct rwnx_plat *rwnx_plat, u8* fw_addr,
 static int aic_request_firmware(const struct firmware **fw, const char *name,
                                struct device *device)
 {
-#if defined(CONFIG_PLATFORM_UBUNTU) && defined(AICWF_USB_SUPPORT)
+#if defined(AICWF_USB_SUPPORT)
     struct aicwf_bus *bus = device ? dev_get_drvdata(device) : NULL;
     struct aic_usb_dev *usbdev = bus ? bus->bus_priv.usb : NULL;
     const char *dir = NULL;
