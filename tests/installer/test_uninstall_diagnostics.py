@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regressions for uninstall.sh.
+"""Regressions for uninstall.sh and the diagnostic output filter.
 
 Usage: python3 tests/installer/test_uninstall_diagnostics.py
 Runs as a normal user. uninstall.sh runs against a temporary DESTDIR, with
@@ -9,6 +9,7 @@ replaced by stubs, so nothing on the system is changed.
 
 from pathlib import Path
 import os
+import re
 import shlex
 import subprocess
 import tempfile
@@ -17,6 +18,7 @@ import unittest
 
 REPO = Path(__file__).resolve().parents[2]
 UNINSTALLER = REPO / "uninstall.sh"
+DIAGNOSTIC_SCRIPTS = [REPO / "diagnose_bt.sh", REPO / "diagnostic_build.sh"]
 STUBBED = ["dkms", "modprobe", "udevadm", "update-initramfs", "dracut", "mkinitcpio",
            "dpkg", "rpm", "pacman"]
 REGISTERED = "aic8800/1.0.0, 6.12.113+deb13-amd64, x86_64: installed"
@@ -97,6 +99,53 @@ class UninstallTests(unittest.TestCase):
         self.assertTrue(self.source("1.0.0").exists())
         self.assertNotIn("dkms remove", self.calls.read_text())
 
+
+def sanitize(script, text):
+    match = re.search(r"(?ms)^sanitize_output\(\) \{.*?^\}", script.read_text(encoding="utf-8"))
+    if not match:
+        raise AssertionError(f"sanitize_output not found in {script}")
+    program = f"hostname() {{ echo workstation; }}\n{match.group()}\nsanitize_output"
+    env = {"PATH": "/usr/bin:/bin", "SUDO_USER": "alice", "AIC_DIAG_RAW": "0"}
+    return subprocess.run(["bash", "-c", program], input=text + "\n", text=True,
+                          capture_output=True, env=env, check=True).stdout.strip()
+
+
+class SanitizerTests(unittest.TestCase):
+    def test_keeps_driver_and_firmware_versions(self):
+        # RWNX_VERS_BANNER, and the firmware version string the driver logs at
+        # LOGINFO. Every firmware file carries a "v<a>.<b>.<c>.<d>" string.
+        for line in ("rwnx v6.4.3.0 - 1a4b0054d2M (master)",
+                     "AICWFDBG(LOGINFO)\tversion_str=v6.9.1.1"):
+            for script in DIAGNOSTIC_SCRIPTS:
+                with self.subTest(script=script.name, line=line):
+                    self.assertEqual(sanitize(script, line), line)
+
+    def test_masks_addresses(self):
+        # Kernel log formats (NFS, CIFS) plus the ip(8) form; RFC 5737 addresses.
+        # The space-separated MAC is aic8800_fdrv's p2p line.
+        cases = {
+            "inet 192.0.2.10/24": "inet <IP>/24",
+            "nfs: server 192.0.2.20 not responding, still trying":
+                "nfs: server <IP> not responding, still trying",
+            "CIFS: VFS: \\\\198.51.100.30 Send error in SessSetup = -13":
+                "CIFS: VFS: \\\\<IP> Send error in SessSetup = -13",
+            "AICWFDBG(LOGERROR)\tp2p dev addr=2 11 22 33 44 55": "AICWFDBG(LOGERROR)\tp2p dev addr=<MAC>",
+        }
+        for script in DIAGNOSTIC_SCRIPTS:
+            for line, expected in cases.items():
+                with self.subTest(script=script.name, line=line):
+                    self.assertEqual(sanitize(script, line), expected)
+
+    def test_masks_addresses_in_firewall_log(self):
+        line = ("[UFW BLOCK] IN=wlx0123456789ab OUT= MAC=01:00:5e:00:00:fb:02:00:00:aa:bb:cc:08:00 "
+                "SRC=203.0.113.5 DST=192.0.2.10 LEN=73 TOS=0x00 PREC=0x00 TTL=255 ID=0 DF "
+                "PROTO=UDP SPT=5353 DPT=5353 LEN=53")
+        for script in DIAGNOSTIC_SCRIPTS:
+            with self.subTest(script=script.name):
+                out = sanitize(script, line)
+                self.assertIn("SRC=<IP> DST=<IP>", out)
+                for leaked in ("203.0.113.5", "192.0.2.10", "02:00:00:aa:bb:cc", "0123456789ab"):
+                    self.assertNotIn(leaked, out)
 
 
 if __name__ == "__main__":

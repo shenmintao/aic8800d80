@@ -21,7 +21,8 @@ sanitize_output() {
         -e 's/((addr|add)[=:] ?)([0-9A-Fa-f]{1,2} ){5}[0-9A-Fa-f]{1,2}($|[^0-9A-Fa-f])/\1<MAC>\4/g'
         -e 's/(Serial(Number)?[=: ]+)[^ ,]+/\1<SERIAL>/g'
         -e 's#/home/[^/[:space:]]+#/home/<user>#g'
-        -e 's/(^|[^0-9.])([0-9]{1,3}\.){3}[0-9]{1,3}($|[^0-9.])/\1<IP>\3/g'
+        # A dotted quad right after a letter is a version (rwnx v6.4.3.0, firmware v6.9.1.1), not an address.
+        -e 's/(^|[^0-9.A-Za-z])([0-9]{1,3}\.){3}[0-9]{1,3}($|[^0-9.])/\1<IP>\3/g'
     )
     if [ -n "$user" ] && [ "$user" != root ]; then
         expr+=(-e "s/\\b${user}\\b/<user>/g")
