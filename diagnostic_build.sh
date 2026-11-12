@@ -94,6 +94,12 @@ if [ "${#DKMS_SOURCE_DIRS[@]}" -gt 0 ]; then
         ls -la "$source_dir/"
         echo ""
 
+        if [ -r "$source_dir/SOURCE_REVISION" ]; then
+            echo "Installed source revision:"
+            cat "$source_dir/SOURCE_REVISION"
+            echo ""
+        fi
+
         echo "Checking drivers/aic8800 inside DKMS:"
         if [ -d "$source_dir/drivers/aic8800" ]; then
             echo -e "${GREEN}✓${NC} drivers/aic8800 copied to DKMS"
