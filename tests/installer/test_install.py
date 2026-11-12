@@ -40,6 +40,10 @@ class InstallerTests(unittest.TestCase):
         script = "\n".join(functions)
         script = script.replace("/lib/firmware", str(self.firmware))
         script = script.replace("/sys/firmware/efi", str(self.root / "efi"))
+        # Keep the udev rules directories inside the temporary root too.
+        script = script.replace("/etc/udev/rules.d", str(self.root / "etc/udev/rules.d"))
+        script = script.replace("/usr/lib/udev/rules.d", str(self.root / "usr/lib/udev/rules.d"))
+        script = re.sub(r"(?<![\w/])/lib/udev/rules\.d", str(self.root / "lib/udev/rules.d"), script)
         setup = f"""
 {SHELL_OPTIONS}
 SCRIPT_DIR={shlex.quote(str(self.root))}
@@ -138,6 +142,36 @@ cleanup_legacy_bluetooth_config() {{ echo LEGACY_CLEANUP; }}
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertFalse(old.exists())
         self.assertEqual((old.parent / "new.bin").read_bytes(), b"new")
+
+    def install_rules(self):
+        (self.root / "aic.rules").write_text("# AIC8800 rules\n")
+        firmware = self.root / "fw" / "aic8800D80" / "new.bin"
+        firmware.parent.mkdir(parents=True)
+        firmware.write_bytes(b"new")
+        stubs = 'udevadm() { echo "$*" >> "$SCRIPT_DIR/udevadm.calls"; }'
+        result = self.run_installer_function("install_firmware", stubs=stubs)
+        calls = self.root / "udevadm.calls"
+        return result, calls.read_text().splitlines() if calls.exists() else []
+
+    def test_rules_install_to_etc_and_leave_vendor_copies_alone(self):
+        # The AUR package aic8800d80-dkms installs /usr/lib/udev/rules.d/aic.rules.
+        vendor = self.root / "usr" / "lib" / "udev" / "rules.d" / "aic.rules"
+        vendor.parent.mkdir(parents=True)
+        vendor.write_text("# AIC8800 rules from a package\n")
+        result, _ = self.install_rules()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual((self.root / "etc/udev/rules.d/aic.rules").read_text(), "# AIC8800 rules\n")
+        self.assertEqual(vendor.read_text(), "# AIC8800 rules from a package\n")
+
+    def test_rules_trigger_only_1111_devices_with_add(self):
+        # The rules match ACTION=="add"; a plain "udevadm trigger" sends "change".
+        result, calls = self.install_rules()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        triggers = [call for call in calls if call.startswith("trigger")]
+        self.assertEqual(len(triggers), 1, calls)
+        for option in ("--action=add", "--subsystem-match=usb",
+                       "--attr-match=idVendor=1111", "--attr-match=idProduct=1111"):
+            self.assertIn(option, triggers[0])
 
     def prepare_preflight(self):
         source = self.root / "drivers" / "aic8800" / "source.c"
