@@ -425,15 +425,23 @@ install_firmware() {
 
     # Install udev rules
     local rules_source="${SCRIPT_DIR}/aic.rules"
-    local rules_dest="/usr/lib/udev/rules.d/aic.rules"
+    # /etc/udev/rules.d is the administrator's location; /usr may be
+    # read-only (image-based distributions) and belongs to the package manager.
+    local rules_dest="/etc/udev/rules.d/aic.rules"
 
     if [ -f "$rules_source" ]; then
         print_info "Installing udev rules to $rules_dest..."
+        mkdir -p /etc/udev/rules.d
         cp "$rules_source" "$rules_dest" >> "$LOG_FILE" 2>&1
-        # Reload udev rules
+        # An aic.rules in /usr/lib or /lib (from an earlier installer, or from
+        # a package) is shadowed by this one and is left alone.
         udevadm control --reload-rules >> "$LOG_FILE" 2>&1 || true
-        udevadm trigger >> "$LOG_FILE" 2>&1 || true
+        # Re-run the rules only for a 1111:1111 adapter that is already
+        # plugged in, rather than re-triggering every device on the system.
+        udevadm trigger --action=add --subsystem-match=usb \
+            --attr-match=idVendor=1111 --attr-match=idProduct=1111 >> "$LOG_FILE" 2>&1 || true
         print_success "Udev rules installed successfully."
+        print_info "If an adapter in mass-storage mode is already plugged in, unplug and replug it."
     else
         print_warning "Udev rules file not found: $rules_source"
     fi
