@@ -61,7 +61,7 @@ for dev in /sys/bus/usb/devices/*; do
     esac
 
     echo "   Device: $vid:$pid"
-    if [ "$vid" = "368b" ] && [ "$pid" = "8d81" ]; then
+    if { [ "$vid" = "368b" ] || [ "$vid" = "a69c" ]; } && [ "$pid" = "8d81" ]; then
         zlp_target_found=true
     fi
     for intf in "$dev"/*:*; do
@@ -154,15 +154,15 @@ if [ "$zlp_target_found" = true ]; then
             zlp_hook=$(cat /sys/module/aic_zlp_quirk/parameters/hook)
         [ -r /sys/module/aic_zlp_quirk/parameters/injections ] && \
             zlp_injections=$(cat /sys/module/aic_zlp_quirk/parameters/injections)
-        echo "   Target 368b:8d81 present"
+        echo "   A matching 368b:8d81 or a69c:8d81 target is present"
         echo "   aic_zlp_quirk loaded: yes"
         echo "   active hook: $zlp_hook"
         echo "   ZLP injections: $zlp_injections"
     else
-        echo "   Target 368b:8d81 present, but aic_zlp_quirk is not loaded"
+        echo "   A matching 368b:8d81 or a69c:8d81 target is present, but aic_zlp_quirk is not loaded"
     fi
 else
-    echo "   Target 368b:8d81 not present; quirk is not required"
+    echo "   No 368b:8d81 or a69c:8d81 target is present; quirk is not required"
 fi
 echo ""
 
@@ -182,7 +182,7 @@ if [ "$bt_interface_found" = false ]; then
     echo "- No Bluetooth HCI USB interface was found. This is normal for a Wi-Fi-only adapter."
 fi
 if [ "$zlp_target_found" = true ] && [ ! -d /sys/module/aic_zlp_quirk ]; then
-    echo "- Device 368b:8d81 requires the ACL ZLP quirk, but the module is not loaded."
+    echo "- A matching 8d81 device requires the ACL ZLP quirk, but the module is not loaded."
     echo "  Try: sudo modprobe aic_zlp_quirk"
 fi
 
