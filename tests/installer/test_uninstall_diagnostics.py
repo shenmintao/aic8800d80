@@ -11,6 +11,7 @@ from pathlib import Path
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import tempfile
 import textwrap
@@ -37,6 +38,11 @@ class UninstallTests(unittest.TestCase):
         self.root.mkdir()
         self.stubs.mkdir()
         self.calls.touch()
+        # Only these utilities and our stubs can run. Removing an initramfs
+        # stub below must never expose a real tool later in the host PATH.
+        for name in ("bash", "sed", "sort", "grep", "find", "readlink", "mkdir",
+                     "mv", "rm", "date", "uname"):
+            (self.stubs / name).symlink_to(shutil.which(name))
         for name in STUBBED:
             self.stub(name, "exit 0")
         self.stub("dpkg", "exit 1")  # no package owns the firmware
@@ -60,11 +66,54 @@ class UninstallTests(unittest.TestCase):
     def source(self, version):
         return self.root / f"usr/src/aic8800-{version}/dkms.conf"
 
-    def uninstall(self):
-        env = {"PATH": f"{self.stubs}:{os.environ['PATH']}", "HOME": str(self.root),
+    def uninstall(self, *args):
+        env = {"PATH": str(self.stubs), "HOME": str(self.root),
                "DESTDIR": str(self.root), "LANG": "C"}
-        return subprocess.run(["bash", str(UNINSTALLER)], text=True, capture_output=True,
+        return subprocess.run(["bash", str(UNINSTALLER), *args], text=True, capture_output=True,
                               timeout=60, env=env)
+
+    def test_refresh_covers_all_kernels_removed_by_dkms(self):
+        other = REGISTERED.replace("6.12.113", "6.12.115")
+        self.stub("dkms", f'if [ "$1" = status ]; then printf "%s\\n" "{REGISTERED}" "{other}"; fi\nexit 0')
+        result = self.uninstall()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        calls = self.calls.read_text().splitlines()
+        self.assertIn("dkms remove aic8800/1.0.0 --all", calls)
+        self.assertIn("update-initramfs -u -k all", calls)
+
+    def test_dracut_refreshes_all_kernels(self):
+        (self.stubs / "update-initramfs").unlink()
+        result = self.uninstall()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("dracut --regenerate-all -f", self.calls.read_text().splitlines())
+
+    def test_initramfs_failure_returns_failure_with_retry_guidance(self):
+        tools = ("update-initramfs", "dracut", "mkinitcpio")
+        for index, tool in enumerate(tools):
+            with self.subTest(tool=tool):
+                for name in tools:
+                    self.stub(name, "exit 0")
+                for name in tools[:index]:
+                    (self.stubs / name).unlink()
+                self.stub(tool, "exit 7")
+                result = self.uninstall()
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn(f"{tool} failed; retry 'sudo {tool}", result.stderr)
+                self.assertIn("Uninstallation incomplete", result.stderr)
+                self.assertNotIn("Some DKMS registrations could not be removed", result.stderr)
+                self.assertNotIn("Done.", result.stdout)
+
+    def test_dry_run_preserves_files_and_does_not_run_mutating_commands(self):
+        self.stub("dkms", f'[ "$1" = status ] && echo "{REGISTERED}"\nexit 0')
+        result = self.uninstall("--dry-run")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(self.source("1.0.0").exists())
+        self.assertTrue(self.rules.exists())
+        self.assertTrue(self.firmware.exists())
+        self.assertIn("update-initramfs -u -k all", result.stdout)
+        calls = self.calls.read_text()
+        for command in ("dkms remove", "modprobe -r", "udevadm", "update-initramfs", "dracut", "mkinitcpio"):
+            self.assertNotIn(command, calls)
 
     def test_successful_removal_deletes_source_and_succeeds(self):
         self.stub("dkms", f'[ "$1" = status ] && echo "{REGISTERED}"\nexit 0')

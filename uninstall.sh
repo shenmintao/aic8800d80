@@ -86,6 +86,7 @@ done
 # A DKMS registration that could not be removed still needs its source tree
 # to rebuild or be removed later, so its tree is kept and the script fails.
 exit_status=0
+dkms_failed=0
 keep_all_sources=0
 declare -A keep_source=()
 
@@ -99,12 +100,14 @@ if command -v dkms > /dev/null 2>&1; then
     else
         echo "    dkms status failed; keeping every ${DRV_NAME} source tree"
         keep_all_sources=1
+        dkms_failed=1
         exit_status=1
     fi
     for version in "${versions[@]}"; do
         if ! run dkms remove "${DRV_NAME}/${version}" --all; then
             echo "    dkms remove ${DRV_NAME}/${version} failed; keeping its source tree"
             keep_source["$version"]=1
+            dkms_failed=1
             exit_status=1
         fi
     done
@@ -183,13 +186,22 @@ if command -v udevadm > /dev/null 2>&1; then
     run udevadm control --reload-rules || true
 fi
 
-echo "==> Refreshing initramfs"
+echo "==> Refreshing initramfs for all kernels"
 if command -v update-initramfs > /dev/null 2>&1; then
-    run update-initramfs -u -k "$(uname -r)" || echo "    update-initramfs failed"
+    if ! run update-initramfs -u -k all; then
+        echo "    update-initramfs failed; retry 'sudo update-initramfs -u -k all'" >&2
+        exit_status=1
+    fi
 elif command -v dracut > /dev/null 2>&1; then
-    run dracut -f || echo "    dracut failed"
+    if ! run dracut --regenerate-all -f; then
+        echo "    dracut failed; retry 'sudo dracut --regenerate-all -f'" >&2
+        exit_status=1
+    fi
 elif command -v mkinitcpio > /dev/null 2>&1; then
-    run mkinitcpio -P || echo "    mkinitcpio failed"
+    if ! run mkinitcpio -P; then
+        echo "    mkinitcpio failed; retry 'sudo mkinitcpio -P'" >&2
+        exit_status=1
+    fi
 else
     echo "    no supported initramfs tool found; skipping"
 fi
@@ -198,7 +210,7 @@ if [ -f "$LOG_FILE" ]; then
     run rm -f "$LOG_FILE"
 fi
 
-if [ "$exit_status" -ne 0 ]; then
+if [ "$dkms_failed" -ne 0 ]; then
     echo ""
     echo "Some DKMS registrations could not be removed, so their source trees were kept." >&2
     echo "Check 'dkms status', remove them with 'sudo dkms remove ${DRV_NAME}/<version> --all'," >&2
@@ -206,7 +218,12 @@ if [ "$exit_status" -ne 0 ]; then
 fi
 
 echo ""
-echo "Done. Not removed: packages installed as dependencies (dkms, headers,"
+if [ "$exit_status" -ne 0 ]; then
+    echo "Uninstallation incomplete; review the errors above and retry." >&2
+else
+    echo "Done."
+fi
+echo "Not removed: packages installed as dependencies (dkms, headers,"
 echo "usb_modeswitch, ...), firmware backups in /var/backups/aic8800-firmware-*,"
 echo "and *.aic8800-backup files that install.sh made of legacy configuration."
 
