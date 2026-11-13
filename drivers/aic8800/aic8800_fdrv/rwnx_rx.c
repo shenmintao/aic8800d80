@@ -2427,12 +2427,17 @@ check_len_update:
 
 #ifndef CONFIG_SUPPORT_4ADDR
 		if (hw_rxhdr->flags_is_4addr) {
-					rwnx_hw->fouraddr_dropped++;
-					if (!rwnx_hw->fouraddr_said || time_after(jiffies, rwnx_hw->fouraddr_said + 60 * HZ)) {
+					unsigned long said = READ_ONCE(rwnx_hw->fouraddr_said);
+					unsigned long now = jiffies ? jiffies : 1;
+
+					atomic_inc(&rwnx_hw->fouraddr_dropped);
+					/* The thread that claims the minute says the count; the other keeps counting. */
+					if ((!said || time_after(now, said + 60 * HZ)) &&
+					    cmpxchg(&rwnx_hw->fouraddr_said, said, now) == said) {
+						unsigned int dropped = atomic_xchg(&rwnx_hw->fouraddr_dropped, 0);
+
 						AICWFDBG(LOGINFO, "4addr frames dropped (this build has no CONFIG_SUPPORT_4ADDR): %u since the last count; "
-							 "aicwf_dbg_level with 0x8 (debug) logs each one\n", rwnx_hw->fouraddr_dropped);
-						rwnx_hw->fouraddr_dropped = 0;
-						rwnx_hw->fouraddr_said = jiffies ? jiffies : 1;
+							 "aicwf_dbg_level with 0x8 (debug) logs each one\n", dropped);
 					}
 					if (aicwf_dbg_level & LOGDEBUG) {
 						AICWFDBG(LOGDEBUG, "4addr Frame received (%d), skb->len:%u\n", hw_rxhdr->flags_vif_idx, skb->len);

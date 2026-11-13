@@ -935,8 +935,10 @@ struct rwnx_hw {
 	ktime_t last_time;
 	char last_alpha2[3];
 
-	/* 4-address frames dropped (a build without CONFIG_SUPPORT_4ADDR): counted, and said at most once a minute. */
-	unsigned int fouraddr_dropped;
+	/* 4-address frames dropped (a build without CONFIG_SUPPORT_4ADDR): counted, and said at most once a minute.
+	 * Both receive threads reach the count (with CONFIG_USB_MSG_IN_EP), so it is atomic and the minute is claimed
+	 * by cmpxchg. */
+	atomic_t fouraddr_dropped;
 	unsigned long fouraddr_said;
 
 };

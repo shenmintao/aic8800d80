@@ -1938,6 +1938,8 @@ static struct rwnx_vif *rwnx_interface_add(struct rwnx_hw *rwnx_hw,
     vif->ndev = ndev;
     vif->drv_vif_index = vif_idx;
     SET_NETDEV_DEV(ndev, wiphy_dev(vif->wdev.wiphy));
+    /* An interface added after the wiphy moved to another namespace belongs there, as cfg80211 asks. */
+    dev_net_set(ndev, wiphy_net(rwnx_hw->wiphy));
     vif->wdev.netdev = ndev;
     vif->wdev.iftype = type;
     vif->up = false;
