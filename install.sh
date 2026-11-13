@@ -979,8 +979,8 @@ show_final_instructions() {
     echo "• With Secure Boot enabled, the module loads only after its signing key is enrolled (MOK)"
     echo ""
     echo -e "${CYAN}Uninstallation:${NC}"
-    echo -e "  ${BLUE}sudo dkms remove ${DRV_NAME}/${DRV_VERSION} --all${NC}"
-    echo -e "  ${BLUE}sudo rm -rf /lib/firmware/aic8800*${NC}"
+    echo -e "  ${BLUE}sudo ./uninstall.sh --dry-run${NC}   (show what would be removed)"
+    echo -e "  ${BLUE}sudo ./uninstall.sh${NC}"
     echo ""
 }
 
