@@ -10,27 +10,13 @@
 #include <linux/ptrace.h>
 #include <linux/usb.h>
 
-/*
- * The same AIC8800D80 combo adapter reports 368b:8d81 with the main-branch
- * firmware and a69c:8d81 with the legacy MCU1 firmware set (seen on an Atomo
- * MO-LYW01), so both vendor IDs are matched.
- */
 #define AIC_USB_VENDOR_ID	0x368b
-#define AIC_USB_VENDOR_ID_LEGACY       0xa69c
+#define AIC_USB_VENDOR_ID_LEGACY	0xa69c
 #define AIC_USB_PRODUCT_ID	0x8d81
 #define USB_BT_SUBCLASS		0x01
 #define USB_BT_PROTOCOL		0x01
 
 static atomic64_t injection_count = ATOMIC64_INIT(0);
-
-/* Diagnostics: bulk OUT URBs to the device, those on the BT ACL endpoint, and
- * ACL URBs that already carried URB_ZERO_PACKET before this module saw them. */
-static unsigned long aic_out_seen;
-static unsigned long acl_seen;
-static unsigned long zlp_preset;
-module_param(aic_out_seen, ulong, 0444);
-module_param(acl_seen, ulong, 0444);
-module_param(zlp_preset, ulong, 0444);
 static const char *hook_name = "none";
 
 static int injections_get(char *buffer, const struct kernel_param *kp)
@@ -64,8 +50,13 @@ MODULE_PARM_DESC(hook, "Active injection hook");
 
 #if IS_ENABLED(CONFIG_KPROBES)
 
-static bool btusb_hook_active;
-static bool submit_hook_active;
+enum aic_zlp_hook {
+	AIC_ZLP_HOOK_NONE,
+	AIC_ZLP_HOOK_BTUSB_RETURN,
+	AIC_ZLP_HOOK_USB_SUBMIT,
+};
+
+static enum aic_zlp_hook active_hook;
 
 static bool is_aic_bulk_out(const struct urb *urb)
 {
@@ -78,16 +69,14 @@ static bool is_aic_bulk_out(const struct urb *urb)
 	if (!udev)
 		return false;
 
-       if ((le16_to_cpu(udev->descriptor.idVendor) != AIC_USB_VENDOR_ID &&
-            le16_to_cpu(udev->descriptor.idVendor) != AIC_USB_VENDOR_ID_LEGACY) ||
+	/* MCU1 firmware can expose a69c:8d81 instead of 368b:8d81. */
+	if ((le16_to_cpu(udev->descriptor.idVendor) != AIC_USB_VENDOR_ID &&
+	     le16_to_cpu(udev->descriptor.idVendor) != AIC_USB_VENDOR_ID_LEGACY) ||
 	    le16_to_cpu(udev->descriptor.idProduct) != AIC_USB_PRODUCT_ID)
 		return false;
 
-       if (usb_pipetype(urb->pipe) != PIPE_BULK || !usb_pipeout(urb->pipe))
-               return false;
-
-       aic_out_seen++;
-       return true;
+	return usb_pipetype(urb->pipe) == PIPE_BULK &&
+	       usb_pipeout(urb->pipe);
 }
 
 static bool is_bluetooth_acl_endpoint(const struct urb *urb)
@@ -127,17 +116,14 @@ static void enable_zlp(struct urb *urb)
 {
 	long long count;
 
-       acl_seen++;
-       if (urb->transfer_flags & URB_ZERO_PACKET) {
-               zlp_preset++;
+	if (urb->transfer_flags & URB_ZERO_PACKET)
 		return;
-       }
 
 	urb->transfer_flags |= URB_ZERO_PACKET;
 	count = atomic64_inc_return(&injection_count);
 
 	if (count == 1)
-               pr_info("enabled ZLP on the first 8d81 ACL bulk OUT URB\n");
+		pr_info("enabled ZLP on the first matching 8d81 ACL bulk OUT URB\n");
 }
 
 static int alloc_bulk_urb_ret_handler(struct kretprobe_instance *ri,
@@ -182,42 +168,30 @@ static struct kprobe usb_submit_urb_probe = {
 	.pre_handler = usb_submit_urb_pre_handler,
 };
 
-/*
- * Both hooks are installed when possible. The btusb return hook catches ACL
- * URBs at allocation, but some kernels inline alloc_bulk_urb() into
- * btusb_send_frame() while keeping an out-of-line copy for other callers, so
- * the kretprobe registers yet never fires for ACL traffic (seen on Artix
- * 7.2.14 with an Atomo MO-LYW01). The usb_submit_urb hook covers that case.
- * enable_zlp() is idempotent, so a URB seen by both hooks is counted once.
- */
 static int __init aic_zlp_quirk_init(void)
 {
 	int ret;
 
 	ret = register_kretprobe(&alloc_bulk_urb_probe);
-       if (!ret)
-               btusb_hook_active = true;
-       else
-               pr_warn("btusb return hook unavailable (%d)\n", ret);
+	if (!ret) {
+		active_hook = AIC_ZLP_HOOK_BTUSB_RETURN;
+		hook_name = "btusb:alloc_bulk_urb";
+		pr_info("attached to system btusb for USB devices 368b:8d81 and a69c:8d81\n");
+		return 0;
+	}
+
+	pr_warn("btusb return hook unavailable (%d), trying USB submit fallback\n",
+		ret);
 
 	ret = register_kprobe(&usb_submit_urb_probe);
-       if (!ret)
-               submit_hook_active = true;
-       else
-               pr_warn("usb_submit_urb hook unavailable (%d)\n", ret);
-
-       if (btusb_hook_active && submit_hook_active)
-               hook_name = "btusb:alloc_bulk_urb+usb_submit_urb";
-       else if (btusb_hook_active)
-               hook_name = "btusb:alloc_bulk_urb";
-       else if (submit_hook_active)
-               hook_name = "usb_submit_urb";
-       else {
-               pr_err("cannot attach any ZLP hook\n");
+	if (ret) {
+		pr_err("cannot attach to usb_submit_urb: %d\n", ret);
 		return ret;
 	}
 
-       pr_info("attached %s for USB devices 368b:8d81 and a69c:8d81\n", hook_name);
+	active_hook = AIC_ZLP_HOOK_USB_SUBMIT;
+	hook_name = "usb_submit_urb";
+	pr_info("attached USB submit fallback for devices 368b:8d81 and a69c:8d81 interface 0\n");
 	return 0;
 }
 
@@ -225,13 +199,12 @@ static void __exit aic_zlp_quirk_exit(void)
 {
 	unsigned long missed = 0;
 
-       if (btusb_hook_active) {
+	if (active_hook == AIC_ZLP_HOOK_BTUSB_RETURN) {
 		unregister_kretprobe(&alloc_bulk_urb_probe);
-               missed += alloc_bulk_urb_probe.nmissed;
-       }
-       if (submit_hook_active) {
+		missed = alloc_bulk_urb_probe.nmissed;
+	} else if (active_hook == AIC_ZLP_HOOK_USB_SUBMIT) {
 		unregister_kprobe(&usb_submit_urb_probe);
-               missed += usb_submit_urb_probe.nmissed;
+		missed = usb_submit_urb_probe.nmissed;
 	}
 
 	pr_info("detached %s after %lld injections (%lu missed hits)\n",
