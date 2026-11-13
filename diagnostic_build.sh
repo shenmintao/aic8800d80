@@ -5,6 +5,35 @@
 # Run this script to diagnose the problem with the DKMS
 #############################################################################
 
+# Output is meant to be pasted into public bug reports, so mask hardware
+# addresses, serial numbers, IPv4 addresses, the user name, the host name
+# and home directory paths. Set AIC_DIAG_RAW=1 to see unmasked output.
+sanitize_output() {
+    if [ "${AIC_DIAG_RAW:-0}" = 1 ]; then
+        cat
+        return
+    fi
+    local user="${SUDO_USER:-${USER:-}}" host
+    host="$(hostname 2>/dev/null || true)"
+    local -a expr=(
+        -e 's/([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}/<MAC>/g'
+        -e 's/wlx[0-9A-Fa-f]{12}/wlx<MAC>/g'
+        -e 's/((addr|add)[=:] ?)([0-9A-Fa-f]{1,2} ){5}[0-9A-Fa-f]{1,2}($|[^0-9A-Fa-f])/\1<MAC>\4/g'
+        -e 's/(Serial(Number)?[=: ]+)[^ ,]+/\1<SERIAL>/g'
+        -e 's#/home/[^/[:space:]]+#/home/<user>#g'
+        # A dotted quad right after a letter is a version (rwnx v6.4.3.0, firmware v6.9.1.1), not an address.
+        -e 's/(^|[^0-9.A-Za-z])([0-9]{1,3}\.){3}[0-9]{1,3}($|[^0-9.])/\1<IP>\3/g'
+    )
+    if [ -n "$user" ] && [ "$user" != root ]; then
+        expr+=(-e "s/\\b${user}\\b/<user>/g")
+    fi
+    if [ -n "$host" ]; then
+        expr+=(-e "s/\\b${host}\\b/<host>/g")
+    fi
+    sed -E "${expr[@]}"
+}
+
+{
 echo "╔════════════════════════════════════════════════════════════════╗"
 echo "║           DIAGNOSTIC BUILD SCRIPT - AIC8800D80 DRIVER          ║"
 echo "╚════════════════════════════════════════════════════════════════╝"
@@ -200,3 +229,4 @@ if command -v dkms >/dev/null 2>&1; then
 else
     echo -e "${RED}✗${NC} dkms command not found"
 fi
+} 2>&1 | sanitize_output
