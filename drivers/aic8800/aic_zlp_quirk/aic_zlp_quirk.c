@@ -11,6 +11,7 @@
 #include <linux/usb.h>
 
 #define AIC_USB_VENDOR_ID	0x368b
+#define AIC_USB_VENDOR_ID_LEGACY	0xa69c
 #define AIC_USB_PRODUCT_ID	0x8d81
 #define USB_BT_SUBCLASS		0x01
 #define USB_BT_PROTOCOL		0x01
@@ -68,7 +69,9 @@ static bool is_aic_bulk_out(const struct urb *urb)
 	if (!udev)
 		return false;
 
-	if (le16_to_cpu(udev->descriptor.idVendor) != AIC_USB_VENDOR_ID ||
+	/* MCU1 firmware can expose a69c:8d81 instead of 368b:8d81. */
+	if ((le16_to_cpu(udev->descriptor.idVendor) != AIC_USB_VENDOR_ID &&
+	     le16_to_cpu(udev->descriptor.idVendor) != AIC_USB_VENDOR_ID_LEGACY) ||
 	    le16_to_cpu(udev->descriptor.idProduct) != AIC_USB_PRODUCT_ID)
 		return false;
 
@@ -120,7 +123,7 @@ static void enable_zlp(struct urb *urb)
 	count = atomic64_inc_return(&injection_count);
 
 	if (count == 1)
-		pr_info("enabled ZLP on the first 368b:8d81 ACL bulk OUT URB\n");
+		pr_info("enabled ZLP on the first matching 8d81 ACL bulk OUT URB\n");
 }
 
 static int alloc_bulk_urb_ret_handler(struct kretprobe_instance *ri,
@@ -173,7 +176,7 @@ static int __init aic_zlp_quirk_init(void)
 	if (!ret) {
 		active_hook = AIC_ZLP_HOOK_BTUSB_RETURN;
 		hook_name = "btusb:alloc_bulk_urb";
-		pr_info("attached to system btusb for USB device 368b:8d81\n");
+		pr_info("attached to system btusb for USB devices 368b:8d81 and a69c:8d81\n");
 		return 0;
 	}
 
@@ -188,7 +191,7 @@ static int __init aic_zlp_quirk_init(void)
 
 	active_hook = AIC_ZLP_HOOK_USB_SUBMIT;
 	hook_name = "usb_submit_urb";
-	pr_info("attached USB submit fallback for device 368b:8d81 interface 0\n");
+	pr_info("attached USB submit fallback for devices 368b:8d81 and a69c:8d81 interface 0\n");
 	return 0;
 }
 
@@ -231,3 +234,4 @@ MODULE_LICENSE("GPL");
 MODULE_VERSION("1.0");
 MODULE_SOFTDEP("pre: btusb");
 MODULE_ALIAS("usb:v368Bp8D81d*dc*dsc*dp*ic*isc*ip*in*");
+MODULE_ALIAS("usb:vA69Cp8D81d*dc*dsc*dp*ic*isc*ip*in*");

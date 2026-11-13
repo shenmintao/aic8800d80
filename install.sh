@@ -767,7 +767,10 @@ aic_zlp_target_present() {
     for device in /sys/bus/usb/devices/*; do
         [ -r "$device/idVendor" ] || continue
         [ -r "$device/idProduct" ] || continue
-        [ "$(cat "$device/idVendor")" = "368b" ] || continue
+        case "$(cat "$device/idVendor")" in
+            368b|a69c) ;;
+            *) continue ;;
+        esac
         [ "$(cat "$device/idProduct")" = "8d81" ] || continue
         return 0
     done
@@ -818,11 +821,11 @@ load_module() {
 
     print_info "Combo adapters use the standard btusb driver when their Bluetooth interface appears."
 
-    # The module has a USB alias and normally autoloads when 368b:8d81 appears.
+    # The module normally autoloads for 368b:8d81 or MCU1's a69c:8d81 alias.
     # Explicitly load it here as well when that device was already present before
     # DKMS installation and therefore did not generate a new modalias event.
     if aic_zlp_target_present; then
-        print_info "Loading the 368b:8d81 Bluetooth ACL ZLP quirk..."
+        print_info "Loading the Bluetooth ACL ZLP quirk for the matching 8d81 device..."
         if modprobe aic_zlp_quirk >> "$LOG_FILE" 2>&1; then
             print_success "Device-scoped Bluetooth ZLP quirk is active."
         else
@@ -882,10 +885,10 @@ verify_installation() {
             fi
             print_success "Bluetooth ACL ZLP quirk is loaded (hook: $zlp_hook)."
         else
-            print_warning "USB device 368b:8d81 is present but aic_zlp_quirk is not loaded."
+            print_warning "A matching 8d81 USB device is present but aic_zlp_quirk is not loaded."
         fi
     else
-        print_info "Bluetooth ZLP quirk is installed but inactive (no 368b:8d81 device present)."
+        print_info "Bluetooth ZLP quirk is installed but inactive (no 368b:8d81 or a69c:8d81 device present)."
     fi
 
     echo ""
@@ -935,7 +938,7 @@ show_final_instructions() {
     echo ""
     echo "✓ Wi-Fi driver and firmware loader installed via DKMS"
     echo "✓ Combo adapters use the standard Linux btusb driver"
-    echo "✓ Device-scoped Bluetooth ACL ZLP quirk installed for 368b:8d81"
+    echo "✓ Device-scoped Bluetooth ACL ZLP quirk installed for 368b:8d81 and a69c:8d81"
     echo "✓ Automatic rebuild enabled for kernel updates"
     echo "✓ Firmware installed in /lib/firmware/"
     echo ""
