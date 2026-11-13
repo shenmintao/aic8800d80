@@ -42,6 +42,7 @@ class InstallerTests(unittest.TestCase):
         script = "\n".join(functions)
         script = script.replace("/lib/firmware", str(self.firmware))
         script = script.replace("/sys/firmware/efi", str(self.root / "efi"))
+        script = script.replace("/sys/bus/usb/devices", str(self.root / "usb"))
         # Keep the udev rules directories inside the temporary root too.
         script = script.replace("/etc/udev/rules.d", str(self.root / "etc/udev/rules.d"))
         script = script.replace("/usr/lib/udev/rules.d", str(self.root / "usr/lib/udev/rules.d"))
@@ -77,6 +78,18 @@ cleanup_legacy_bluetooth_config() {{ echo LEGACY_CLEANUP; }}
             ["bash", "-c", setup + script + "\ntrap cleanup_on_error ERR\n" + stubs + "\n" + name + after],
             input="", text=True, capture_output=True, timeout=15,
         )
+
+    def test_zlp_target_matches_both_firmware_vids(self):
+        device = self.root / "usb" / "1-1"
+        device.mkdir(parents=True)
+        for vid, pid, expected in (("368b", "8d81", True), ("a69c", "8d81", True),
+                                   ("a69c", "8d80", False), ("a69c", "8d83", False),
+                                   ("1234", "8d81", False)):
+            with self.subTest(vid=vid, pid=pid):
+                (device / "idVendor").write_text(vid + "\n")
+                (device / "idProduct").write_text(pid + "\n")
+                result = self.run_installer_function("aic_zlp_target_present")
+                self.assertEqual(result.returncode == 0, expected, result.stdout + result.stderr)
 
     def test_verification_reaches_final_instructions(self):
         for count in (0, 1, 3):

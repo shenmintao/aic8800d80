@@ -5,6 +5,35 @@
 # standard in-kernel btusb driver must then bind to the Bluetooth HCI USB
 # interface. The removed aic_btusb module must not be installed or loaded.
 
+# Output is meant to be pasted into public bug reports, so mask hardware
+# addresses, serial numbers, IPv4 addresses, the user name, the host name
+# and home directory paths. Set AIC_DIAG_RAW=1 to see unmasked output.
+sanitize_output() {
+    if [ "${AIC_DIAG_RAW:-0}" = 1 ]; then
+        cat
+        return
+    fi
+    local user="${SUDO_USER:-${USER:-}}" host
+    host="$(hostname 2>/dev/null || true)"
+    local -a expr=(
+        -e 's/([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}/<MAC>/g'
+        -e 's/wlx[0-9A-Fa-f]{12}/wlx<MAC>/g'
+        -e 's/((addr|add)[=:] ?)([0-9A-Fa-f]{1,2} ){5}[0-9A-Fa-f]{1,2}($|[^0-9A-Fa-f])/\1<MAC>\4/g'
+        -e 's/(Serial(Number)?[=: ]+)[^ ,]+/\1<SERIAL>/g'
+        -e 's#/home/[^/[:space:]]+#/home/<user>#g'
+        # A dotted quad right after a letter is a version (rwnx v6.4.3.0, firmware v6.9.1.1), not an address.
+        -e 's/(^|[^0-9.A-Za-z])([0-9]{1,3}\.){3}[0-9]{1,3}($|[^0-9.])/\1<IP>\3/g'
+    )
+    if [ -n "$user" ] && [ "$user" != root ]; then
+        expr+=(-e "s/\\b${user}\\b/<user>/g")
+    fi
+    if [ -n "$host" ]; then
+        expr+=(-e "s/\\b${host}\\b/<host>/g")
+    fi
+    sed -E "${expr[@]}"
+}
+
+{
 echo "=== AIC8800 Bluetooth diagnostics ==="
 echo ""
 
@@ -32,7 +61,7 @@ for dev in /sys/bus/usb/devices/*; do
     esac
 
     echo "   Device: $vid:$pid"
-    if [ "$vid" = "368b" ] && [ "$pid" = "8d81" ]; then
+    if { [ "$vid" = "368b" ] || [ "$vid" = "a69c" ]; } && [ "$pid" = "8d81" ]; then
         zlp_target_found=true
     fi
     for intf in "$dev"/*:*; do
@@ -125,15 +154,15 @@ if [ "$zlp_target_found" = true ]; then
             zlp_hook=$(cat /sys/module/aic_zlp_quirk/parameters/hook)
         [ -r /sys/module/aic_zlp_quirk/parameters/injections ] && \
             zlp_injections=$(cat /sys/module/aic_zlp_quirk/parameters/injections)
-        echo "   Target 368b:8d81 present"
+        echo "   A matching 368b:8d81 or a69c:8d81 target is present"
         echo "   aic_zlp_quirk loaded: yes"
         echo "   active hook: $zlp_hook"
         echo "   ZLP injections: $zlp_injections"
     else
-        echo "   Target 368b:8d81 present, but aic_zlp_quirk is not loaded"
+        echo "   A matching 368b:8d81 or a69c:8d81 target is present, but aic_zlp_quirk is not loaded"
     fi
 else
-    echo "   Target 368b:8d81 not present; quirk is not required"
+    echo "   No 368b:8d81 or a69c:8d81 target is present; quirk is not required"
 fi
 echo ""
 
@@ -153,8 +182,9 @@ if [ "$bt_interface_found" = false ]; then
     echo "- No Bluetooth HCI USB interface was found. This is normal for a Wi-Fi-only adapter."
 fi
 if [ "$zlp_target_found" = true ] && [ ! -d /sys/module/aic_zlp_quirk ]; then
-    echo "- Device 368b:8d81 requires the ACL ZLP quirk, but the module is not loaded."
+    echo "- A matching 8d81 device requires the ACL ZLP quirk, but the module is not loaded."
     echo "  Try: sudo modprobe aic_zlp_quirk"
 fi
 
 echo "=== Diagnostics complete ==="
+} 2>&1 | sanitize_output
