@@ -173,7 +173,7 @@ CONFIG_RWNX_BCMC ?= y
 # Enable Monitor+Data interface support (need FW support)
 CONFIG_RWNX_MON_DATA =n
 CONFIG_RWNX_MON_XMIT ?= y
-CONFIG_RWNX_MON_RXFILTER ?= n
+CONFIG_RWNX_MON_RXFILTER ?= y
 
 CONFIG_FILTER_TCP_ACK =y
 

@@ -2670,8 +2670,9 @@ static int rwnx_cfg80211_change_iface(struct wiphy *wiphy,
         struct rwnx_vif *vif_el;
         list_for_each_entry(vif_el, &rwnx_hw->vifs, list) {
             // Check if data interface already exists
-            if ((vif_el != vif) &&
-               (RWNX_VIF_TYPE(vif) != NL80211_IFTYPE_MONITOR)) {
+            if ((vif_el != vif) && !vif_el->is_p2p_vif &&
+               (RWNX_VIF_TYPE(vif_el) != NL80211_IFTYPE_MONITOR) &&
+               (RWNX_VIF_TYPE(vif_el) != NL80211_IFTYPE_P2P_DEVICE)) {
                 wiphy_err(rwnx_hw->wiphy,
                         "Monitor+Data interface support (MON_DATA) disabled\n");
                 return -EIO;
@@ -2772,6 +2773,9 @@ static int rwnx_cfg80211_change_iface(struct wiphy *wiphy,
         vif->rwnx_hw->monitor_vif = vif->vif_index;
         #if defined(CONFIG_RWNX_MON_XMIT)
         rwnx_txq_unk_vif_init(vif);
+        if (vif->up) {
+            netif_carrier_on(vif->ndev);
+        }
         #endif
         #if defined(CONFIG_RWNX_MON_RXFILTER)
         rwnx_send_set_filter(vif->rwnx_hw, (FIF_BCN_PRBRESP_PROMISC | FIF_OTHER_BSS | FIF_PSPOLL | FIF_PROBE_REQ));
