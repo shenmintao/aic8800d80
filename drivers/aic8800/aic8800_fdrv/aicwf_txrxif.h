@@ -155,7 +155,7 @@ struct aicwf_tx_priv {
 #define DEFRAG_MAX_WAIT         40 //100
 #ifdef AICWF_RX_REORDER
 #define MAX_REORD_RXFRAME       250
-#define REORDER_UPDATE_TIME     50
+#define REORDER_UPDATE_TIME     6
 #define AICWF_REORDER_WINSIZE   64
 //SN_LESS(a, b) a-b<0 is ture
 #define SN_LESS(a, b)           (((a-b)&0x800)!=0)

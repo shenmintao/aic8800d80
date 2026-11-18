@@ -1876,6 +1876,7 @@ void reord_rxframes_ind(struct aicwf_rx_priv *rx_priv, struct reord_ctrl *preord
 
 int reorder_timeout = REORDER_UPDATE_TIME;
 module_param(reorder_timeout, int, 0660);
+MODULE_PARM_DESC(reorder_timeout, "RX reorder timeout in ms (default: 6)");
 
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,14,0)
