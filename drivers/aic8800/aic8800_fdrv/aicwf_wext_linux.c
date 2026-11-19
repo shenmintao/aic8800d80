@@ -211,30 +211,53 @@ static int aicwf_get_freq(struct net_device *dev,
 	return 0;
 }
 
+static u32 aicwf_iftype_to_iwmode(enum nl80211_iftype type)
+{
+	switch (type) {
+	case NL80211_IFTYPE_STATION:
+	case NL80211_IFTYPE_P2P_CLIENT:
+		return IW_MODE_INFRA;
+	case NL80211_IFTYPE_ADHOC:
+		return IW_MODE_ADHOC;
+	case NL80211_IFTYPE_AP:
+	case NL80211_IFTYPE_P2P_GO:
+		return IW_MODE_MASTER;
+	case NL80211_IFTYPE_MONITOR:
+		return IW_MODE_MONITOR;
+	case NL80211_IFTYPE_MESH_POINT:
+		return IW_MODE_MESH;
+	default:
+		return IW_MODE_AUTO;
+	}
+}
+
 static int aicwf_get_mode(struct net_device *dev, struct iw_request_info *a,
 			   union iwreq_data *wrqu, char *b)
 {
-
 	AICWFDBG(LOGTRACE, "%s Enter", __func__);
 
-	wrqu->mode = IW_MODE_AUTO;
-#if 0
-	if (check_fwstate(pmlmepriv, WIFI_STATION_STATE) == _TRUE)
-		wrqu->mode = IW_MODE_INFRA;
-	else if ((check_fwstate(pmlmepriv, WIFI_ADHOC_MASTER_STATE) == _TRUE) ||
-		 (check_fwstate(pmlmepriv, WIFI_ADHOC_STATE) == _TRUE))
-
-		wrqu->mode = IW_MODE_ADHOC;
-	else if (check_fwstate(pmlmepriv, WIFI_AP_STATE) == _TRUE)
-		wrqu->mode = IW_MODE_MASTER;
-	else if (check_fwstate(pmlmepriv, WIFI_MONITOR_STATE) == _TRUE)
-		wrqu->mode = IW_MODE_MONITOR;
-	else
-		wrqu->mode = IW_MODE_AUTO;
-#endif
+	/* Report the real interface type (was hard-coded IW_MODE_AUTO). */
+	wrqu->mode = dev->ieee80211_ptr ?
+		aicwf_iftype_to_iwmode(dev->ieee80211_ptr->iftype) : IW_MODE_AUTO;
 
 	return 0;
+}
 
+static int aicwf_set_mode(struct net_device *dev, struct iw_request_info *a,
+			   union iwreq_data *wrqu, char *b)
+{
+	AICWFDBG(LOGTRACE, "%s Enter", __func__);
+
+	/*
+	 * Mode changes must go through nl80211 (iw dev <if> set type ...).
+	 * Accept a no-op request for the current mode so WEXT users such as
+	 * aircrack-ng work on an interface already put in that mode with iw.
+	 */
+	if (dev->ieee80211_ptr &&
+	    wrqu->mode == aicwf_iftype_to_iwmode(dev->ieee80211_ptr->iftype))
+		return 0;
+
+	return -EOPNOTSUPP;
 }
 
 
@@ -1153,7 +1176,7 @@ static iw_handler aic_handlers[] = {
 	NULL,					/* SIOCGIWNWID */
 	NULL,					/* SIOCSIWFREQ */
 	aicwf_get_freq,			/* SIOCGIWFREQ */
-	NULL,					/* SIOCSIWMODE */
+	aicwf_set_mode,			/* SIOCSIWMODE */
 	aicwf_get_mode,			/* SIOCGIWMODE */
 	NULL,					/* SIOCSIWSENS */
 	NULL,					/* SIOCGIWSENS */
