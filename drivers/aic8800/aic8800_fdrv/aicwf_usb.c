@@ -2414,6 +2414,8 @@ static int aicwf_usb_probe(struct usb_interface *intf, const struct usb_device_i
         AICWFDBG(LOGERROR, "%s usb_dev kzalloc fail\r\n", __func__);
         return -ENOMEM;
     }
+    /* Before anything can fail: every cleanup path cancels the stall watch (aicwf_bus_deinit). */
+    INIT_DELAYED_WORK(&usb_dev->join_watch_work, join_watch_tick);
 
     usb_dev->usb_tx_buf = vmalloc(sizeof(struct aicwf_usb_buf) * AICWF_USB_TX_URBS);
     usb_dev->usb_rx_buf = vmalloc(sizeof(struct aicwf_usb_buf) * AICWF_USB_RX_URBS);
@@ -2444,6 +2446,7 @@ static int aicwf_usb_probe(struct usb_interface *intf, const struct usb_device_i
 
 
     usb_dev->udev = usb;
+    usb_dev->intf = intf;
     usb_dev->dev = &usb->dev;
     usb_set_intfdata(intf, usb_dev);
 
@@ -2563,6 +2566,13 @@ static void aicwf_usb_disconnect(struct usb_interface *intf)
 	}
 #endif
     aicwf_bus_deinit(usb_dev->dev);
+
+    /* Keep the reboot owed to the probe that follows a reset: USB core unbinds the interface before resetting it,
+     * while the device is still attached, and a failed reset leaves needs_binding set for its later unbind. A real
+     * disconnect has no probe left to consume the reboot. */
+    if (usb_dev->udev && usb_dev->udev->state == USB_STATE_NOTATTACHED && !intf->needs_binding)
+        aicwf_port_cancel(usb_dev->udev);
+
     aicwf_usb_deinit(usb_dev);
 
 #ifdef CONFIG_GPIO_WAKEUP
