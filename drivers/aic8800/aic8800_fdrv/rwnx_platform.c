@@ -36,9 +36,7 @@
 #include "aicwf_compat_8800d80x2.h"
 #include "aicwf_compat_8800d80n.h"
 #include "aicwf_compat_8800dln.h"
-#ifdef CONFIG_USE_FW_REQUEST
 #include <linux/firmware.h>
-#endif
 
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 9, 0))
@@ -609,7 +607,6 @@ static int rwnx_plat_bin_fw_upload(struct rwnx_plat *rwnx_plat, u8* fw_addr,
 #define MD5(x) x[0],x[1],x[2],x[3],x[4],x[5],x[6],x[7],x[8],x[9],x[10],x[11],x[12],x[13],x[14],x[15]
 #define MD5PINRT "file md5:%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x\r\n"
 
-#ifdef CONFIG_USE_FW_REQUEST
 static int aic_request_firmware(const struct firmware **fw, const char *name,
                                struct device *device)
 {
@@ -655,12 +652,9 @@ static int aic_request_firmware(const struct firmware **fw, const char *name,
 #endif
     return request_firmware(fw, name, device);
 }
-#endif
 
-static int rwnx_load_firmware(u32 **fw_buf, const char *name, struct device *device)
+static int rwnx_load_firmware_request(u32 **fw_buf, const char *name, struct device *device)
 {
-
-#ifdef CONFIG_USE_FW_REQUEST
 	const struct firmware *fw = NULL;
 	u32 *dst = NULL;
 	void *buffer=NULL;
@@ -704,6 +698,12 @@ static int rwnx_load_firmware(u32 **fw_buf, const char *name, struct device *dev
 	release_firmware(fw);
 
 	return size;
+}
+
+static int rwnx_load_firmware(u32 **fw_buf, const char *name, struct device *device)
+{
+#ifdef CONFIG_USE_FW_REQUEST
+	return rwnx_load_firmware_request(fw_buf, name, device);
 #else
     void *buffer = NULL;
     char *path = NULL;
@@ -740,7 +740,13 @@ static int rwnx_load_firmware(u32 **fw_buf, const char *name, struct device *dev
         *fw_buf = NULL;
         __putname(path);
         fp = NULL;
-        return -1;
+        /*
+         * filp_open() of an absolute path can fail when the probe runs
+         * from a kernel worker (e.g. re-enumeration on Linux 7.x).
+         * Fall back to the kernel firmware loader.
+         */
+        AICWFDBG(LOGERROR, "%s: falling back to request_firmware for %s\n", __func__, name);
+        return rwnx_load_firmware_request(fw_buf, name, device);
     }
 
     size = i_size_read(file_inode(fp));

@@ -6,9 +6,7 @@
 #include "md5.h"
 #include "aicbluetooth.h"
 #include "aicwf_debug.h"
-#ifdef CONFIG_USE_FW_REQUEST
 #include <linux/firmware.h>
-#endif
 
 //Parser state
 #define INIT 0
@@ -249,7 +247,6 @@ void aic_bt_platform_deinit(struct aic_usb_dev *usbdev)
 #define MD5(x) x[0],x[1],x[2],x[3],x[4],x[5],x[6],x[7],x[8],x[9],x[10],x[11],x[12],x[13],x[14],x[15]
 #define MD5PINRT "file md5:%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x\r\n"
 
-#ifdef CONFIG_USE_FW_REQUEST
 static int aic_request_firmware(const struct firmware **fw, const char *name,
                                struct device *device)
 {
@@ -293,12 +290,9 @@ static int aic_request_firmware(const struct firmware **fw, const char *name,
 #endif
     return request_firmware(fw, name, device);
 }
-#endif
 
-static int aic_load_firmware(u32 ** fw_buf, const char *name, struct device *device)
+static int aic_load_firmware_request(u32 ** fw_buf, const char *name, struct device *device)
 {
-
-#ifdef CONFIG_USE_FW_REQUEST
 	const struct firmware *fw = NULL;
 	u32 *dst = NULL;
 	void *buffer=NULL;
@@ -343,6 +337,12 @@ static int aic_load_firmware(u32 ** fw_buf, const char *name, struct device *dev
 	release_firmware(fw);
 	
 	return size;
+}
+
+static int aic_load_firmware(u32 ** fw_buf, const char *name, struct device *device)
+{
+#ifdef CONFIG_USE_FW_REQUEST
+	return aic_load_firmware_request(fw_buf, name, device);
 #else
     void *buffer=NULL;
     char *path=NULL;
@@ -404,7 +404,13 @@ static int aic_load_firmware(u32 ** fw_buf, const char *name, struct device *dev
 	*fw_buf=NULL;
             __putname(path);
             fp=NULL;
-            return -1;
+            /*
+             * filp_open() of an absolute path can fail when the probe runs
+             * from a kernel worker (e.g. re-enumeration on Linux 7.x).
+             * Fall back to the kernel firmware loader.
+             */
+            printk("%s: falling back to request_firmware for %s\n", __func__, name);
+            return aic_load_firmware_request(fw_buf, name, device);
     }
 
     size = i_size_read(file_inode(fp));
@@ -490,7 +496,6 @@ static int aic_load_firmware(u32 ** fw_buf, const char *name, struct device *dev
 
     return size;
 #endif
-
 }
 
 int rwnx_plat_bin_fw_upload_android(struct aic_usb_dev *usbdev, u32 fw_addr,
