@@ -87,7 +87,7 @@ enum AICWF_IC{
 };
 
 
-#define AICWF_USB_RX_URBS               (20)//(200)
+#define AICWF_USB_RX_URBS               (64)
 #ifdef CONFIG_USB_MSG_IN_EP
 #define AICWF_USB_MSG_RX_URBS           (100)
 #endif

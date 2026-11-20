@@ -33,12 +33,6 @@ struct rx_buff *aicwf_prealloc_rxbuff_alloc(spinlock_t *lock)
 
     spin_lock_irqsave(lock, flags);
     rx_buff_list_ava = atomic_read(&aic_rx_buff_list.rxbuff_list_len);
-    if(rx_buff_list_ava < 10){
-        AICWFDBG(LOGERROR, "%s WARNING rxbuff is running out %d\r\n", __func__,
-            rx_buff_list_ava);
-        //msleep(10);
-        mdelay(10);
-    }
 
     if (list_empty(&aic_rx_buff_list.rxbuff_list)) {
         spin_unlock_irqrestore(lock, flags);
@@ -51,8 +45,6 @@ struct rx_buff *aicwf_prealloc_rxbuff_alloc(spinlock_t *lock)
         atomic_dec(&aic_rx_buff_list.rxbuff_list_len);
 	}
     spin_unlock_irqrestore(lock, flags);
-    //printk("len:%d\n", aic_rx_buff_list.rxbuff_list_len);
-    memset(rxbuff->data, 0, aic_rxbuff_size);
     rxbuff->len = 0;
     rxbuff->start = NULL;
     rxbuff->read = NULL;

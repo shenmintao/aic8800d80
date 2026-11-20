@@ -76,6 +76,11 @@ endif
 all: modules
 modules:
 	make -C $(KDIR) M=$(PWD) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) $(KBUILD_EXTRA_ARGS) modules
+	@for ko in aic_load_fw/aic_load_fw.ko aic8800_fdrv/aic8800_fdrv.ko aic_zlp_quirk/aic_zlp_quirk.ko; do \
+		if [ -f "$$ko" ]; then \
+			objcopy --remove-section .BTF --remove-section .BTF.base "$$ko" 2>/dev/null || true; \
+		fi \
+	done
 
 install:
 	mkdir -p $(MODDESTDIR)

@@ -1224,7 +1224,6 @@ int usb_bustx_thread(void *data)
 {
     struct aicwf_bus *bus = (struct aicwf_bus *)data;
     struct aic_usb_dev *usbdev = bus->bus_priv.usb;
-    int set_cpu_ret = 0;
 
 #ifdef CONFIG_THREAD_INFO_IN_TASK
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0))
@@ -1233,21 +1232,11 @@ int usb_bustx_thread(void *data)
     AICWFDBG(LOGINFO, "%s the cpu is:%d\n", __func__, current->cpu);
 #endif
 #endif
-    set_cpu_ret = set_cpus_allowed_ptr(current, cpumask_of(1));
-#ifdef CONFIG_THREAD_INFO_IN_TASK
-    AICWFDBG(LOGINFO, "%s set_cpu_ret is:%d\n", __func__, set_cpu_ret);
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0))
-	AICWFDBG(LOGINFO, "%s change cpu to:%d\n", __func__, current->thread_info.cpu);
-#else
-    AICWFDBG(LOGINFO, "%s change cpu to:%d\n", __func__, current->cpu);
-#endif
-#endif
-
 
 #ifdef CONFIG_TXRX_THREAD_PRIO
 	if (bustx_thread_prio > 0) {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0))
-        sched_set_fifo_low(current);
+        sched_set_fifo(current);
 #else
         struct sched_param param;
         param.sched_priority = (bustx_thread_prio < MAX_RT_PRIO)?bustx_thread_prio:(MAX_RT_PRIO-1);
@@ -1291,7 +1280,6 @@ int usb_busrx_thread(void *data)
 {
     struct aicwf_rx_priv *rx_priv = (struct aicwf_rx_priv *)data;
     struct aicwf_bus *bus_if = rx_priv->usbdev->bus_if;
-    int set_cpu_ret = 0;
     
 #ifdef CONFIG_THREAD_INFO_IN_TASK
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0))
@@ -1300,20 +1288,11 @@ int usb_busrx_thread(void *data)
     AICWFDBG(LOGINFO, "%s the cpu is:%d\n", __func__, current->cpu);
 #endif
 #endif
-    set_cpu_ret = set_cpus_allowed_ptr(current, cpumask_of(1));
-#ifdef CONFIG_THREAD_INFO_IN_TASK
-    AICWFDBG(LOGINFO, "%s set_cpu_ret is:%d\n", __func__, set_cpu_ret);
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0))
-	AICWFDBG(LOGINFO, "%s change cpu to:%d\n", __func__, current->thread_info.cpu);
-#else
-    AICWFDBG(LOGINFO, "%s change cpu to:%d\n", __func__, current->cpu);
-#endif
-#endif
 
 #ifdef CONFIG_TXRX_THREAD_PRIO
 	if (busrx_thread_prio > 0) {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0))
-        sched_set_fifo_low(current);
+        sched_set_fifo(current);
 #else
 		struct sched_param param;
 		param.sched_priority = (busrx_thread_prio < MAX_RT_PRIO)?busrx_thread_prio:(MAX_RT_PRIO-1);
