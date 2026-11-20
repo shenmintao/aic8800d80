@@ -153,6 +153,7 @@ class RequestFirmwareTests(unittest.TestCase):
             enums = re.search(r"enum AICWF_IC\s*\{.*?\};",
                               (folder / "aicwf_usb.h").read_text(), re.S).group()
             code = PRELUDE + enums + function(source, "static int aic_request_firmware(")
+            code += function(source, "static int " + loader + "_request(")
             code += function(source, "static int " + loader + "(")
             if module == "aic8800_fdrv":
                 code += function(source, "int rwnx_request_firmware_common(")
