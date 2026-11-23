@@ -1,0 +1,53 @@
+# Maintainer: Albert <albert748@users.noreply.github.com>
+# Arch PKGBUILD for the AIC8800D80 out-of-tree driver.
+#
+# Installs the DKMS source tree, all firmware variants, the udev rule and the
+# usb_modeswitch configuration. The udev rule lives under /usr/lib and points
+# usb_modeswitch at /usr/share/usb_modeswitch/1111:1111, so the package does
+# not write to /etc.
+
+pkgname=aic8800d80-dkms-git
+pkgver=1.0.0.r177.g1a2ce4e
+pkgrel=1
+pkgdesc="AIC8800D80 (Wi-Fi 6 + Bluetooth) out-of-tree DKMS driver"
+arch=('any')
+url="https://github.com/shenmintao/aic8800d80"
+license=('GPL-2.0-only')
+depends=('dkms' 'usb_modeswitch' 'util-linux')
+makedepends=('git')
+conflicts=('aic8800d80-dkms')
+provides=('aic8800d80-dkms')
+source=("git+${url}.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd aic8800d80
+  printf '1.0.0.r%s.g%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+package() {
+  local src="$srcdir/aic8800d80"
+  local dkmsdir="$pkgdir/usr/src/aic8800-$pkgver"
+
+  # DKMS source: use git archive so the repository history is not installed.
+  install -dm755 "$dkmsdir"
+  git -C "$src" archive --format=tar HEAD | tar -x -C "$dkmsdir"
+
+  # dkms.conf must match the package version. CLEAN is deprecated in DKMS 3.
+  sed -i "s/^PACKAGE_VERSION=.*/PACKAGE_VERSION=\"$pkgver\"/" "$dkmsdir/dkms.conf"
+  sed -i '/^CLEAN=/d' "$dkmsdir/dkms.conf"
+
+  # Firmware for every supported chip variant.
+  install -dm755 "$pkgdir/usr/lib/firmware"
+  cp -a "$src"/fw/aic8800* "$pkgdir/usr/lib/firmware/"
+
+  # usb_modeswitch configuration for the 1111:1111 "88M80" mode switch.
+  install -Dm644 "$src/usb_modeswitch/1111_1111" \
+    "$pkgdir/usr/share/usb_modeswitch/1111:1111"
+
+  # udev rules are package-owned under /usr/lib; point the mode switch at
+  # /usr/share instead of /etc.
+  install -Dm644 "$src/aic.rules" "$pkgdir/usr/lib/udev/rules.d/99-aic8800.rules"
+  sed -i 's#/etc/usb_modeswitch.d/1111:1111#/usr/share/usb_modeswitch/1111:1111#g' \
+    "$pkgdir/usr/lib/udev/rules.d/99-aic8800.rules"
+}
