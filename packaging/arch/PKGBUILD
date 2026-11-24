@@ -5,6 +5,12 @@
 # usb_modeswitch configuration. The udev rule lives under /usr/lib and points
 # usb_modeswitch at /usr/share/usb_modeswitch/1111:1111, so the package does
 # not write to /etc.
+#
+# A machine that used install.sh still carries unowned copies of the same
+# firmware, an /etc/udev/rules.d/aic.rules that would run a second mode-switch
+# command, and an aic8800/1.0.0 DKMS registration. The install scriptlet moves
+# those files to /var/backups before pacman extracts anything; see
+# aic8800d80-dkms-git.install and README.md.
 
 pkgname=aic8800d80-dkms-git
 pkgver=1.0.0.r177.g1a2ce4e
@@ -17,6 +23,7 @@ depends=('dkms' 'usb_modeswitch' 'util-linux')
 makedepends=('git')
 conflicts=('aic8800d80-dkms')
 provides=('aic8800d80-dkms')
+install=aic8800d80-dkms-git.install
 source=("git+${url}.git")
 sha256sums=('SKIP')
 
@@ -50,4 +57,13 @@ package() {
   install -Dm644 "$src/aic.rules" "$pkgdir/usr/lib/udev/rules.d/99-aic8800.rules"
   sed -i 's#/etc/usb_modeswitch.d/1111:1111#/usr/share/usb_modeswitch/1111:1111#g' \
     "$pkgdir/usr/lib/udev/rules.d/99-aic8800.rules"
+
+  # Keep the migration tests on the installed system.  They only write inside a
+  # temporary root and use stub pacman/dkms/udevadm, so they are safe to re-run
+  # next to an active driver installation.  makepkg only resolves local
+  # sources by basename, so the files are taken from the PKGBUILD directory.
+  install -Dm755 "$startdir/tests/migration-from-install-sh.sh" \
+    "$pkgdir/usr/share/aic8800d80-dkms-git/tests/migration-from-install-sh.sh"
+  install -Dm755 "$startdir/tests/migration-e2e-bwrap.sh" \
+    "$pkgdir/usr/share/aic8800d80-dkms-git/tests/migration-e2e-bwrap.sh"
 }

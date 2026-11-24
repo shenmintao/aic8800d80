@@ -1,0 +1,300 @@
+#!/bin/bash
+# Install scriptlet for aic8800d80-dkms-git.
+#
+# install.sh (the repository installer) manages this driver outside the package
+# manager.  A script-managed installation leaves these paths behind:
+#
+#   /etc/udev/rules.d/aic.rules        mode-switch rule          (unowned)
+#   /etc/usb_modeswitch.d/1111:1111    mode-switch data          (unowned)
+#   /lib/firmware/aic8800*             firmware directories      (unowned)
+#   /usr/src/aic8800-1.0.0             DKMS source tree          (unowned)
+#   DKMS registration aic8800/1.0.0
+#
+# This package installs /usr/lib/udev/rules.d/99-aic8800.rules instead.  The
+# file names differ, so udev would keep loading both rules and run both
+# mode-switch commands for the same 1111:1111 "add" event.  pre_install and
+# pre_upgrade therefore move the leftovers out of the way before pacman
+# extracts any file:
+#
+#   * nothing is deleted; every moved path keeps its absolute path below
+#     /var/backups/aic8800d80-migration-<timestamp>/ so it can be put back;
+#   * a path owned by any package (pacman -Qqo) is never moved or removed;
+#   * the aic8800/1.0.0 DKMS registration and its source tree are only removed
+#     when that tree is unowned, so a registration managed by another package
+#     stays intact;
+#   * the migration is idempotent: a second run finds nothing to move and does
+#     not create another backup directory.
+#
+# post_install and post_upgrade reload the udev rules and replay the "add"
+# event only for a 1111:1111 adapter, never for every USB device.
+#
+# Tests: tests/migration-from-install-sh.sh (temporary root, stub
+# pacman/dkms/udevadm) and tests/migration-e2e-bwrap.sh (real dkms in a bwrap
+# sandbox).  Both are installed under
+# /usr/share/aic8800d80-dkms-git/tests/.
+#
+# AIC8800_ROOT (or DESTDIR) prefixes every path and AIC8800_BACKUP_ROOT moves
+# the backup directory; both exist for the test suite.
+
+_aic_dkms_version="1.0.0"   # PACKAGE_VERSION used by install.sh's dkms.conf
+_aic_root=""
+_aic_backup_base=""
+_aic_backup_dir=""
+_aic_moved=0
+_aic_dkms_keep=0
+
+_aic_msg() {
+    printf 'aic8800d80: %s\n' "$*"
+}
+
+_aic_warn() {
+    printf 'aic8800d80: warning: %s\n' "$*" >&2
+}
+
+_aic_init() {
+    _aic_root="${AIC8800_ROOT:-${DESTDIR:-}}"
+    while [ "${_aic_root%/}" != "$_aic_root" ]; do
+        _aic_root="${_aic_root%/}"
+    done
+    _aic_backup_base="${AIC8800_BACKUP_ROOT:-${_aic_root}/var/backups}"
+    _aic_backup_dir=""
+    _aic_moved=0
+    _aic_dkms_keep=0
+}
+
+_aic_realpath() {
+    readlink -f -- "$1" 2>/dev/null || printf '%s' "$1"
+}
+
+# Print the packages that own a path.  Empty output means "unowned"; "?" means
+# ownership could not be checked, which callers treat as "do not touch".
+_aic_owners() {
+    local path=$1 real owners
+    if ! command -v pacman >/dev/null 2>&1; then
+        printf '?'
+        return 0
+    fi
+    owners=$(pacman -Qqo -- "$path" 2>/dev/null) || owners=""
+    if [ -z "$owners" ]; then
+        real=$(_aic_realpath "$path")
+        if [ "$real" != "$path" ]; then
+            owners=$(pacman -Qqo -- "$real" 2>/dev/null) || owners=""
+        fi
+    fi
+    printf '%s' "$owners"
+}
+
+_aic_can_move() {
+    local path=$1 owners
+    owners=$(_aic_owners "$path")
+    case "$owners" in
+        "?")
+            _aic_warn "cannot check ownership of $path (pacman not found); leaving it in place"
+            return 1
+            ;;
+        "")
+            return 0
+            ;;
+        *)
+            _aic_msg "leaving $path in place: owned by $(printf '%s' "$owners" | tr '\n' ' ')"
+            return 1
+            ;;
+    esac
+}
+
+_aic_ensure_backup() {
+    [ -n "$_aic_backup_dir" ] && return 0
+    if ! mkdir -p -- "$_aic_backup_base"; then
+        _aic_warn "cannot create $_aic_backup_base; leaving the old files in place"
+        return 1
+    fi
+    # mktemp gives every run its own directory: a retry in the same second must
+    # not try to move a directory into an existing backup of the same name.
+    if ! _aic_backup_dir=$(mktemp -d -- "$_aic_backup_base/aic8800d80-migration-$(date '+%Y%m%d-%H%M%S').XXXXXX"); then
+        _aic_backup_dir=""
+        _aic_warn "cannot create a backup directory under $_aic_backup_base; leaving the old files in place"
+        return 1
+    fi
+    _aic_msg "backing up files left by install.sh in $_aic_backup_dir"
+    return 0
+}
+
+# Move one path into the backup directory, keeping its absolute path below the
+# backup root so that it can be restored by hand.
+_aic_move() {
+    local path=$1 rel dest
+    if [ -n "$_aic_root" ]; then
+        rel="${path#"$_aic_root"}"
+    else
+        rel="$path"
+    fi
+    _aic_ensure_backup || return 1
+    dest="$_aic_backup_dir$rel"
+    if ! mkdir -p -- "$(dirname -- "$dest")"; then
+        _aic_warn "cannot create $(dirname -- "$dest"); leaving $path in place"
+        return 1
+    fi
+    if ! mv -- "$path" "$dest"; then
+        _aic_warn "cannot move $path to $dest"
+        return 1
+    fi
+    _aic_moved=$((_aic_moved + 1))
+    _aic_msg "moved $path -> $dest"
+    return 0
+}
+
+# install.sh writes aic.rules to /etc/udev/rules.d; older installers used
+# /usr/lib and /lib as well.  Only files that contain this project's rules are
+# moved, so an unrelated file that happens to be called aic.rules stays.
+_aic_migrate_rules() {
+    local f real seen=" "
+    for f in "$_aic_root/etc/udev/rules.d/aic.rules" \
+             "$_aic_root/usr/lib/udev/rules.d/aic.rules" \
+             "$_aic_root/lib/udev/rules.d/aic.rules"; do
+        [ -f "$f" ] || continue
+        real=$(_aic_realpath "$f")
+        case "$seen" in
+            *" $real "*) continue ;;
+        esac
+        seen="$seen$real "
+        if ! grep -q 'AIC8800' "$f" 2>/dev/null; then
+            _aic_warn "leaving $f in place: it does not contain AIC8800 rules"
+            continue
+        fi
+        _aic_can_move "$f" || continue
+        _aic_move "$f"
+    done
+    if [ -f "$_aic_root/etc/udev/rules.d/aic.rules" ]; then
+        _aic_warn "/etc/udev/rules.d/aic.rules is still present; udev may run its mode-switch command as well as 99-aic8800.rules"
+    fi
+}
+
+_aic_migrate_modeswitch() {
+    local f="$_aic_root/etc/usb_modeswitch.d/1111:1111"
+    [ -f "$f" ] || return 0
+    if ! grep -q 'AIC8800' "$f" 2>/dev/null; then
+        _aic_msg "leaving $f in place: it is not the AIC8800 mode-switch configuration"
+        return 0
+    fi
+    _aic_can_move "$f" || return 0
+    _aic_move "$f"
+}
+
+# /lib/firmware and /usr/lib/firmware are the same directory on merged-/usr
+# systems, so a path is handled once even when both globs match it.
+_aic_migrate_firmware() {
+    local dir real seen=" "
+    for dir in "$_aic_root/lib/firmware"/aic8800* \
+               "$_aic_root/usr/lib/firmware"/aic8800*; do
+        [ -d "$dir" ] || continue
+        real=$(_aic_realpath "$dir")
+        case "$seen" in
+            *" $real "*) continue ;;
+        esac
+        seen="$seen$real "
+        _aic_can_move "$dir" || continue
+        _aic_move "$dir"
+    done
+}
+
+_aic_migrate_dkms() {
+    local ver=$_aic_dkms_version src status owners
+    src="$_aic_root/usr/src/aic8800-$ver"
+
+    if ! command -v dkms >/dev/null 2>&1; then
+        _aic_msg "dkms is not installed; nothing to remove for aic8800/$ver"
+        return 0
+    fi
+    if ! status=$(dkms status 2>&1); then
+        _aic_warn "dkms status failed; leaving the aic8800/$ver registration and its source tree alone"
+        _aic_dkms_keep=1
+        return 0
+    fi
+    if ! printf '%s\n' "$status" | grep -q "^aic8800/${ver}[,:]"; then
+        _aic_msg "no aic8800/$ver registration in dkms status"
+        return 0
+    fi
+
+    # If another package owns /usr/src/aic8800-1.0.0, that package manages the
+    # registration; removing it here would break that package's file list.
+    if [ -d "$src" ]; then
+        owners=$(_aic_owners "$src")
+        if [ -n "$owners" ]; then
+            _aic_msg "leaving the aic8800/$ver registration alone: $src is owned by $(printf '%s' "$owners" | tr '\n' ' ')"
+            return 0
+        fi
+    fi
+
+    _aic_msg "removing the aic8800/$ver DKMS registration left by install.sh"
+    if ! dkms remove "aic8800/$ver" --all; then
+        _aic_warn "dkms remove aic8800/$ver --all failed; remove the registration by hand and delete $src afterwards"
+        _aic_dkms_keep=1
+    fi
+}
+
+# install.sh copies its checkout to /usr/src/aic8800-1.0.0.  Only trees whose
+# dkms.conf names this driver are touched.
+_aic_migrate_sources() {
+    local src
+    for src in "$_aic_root/usr/src"/aic8800-*; do
+        [ -d "$src" ] || continue
+        if ! grep -q '^PACKAGE_NAME="aic8800"' "$src/dkms.conf" 2>/dev/null; then
+            _aic_msg "leaving $src in place: its dkms.conf does not declare aic8800"
+            continue
+        fi
+        if [ "$_aic_dkms_keep" = 1 ] && [ "$src" = "$_aic_root/usr/src/aic8800-$_aic_dkms_version" ]; then
+            _aic_warn "keeping $src: its DKMS registration aic8800/$_aic_dkms_version is still present"
+            continue
+        fi
+        _aic_can_move "$src" || continue
+        _aic_move "$src"
+    done
+}
+
+_aic_migrate_from_installer() {
+    _aic_init
+    _aic_msg "checking for files left by install.sh"
+    _aic_migrate_rules
+    _aic_migrate_modeswitch
+    _aic_migrate_dkms
+    _aic_migrate_sources
+    _aic_migrate_firmware
+    if [ "$_aic_moved" -gt 0 ]; then
+        _aic_msg "moved $_aic_moved item(s) to $_aic_backup_dir"
+        _aic_msg "the package now owns the firmware, the udev rule and the DKMS source; reboot after the DKMS build finishes"
+    else
+        _aic_msg "nothing to migrate"
+    fi
+}
+
+_aic_reload_udev() {
+    if ! command -v udevadm >/dev/null 2>&1; then
+        _aic_warn "udevadm not found; reload the udev rules by hand"
+        return 0
+    fi
+    if ! udevadm control --reload-rules; then
+        _aic_warn "udevadm control --reload-rules failed"
+    fi
+    # Replay the add event only for a 1111:1111 adapter that is already
+    # plugged in; a global trigger would replay every USB device.
+    if ! udevadm trigger --action=add --subsystem-match=usb \
+            --attr-match=idVendor=1111 --attr-match=idProduct=1111; then
+        _aic_warn "udevadm trigger for 1111:1111 failed; unplug and replug the adapter"
+    fi
+}
+
+pre_install() {
+    _aic_migrate_from_installer
+}
+
+pre_upgrade() {
+    _aic_migrate_from_installer
+}
+
+post_install() {
+    _aic_reload_udev
+}
+
+post_upgrade() {
+    _aic_reload_udev
+}
