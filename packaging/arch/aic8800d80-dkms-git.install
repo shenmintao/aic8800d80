@@ -25,6 +25,16 @@
 #   * the migration is idempotent: a second run finds nothing to move and does
 #     not create another backup directory.
 #
+# LIMITS: pacman checks for file conflicts in _alpm_sync_check(), before the
+# transaction is committed, and pre_install only runs inside the commit.  The
+# unowned firmware is also the package's firmware, so a plain `pacman -U` on a
+# machine that used install.sh aborts with "exists in filesystem" and this
+# scriptlet never runs.  Use migrate-from-install-sh.sh first (it calls the
+# same functions below, from outside pacman), or pass --overwrite to pacman so
+# the commit is reached and pre_install can move the old firmware.  The
+# non-conflicting parts (udev rule, modeswitch data, DKMS source and
+# registration) are still migrated here as a safety net.
+#
 # post_install and post_upgrade reload the udev rules and replay the "add"
 # event only for a 1111:1111 adapter, never for every USB device.
 #
@@ -42,6 +52,7 @@ _aic_backup_base=""
 _aic_backup_dir=""
 _aic_moved=0
 _aic_dkms_keep=0
+_aic_dry_run=0              # set by migrate-from-install-sh.sh --dry-run
 
 _aic_msg() {
     printf 'aic8800d80: %s\n' "$*"
@@ -127,6 +138,11 @@ _aic_move() {
         rel="${path#"$_aic_root"}"
     else
         rel="$path"
+    fi
+    if [ "$_aic_dry_run" = 1 ]; then
+        _aic_msg "would move $path -> $_aic_backup_base/aic8800d80-migration-<timestamp>$rel"
+        _aic_moved=$((_aic_moved + 1))
+        return 0
     fi
     _aic_ensure_backup || return 1
     dest="$_aic_backup_dir$rel"
@@ -226,6 +242,10 @@ _aic_migrate_dkms() {
     fi
 
     _aic_msg "removing the aic8800/$ver DKMS registration left by install.sh"
+    if [ "$_aic_dry_run" = 1 ]; then
+        _aic_msg "would run: dkms remove aic8800/$ver --all"
+        return 0
+    fi
     if ! dkms remove "aic8800/$ver" --all; then
         _aic_warn "dkms remove aic8800/$ver --all failed; remove the registration by hand and delete $src afterwards"
         _aic_dkms_keep=1
@@ -260,8 +280,12 @@ _aic_migrate_from_installer() {
     _aic_migrate_sources
     _aic_migrate_firmware
     if [ "$_aic_moved" -gt 0 ]; then
-        _aic_msg "moved $_aic_moved item(s) to $_aic_backup_dir"
-        _aic_msg "the package now owns the firmware, the udev rule and the DKMS source; reboot after the DKMS build finishes"
+        if [ "$_aic_dry_run" = 1 ]; then
+            _aic_msg "would move $_aic_moved item(s); nothing was changed"
+        else
+            _aic_msg "moved $_aic_moved item(s) to $_aic_backup_dir"
+            _aic_msg "the package now owns the firmware, the udev rule and the DKMS source; reboot after the DKMS build finishes"
+        fi
     else
         _aic_msg "nothing to migrate"
     fi

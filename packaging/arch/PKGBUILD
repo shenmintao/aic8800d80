@@ -58,12 +58,18 @@ package() {
   sed -i 's#/etc/usb_modeswitch.d/1111:1111#/usr/share/usb_modeswitch/1111:1111#g' \
     "$pkgdir/usr/lib/udev/rules.d/99-aic8800.rules"
 
-  # Keep the migration tests on the installed system.  They only write inside a
-  # temporary root and use stub pacman/dkms/udevadm, so they are safe to re-run
-  # next to an active driver installation.  makepkg only resolves local
-  # sources by basename, so the files are taken from the PKGBUILD directory.
-  install -Dm755 "$startdir/tests/migration-from-install-sh.sh" \
-    "$pkgdir/usr/share/aic8800d80-dkms-git/tests/migration-from-install-sh.sh"
-  install -Dm755 "$startdir/tests/migration-e2e-bwrap.sh" \
-    "$pkgdir/usr/share/aic8800d80-dkms-git/tests/migration-e2e-bwrap.sh"
+  # Keep the migration tools on the installed system.  They only write inside a
+  # temporary root or after an explicit confirmation, and the tests use stub
+  # pacman/dkms/udevadm, so they are safe to re-run next to an active driver
+  # installation.  makepkg only resolves local sources by basename, so the
+  # files are taken from the PKGBUILD directory.
+  install -Dm755 "$startdir/migrate-from-install-sh.sh" \
+    "$pkgdir/usr/share/aic8800d80-dkms-git/migrate-from-install-sh.sh"
+  # The migrate script sources the scriptlet to reuse its functions.
+  install -Dm644 "$startdir/aic8800d80-dkms-git.install" \
+    "$pkgdir/usr/share/aic8800d80-dkms-git/aic8800d80-dkms-git.install"
+  for test in migration-from-install-sh.sh migration-e2e-bwrap.sh pacman-transaction.sh; do
+    install -Dm755 "$startdir/tests/$test" \
+      "$pkgdir/usr/share/aic8800d80-dkms-git/tests/$test"
+  done
 }
