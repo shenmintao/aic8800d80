@@ -3810,6 +3810,24 @@ int rwnx_send_sm_connect_req(struct rwnx_hw *rwnx_hw,
     else
         goto invalid_param;
 
+    /*
+     * Connect-API drivers get SAE (WPA3) requests from wpa_supplicant as
+     * auth_type OPEN/AUTOMATIC + an SAE AKM + CONNECT_REQ_EXTERNAL_AUTH_SUPPORT.
+     * Tell the firmware to use SAE so it raises SM_EXTERNAL_AUTH_REQUIRED_IND
+     * and userspace runs the SAE handshake.
+     */
+    if (req->auth_type == WLAN_AUTH_OPEN &&
+        (sme->flags & CONNECT_REQ_EXTERNAL_AUTH_SUPPORT)) {
+        for (i = 0; i < sme->crypto.n_akm_suites; i++) {
+            if (sme->crypto.akm_suites[i] == WLAN_AKM_SUITE_SAE ||
+                sme->crypto.akm_suites[i] == WLAN_AKM_SUITE_FT_OVER_SAE) {
+                req->auth_type = WLAN_AUTH_SAE;
+                AICWFDBG(LOGINFO, "%s: SAE AKM with external auth, using auth_type SAE\r\n", __func__);
+                break;
+            }
+        }
+    }
+
     /* Set UAPSD queues */
     req->uapsd_queues = rwnx_mod_params.uapsd_queues;
 
