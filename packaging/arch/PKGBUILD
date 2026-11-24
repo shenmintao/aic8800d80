@@ -8,9 +8,10 @@
 #
 # A machine that used install.sh still carries unowned copies of the same
 # firmware, an /etc/udev/rules.d/aic.rules that would run a second mode-switch
-# command, and an aic8800/1.0.0 DKMS registration. The install scriptlet moves
-# those files to /var/backups before pacman extracts anything; see
-# aic8800d80-dkms-git.install and README.md.
+# command, and an aic8800/1.0.0 DKMS registration. pacman checks file conflicts
+# before it runs pre_install, so run migrate-from-install-sh.sh first (or pass
+# --overwrite for the firmware); see README.md and
+# aic8800d80-dkms-git.install.
 
 pkgname=aic8800d80-dkms-git
 pkgver=1.0.0.r177.g1a2ce4e
