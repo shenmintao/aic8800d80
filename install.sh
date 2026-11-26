@@ -745,6 +745,15 @@ refresh_initramfs() {
         else
             print_warning "dracut failed; firmware may not be available during early boot."
         fi
+    elif command -v limine-mkinitcpio > /dev/null 2>&1; then
+        # Limine UKI setups (Omarchy, CachyOS): plain 'mkinitcpio -P' finds no
+        # presets and Omarchy's wrapper waits on a hidden [Y/n] prompt.
+        print_info "Running limine-mkinitcpio..."
+        if limine-mkinitcpio < /dev/null >> "$LOG_FILE" 2>&1; then
+            print_success "Initramfs refreshed successfully."
+        else
+            print_warning "limine-mkinitcpio failed; firmware may not be available during early boot."
+        fi
     elif command -v mkinitcpio > /dev/null 2>&1; then
         print_info "Running mkinitcpio presets..."
         if mkinitcpio -P >> "$LOG_FILE" 2>&1; then

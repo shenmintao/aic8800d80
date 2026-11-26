@@ -87,6 +87,17 @@ class UninstallTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("dracut --regenerate-all -f", self.calls.read_text().splitlines())
 
+    def test_limine_mkinitcpio_is_preferred_without_reading_stdin(self):
+        for name in ("update-initramfs", "dracut"):
+            (self.stubs / name).unlink()
+        # Fails if it is given a terminal or a pipe it could block on.
+        self.stub("limine-mkinitcpio", '[ -t 0 ] && exit 9\nread -r answer && exit 8\nexit 0')
+        result = self.uninstall()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        calls = self.calls.read_text().splitlines()
+        self.assertIn("limine-mkinitcpio ", calls)
+        self.assertNotIn("mkinitcpio -P", calls)
+
     def test_initramfs_failure_returns_failure_with_retry_guidance(self):
         tools = ("update-initramfs", "dracut", "mkinitcpio")
         for index, tool in enumerate(tools):

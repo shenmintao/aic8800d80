@@ -102,6 +102,20 @@ cleanup_legacy_bluetooth_config() {{ echo LEGACY_CLEANUP; }}
                 if count:
                     self.assertIn(f"Firmware installed for {count} chip variant(s)", result.stdout)
 
+    def test_limine_mkinitcpio_is_preferred_without_reading_stdin(self):
+        # No real update-initramfs/dracut may be found; the log is read with builtins.
+        stubs = (
+            "limine-mkinitcpio() { read -r answer && return 8; echo LIMINE; }\n"
+            "mkinitcpio() { echo MKINITCPIO; }\n"
+            "PATH=/nonexistent"
+        )
+        after = '\nwhile IFS= read -r line; do echo "$line"; done < "$LOG_FILE"'
+        result = self.run_installer_function("refresh_initramfs", stubs=stubs, after=after)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("LIMINE", result.stdout)
+        self.assertNotIn("MKINITCPIO", result.stdout)
+        self.assertIn("Initramfs refreshed successfully.", result.stdout)
+
     def test_pacman_uses_existing_database(self):
         result = self.run_installer_function(
             "install_dependencies", 'pacman() { echo "PACMAN $*"; }', " pacman",

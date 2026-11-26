@@ -197,6 +197,12 @@ elif command -v dracut > /dev/null 2>&1; then
         echo "    dracut failed; retry 'sudo dracut --regenerate-all -f'" >&2
         exit_status=1
     fi
+elif command -v limine-mkinitcpio > /dev/null 2>&1; then
+    # Limine UKI setups: see refresh_initramfs() in install.sh.
+    if ! run limine-mkinitcpio < /dev/null; then
+        echo "    limine-mkinitcpio failed; retry 'sudo limine-mkinitcpio'" >&2
+        exit_status=1
+    fi
 elif command -v mkinitcpio > /dev/null 2>&1; then
     if ! run mkinitcpio -P; then
         echo "    mkinitcpio failed; retry 'sudo mkinitcpio -P'" >&2
